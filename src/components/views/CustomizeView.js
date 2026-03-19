@@ -12,11 +12,13 @@ export class CustomizeView extends LitElement {
             height: 100%;
             width: 100%;
             color: var(--text-color);
+            overflow: hidden;
         }
         .settings-container {
             display: flex;
             height: calc(100vh - 55px); /* Account for app header */
             width: 100%;
+            overflow: hidden;
         }
         .sidebar {
             width: 180px;
@@ -52,9 +54,10 @@ export class CustomizeView extends LitElement {
         .content {
             flex: 1;
             padding: 25px 40px;
-            overflow-y: hidden;
+            overflow: hidden;
             display: flex;
             flex-direction: column;
+            min-height: 0;
         }
         .scrollable-tab {
             overflow-y: auto;
@@ -514,21 +517,24 @@ export class CustomizeView extends LitElement {
                 `;
             case 'profile':
                 return html`
-                    <h2>Context & Identity Vault</h2>
-                    <div class="form-group" style="margin-bottom: 25px;">
-                        <label>Target Interview Role</label>
-                        <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px;">(e.g., SDE, Product Manager, Business Analyst, Cyber Security)</p>
-                        <input type="text" .value=${this.prefs.interviewRole || ''} @change=${(e) => this.savePref('interviewRole', e.target.value)} placeholder="e.g. Senior Frontend Developer">
-                    </div>
-                    <div class="form-group">
-                        <label>Resume & Raw Experience Data</label>
-                        <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px; line-height: 1.4;">
-                            Copy and paste your raw resume text here to prevent PDF formatting errors. <br>
-                            The AI will use this strictly as background knowledge when answering.
-                        </p>
-                        <textarea .value=${this.prefs.customPrompt || ''} @change=${(e) => this.savePref('customPrompt', e.target.value)} placeholder="Paste resume text, past projects, or specific metrics here..."></textarea>
-                    </div>
-                `;
+                    <div class="scrollable-tab">
+                        <h2>Context & Identity Vault</h2>
+                        <div class="form-group" style="margin-bottom: 25px;">
+                            <label>Target Interview Role</label>
+                            <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px;">(e.g., SDE, Product Manager, Business Analyst, Cyber Security)</p>
+                            <input type="text" .value=${this.prefs.interviewRole || ''} @change=${(e) => this.savePref('interviewRole', e.target.value)} placeholder="e.g. Senior Frontend Developer">
+                        </div>
+                        <div class="form-group">
+                            <label>Resume & Raw Experience Data</label>
+                            <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px; line-height: 1.4;">
+                                Copy and paste your raw resume text here to prevent PDF formatting errors. <br>
+                                The AI will use this strictly as background knowledge when answering.
+                            </p>
+                        <textarea .value=${this.prefs.customPrompt || ''} 
+                              @change=${(e) => this.savePref('customPrompt', e.target.value)}
+                              placeholder="Paste resume text, past projects, or specific metrics here..."></textarea>
+                        </div>
+                    </div> `;
             case 'appearance':
                 const themeOpts = [
                     {value: 'dark', label: 'Dark'}, {value: 'light', label: 'Light'}, {value: 'midnight', label: 'Midnight Blue'},

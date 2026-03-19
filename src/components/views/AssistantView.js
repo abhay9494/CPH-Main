@@ -699,11 +699,15 @@ export class AssistantView extends LitElement {
                 payload += `\n\n[Format solution in ${lang}]`;
             }
             
-            await ipcRenderer.invoke('send-manual-text', payload);
-            this.lastUserPrompt = `👤 You: ${rawText}`; 
+            // Update UI instantly to show responsiveness
+            this.lastUserPrompt = `👤 You: ${rawText}`;
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Thinking...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
-            input.value = ''; this.requestUpdate();
+            input.value = '';
+            this.requestUpdate();
+            
+            // Then let the backend do the heavy lifting
+            await ipcRenderer.invoke('send-manual-text', payload);
         }
     }
 

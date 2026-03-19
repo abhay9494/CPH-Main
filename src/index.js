@@ -422,7 +422,7 @@ async function applyDropdownBrainMode() {
             (async () => {
                 try {
                     // 1. ANCHOR TO THE TEXT AREA
-                    const editor = document.querySelector('textarea, [contenteditable="true"], .ql-editor');
+                    const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
                     if (!editor) return resolve('Text input area not found');
                     
                     let inputContainer = editor;
@@ -1066,14 +1066,14 @@ function setupGeneralIpcHandlers() {
         for (let i = 0; i < accumulatedScreenshots.length; i++) {
             const img = nativeImage.createFromDataURL(accumulatedScreenshots[i]);
             clipboard.writeImage(img);
-            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('textarea, [contenteditable="true"], .ql-editor')?.focus();`);
+            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
             aiWebWindow.webContents.paste();
             await new Promise(r => setTimeout(r, 200)); 
         }
         
         const promptToUse = customPrompt || "Please solve the problem shown in these images step-by-step.";
         clipboard.writeText(promptToUse);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('textarea, [contenteditable="true"], .ql-editor')?.focus();`);
+        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         aiWebWindow.webContents.paste();
         
         const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
@@ -1206,7 +1206,7 @@ function setupGeneralIpcHandlers() {
         for (let i = 0; i < accumulatedScreenshots.length; i++) {
             const img = nativeImage.createFromDataURL(accumulatedScreenshots[i]);
             clipboard.writeImage(img);
-            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('textarea, [contenteditable="true"], .ql-editor')?.focus();`);
+            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
             aiWebWindow.webContents.paste();
             await new Promise(r => setTimeout(r, 800)); 
         }
@@ -1233,7 +1233,7 @@ input
 expected output`;
 
         clipboard.writeText(dynamicPrompt);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('textarea, [contenteditable="true"], .ql-editor')?.focus();`);
+        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         aiWebWindow.webContents.paste();
         
         const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
@@ -1277,7 +1277,7 @@ expected output`;
         // 🐛 FIX: Removed the /thinking injection from here!
 
         clipboard.writeText(OA_PROMPT_2);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('textarea, [contenteditable="true"], .ql-editor')?.focus();`);
+        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         aiWebWindow.webContents.paste();
 
         await new Promise(r => setTimeout(r, 500));
@@ -1329,7 +1329,7 @@ expected output`;
         // 🐛 FIX: Removed the /thinking injection from here!
 
         clipboard.writeText(text);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('textarea, [contenteditable="true"], .ql-editor')?.focus();`);
+        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         aiWebWindow.webContents.paste();
         await new Promise(r => setTimeout(r, 500));
         
@@ -1445,8 +1445,8 @@ expected output`;
             (() => {
                 try {
                     // 🤖 GEMINI SPY
-                    if (${currentProviderIdx} === 1) { 
-                        const editor = document.querySelector('textarea, [contenteditable="true"], .ql-editor');
+                    if (${currentProviderIdx} === 1) {
+                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
                         if (!editor) return null;
                         let container = editor;
                         for(let i=0; i<10 && container.parentElement; i++) container = container.parentElement;
@@ -1460,8 +1460,8 @@ expected output`;
                         }
                     } 
                     // 🐺 GROK SPY
-                    else if (${currentProviderIdx} === 2) { 
-                        const editor = document.querySelector('textarea, [contenteditable="true"], .ql-editor');
+                    else if (${currentProviderIdx} === 2) {
+                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
                         if (!editor) return null;
                         let container = editor;
                         for(let i=0; i<10 && container.parentElement; i++) container = container.parentElement;
@@ -1476,7 +1476,7 @@ expected output`;
                     } 
                     // 🧠 CHATGPT SPY (Updated for the new UI!)
                     else { 
-                        const editor = document.querySelector('#prompt-textarea, textarea, [contenteditable="true"], .ql-editor');
+                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
                         if (!editor) return null;
                         
                         // Walk up to grab the input area container
