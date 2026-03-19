@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; user-select: none; cursor: default !important;}
+        body { 
+            margin: 0; padding: 12px; 
+            background: rgba(30, 30, 30, var(--bg-alpha, 0.9)); 
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px; color: white; overflow: hidden;
+            display: flex; flex-direction: column; gap: 8px;
+        }
+        /* Draggable Header */
+        .drag-handle {
+            -webkit-app-region: drag;
+            display: flex; justify-content: space-between; align-items: center;
+            padding-bottom: 5px; border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 5px;
+        }
+        .drag-title { font-size: 10px; font-weight: bold; color: #888; letter-spacing: 1px; }
+        .close-btn {
+            -webkit-app-region: no-drag;
+            background: transparent; border: none; color: #888;
+            font-size: 12px; font-weight: bold; padding: 0 4px;
+        }
+        .close-btn:hover { color: #f14c4c; }
+        
+        /* Buttons */
+        button {
+            -webkit-app-region: no-drag;
+            width: 100%; padding: 8px; border: none; border-radius: 4px;
+            font-size: 12px; font-weight: bold; transition: 0.2s;
+        }
+        .btn-capture { background: #333; color: white; border: 1px solid #555; }
+        .btn-capture:hover { background: #444; border-color: #777; }
+        .btn-clear { background: rgba(241, 76, 76, 0.1); color: #f14c4c; border: 1px solid #f14c4c; display: none; }
+        .btn-clear:hover { background: #f14c4c; color: white; }
+        .btn-send { background: rgba(50, 50, 50, 0.5); color: #888; border: 1px solid #444; }
+        .btn-send.ready { background: #00cc66; color: white; border-color: #00cc66; }
+    </style>
+</head>
+<body>
+    <div class="drag-handle">
+        <span class="drag-title">TACTICAL</span>
+        <button class="close-btn" id="hideBtn">✖</button>
+    </div>
+    
+    <button class="btn-capture" id="captureBtn">📸 Capture Screen (0)</button>
+    <button class="btn-clear" id="clearBtn">🗑️ Clear</button>
+    <button class="btn-send" id="sendBtn">🚀 Send to AI</button>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+
+        const captureBtn = document.getElementById('captureBtn');
+        const clearBtn = document.getElementById('clearBtn');
+        const sendBtn = document.getElementById('sendBtn');
+        const hideBtn = document.getElementById('hideBtn');
+
+        // Send actions to the Main Process to execute
+        captureBtn.onclick = () => ipcRenderer.send('widget-action', 'capture');
+        clearBtn.onclick = () => ipcRenderer.send('widget-action', 'clear');
+        sendBtn.onclick = () => ipcRenderer.send('widget-action', 'send');
+        hideBtn.onclick = () => ipcRenderer.send('widget-action', 'hide-app');
+
+        let currentCount = 0; // Store count globally inside the widget
+
+        // Listen for updates from the Main App (Counter & Transparency)
+        ipcRenderer.on('sync-widget-state', (event, state) => {
+            if (state.count !== undefined) {
+                currentCount = state.count;
+            }
+            
+            captureBtn.innerText = `📸 Capture Screen (${currentCount})`;
+            
+            if (currentCount > 0) {
+                clearBtn.style.display = 'block';
+                sendBtn.classList.add('ready');
+            } else {
+                clearBtn.style.display = 'none';
+                sendBtn.classList.remove('ready');
+            }
+
+            if (state.transparency !== undefined) {
+                document.body.style.setProperty('--bg-alpha', state.transparency);
+            }
+        });
+    </script>
+</body>
+</html>
