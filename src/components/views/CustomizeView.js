@@ -524,8 +524,7 @@ export class CustomizeView extends LitElement {
                             <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px;">(e.g., SDE, Product Manager, Business Analyst, Cyber Security)</p>
                             <input type="text" .value=${this.prefs.interviewRole || ''} @change=${(e) => this.savePref('interviewRole', e.target.value)} placeholder="e.g. Senior Frontend Developer">
                         </div>
-                        <div class="form-group">
-                            <label>Resume & Raw Experience Data</label>
+                        <div class="form-group" style="margin-bottom: 0;"> <label>Resume & Raw Experience Data</label>
                             <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px; line-height: 1.4;">
                                 Copy and paste your raw resume text here to prevent PDF formatting errors. <br>
                                 The AI will use this strictly as background knowledge when answering.
