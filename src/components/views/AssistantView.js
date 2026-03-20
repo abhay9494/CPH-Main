@@ -209,6 +209,14 @@ export class AssistantView extends LitElement {
     connectedCallback() {
         super.connectedCallback();
 
+        // 🟢 FIX: Catch the quit warning and beam the disconnect signal
+        this.appQuittingHandler = () => {
+            if (this.helperConn && this.helperConn.open) {
+                this.helperConn.send(JSON.stringify({ type: 'disconnect' }));
+            }
+        };
+        window.addEventListener('app-quitting', this.appQuittingHandler);
+
         window.addEventListener('focus', () => this.requestUpdate());
 
         if (window.require) {
@@ -380,6 +388,7 @@ export class AssistantView extends LitElement {
         window.removeEventListener('cancel-typer-mode', this.cancelTyperHandler);
         window.removeEventListener('typing-state-changed', this.syncTypingState);
         window.removeEventListener('help-mode-toggled', this.helpModeHandler);
+        window.removeEventListener('app-quitting', this.appQuittingHandler);
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeAllListeners('ai-new-message');
@@ -1216,7 +1225,7 @@ export class AssistantView extends LitElement {
                             <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
                                 ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
                                     <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" style="height: 32px; box-sizing: border-box;" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
-                                        ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode'}
+                                        ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Auto-Sync: OFF'}
                                     </button>
                                     <button class="action-btn" style="background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; height: 32px; box-sizing: border-box;" @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex], true)}>
                                         🚀 PUSH TO SCREEN

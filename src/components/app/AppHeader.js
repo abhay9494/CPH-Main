@@ -263,11 +263,17 @@ export class AppHeader extends LitElement {
         }
     }
 
-    // 🟢 FIX: The absolute hard-kill function
+    // 🟢 FIX: The Graceful Teardown
     handleHardClose() {
-        if (window.require) {
-            window.require('electron').ipcRenderer.invoke('quit-application');
-        }
+        // 1. Tell the rest of the app we are about to die
+        window.dispatchEvent(new CustomEvent('app-quitting'));
+        
+        // 2. Give WebRTC exactly 100ms to send the final disconnect payload before executing the kill command
+        setTimeout(() => {
+            if (window.require) {
+                window.require('electron').ipcRenderer.invoke('quit-application');
+            }
+        }, 100);
     }
 
     render() {
