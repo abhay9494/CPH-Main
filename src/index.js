@@ -558,7 +558,7 @@ async function applyDropdownBrainMode() {
     
     let resultStr = rawResult;
     if (rawResult && typeof rawResult === 'object' && rawResult.__zone_symbol__value) resultStr = rawResult.__zone_symbol__value;
-    console.log("🧠 Brain Mode Execution:", resultStr);
+    // console.log("🧠 Brain Mode Execution:", resultStr);
 }
 
 function createMainWindow() {
@@ -1555,11 +1555,11 @@ expected output`;
 
         if (targetVisible) {
             aiWebWindow.show();
-            console.log('👁️ AI Window VISIBLE');
+            // console.log('👁️ AI Window VISIBLE');
             return true;
         } else {
             aiWebWindow.hide();
-            console.log('👻 AI Window HIDDEN');
+            // console.log('👻 AI Window HIDDEN');
             return false;
         }
     });

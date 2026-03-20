@@ -9,6 +9,9 @@ let windowResizing = false;
 let resizeAnimation = null;
 const RESIZE_ANIMATION_DURATION = 500; // milliseconds
 
+// 🐛 FIX: Declare this globally so the export at the bottom can read it!
+let companionChatWindow = null;
+
 function createWindow(sendToRenderer, geminiSessionRef) {
     // Get layout preference (default to 'normal')
     let windowWidth = 900;
@@ -224,7 +227,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isClickThrough = !isClickThrough;
             mainWindow.setIgnoreMouseEvents(isClickThrough, { forward: true });
-            console.log(`Click-through mode: ${isClickThrough ? 'ON' : 'OFF'}`);
+            // console.log(`Click-through mode: ${isClickThrough ? 'ON' : 'OFF'}`);
         }
     });
 
@@ -262,7 +265,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 6. EMERGENCY ERASE (Nuke & Quit)
     // ----------------------------------------------------
     register('emergencyErase', keybinds.emergencyErase, async () => {
-        console.log("🧨 EMERGENCY ERASE TRIGGERED!");
+        // console.log("🧨 EMERGENCY ERASE TRIGGERED!");
         try {
             // 1. Wipe local config/storage files
             storage.clearAllData();
@@ -323,7 +326,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         return new Promise(resolve => {
             // Check if window is destroyed before starting animation
             if (mainWindow.isDestroyed()) {
-                console.log('Cannot animate resize: window has been destroyed');
+                // console.log('Cannot animate resize: window has been destroyed');
                 resolve();
                 return;
             }
@@ -338,12 +341,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
 
             // If already at target size, no need to animate
             if (startWidth === targetWidth && startHeight === targetHeight) {
-                console.log(`Window already at target size for ${layoutMode} mode`);
+                // console.log(`Window already at target size for ${layoutMode} mode`);
                 resolve();
                 return;
             }
 
-            console.log(`Starting animated resize from ${startWidth}x${startHeight} to ${targetWidth}x${targetHeight}`);
+            // console.log(`Starting animated resize from ${startWidth}x${startHeight} to ${targetWidth}x${targetHeight}`);
 
             windowResizing = true;
             mainWindow.setResizable(true);
@@ -395,7 +398,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                         mainWindow.setPosition(finalX, 0);
                     }
 
-                    console.log(`Animation complete: ${targetWidth}x${targetHeight}`);
+                    // console.log(`Animation complete: ${targetWidth}x${targetHeight}`);
                     resolve();
                 }
             }, 1000 / frameRate);
@@ -409,15 +412,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         return { success: true };
     });
 
-    // 🟢 NEW: Floating Companion Chat Window
-    let companionChatWindow = null;
-
     // 🟢 FIXED: Force window to open the second connection is established
     ipcMain.on('open-companion-window', (event, data) => {
-        console.log("[DEBUG-COMPANION] Received open request for:", data.name);
+        // console.log("[DEBUG-COMPANION] Received open request for:", data.name);
         
         if (typeof companionChatWindow === 'undefined' || !companionChatWindow || companionChatWindow.isDestroyed()) {
-            console.log("[DEBUG-COMPANION] Creating Companion window...");
+            // console.log("[DEBUG-COMPANION] Creating Companion window...");
             const { screen } = require('electron');
             const { width, height } = screen.getPrimaryDisplay().workAreaSize;
             
@@ -485,7 +485,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
         
         // Ensure it pops up immediately
-        console.log("[DEBUG-COMPANION] Showing Companion window.");
+        // console.log("[DEBUG-COMPANION] Showing Companion window.");
         companionChatWindow.showInactive();
     });
 
