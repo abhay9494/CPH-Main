@@ -81,7 +81,7 @@ export class AssistantView extends LitElement {
         input.prompt-input, textarea.prompt-input { flex: 1; background: var(--input-background); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 8px 12px; border-radius: 4px; font-size: 13px; font-family: 'Inter', sans-serif; }
 
         .custom-dropdown { position: relative; display: inline-block; }
-        .dropdown-trigger { background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+        .dropdown-trigger { background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 5px 10px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; white-space: nowrap; height: 32px; box-sizing: border-box; }
         .dropdown-trigger:hover { background: var(--bg-hover); color: #fff; }
         .dropdown-menu { position: absolute; bottom: 100%; left: 0; background: var(--bg-primary); border: 1px solid var(--border-color, #444); border-radius: 4px; margin-bottom: 4px; min-width: 100%; z-index: 1000; display: flex; flex-direction: column; box-shadow: 0 -4px 15px rgba(0,0,0,0.8); max-height: 200px; overflow-y: auto; }
         .dropdown-option { padding: 8px 12px; font-size: 12px; color: var(--text-color); white-space: nowrap; }
@@ -392,8 +392,10 @@ export class AssistantView extends LitElement {
 
     connectToCompanion() {
         if (!this.helperPinInput || this.helperPinInput.length !== 6) return;
-        this.helperStatus = 'connecting';
-        this.requestUpdate();
+        this.hasReceivedCompanionProfile = false; // 🟢 Reset for next session
+        this.helperConn = null;
+        window.dispatchEvent(new CustomEvent('helper-status-changed', { detail: 'disconnected' }));
+        window.dispatchEvent(new CustomEvent('update-pin-display', { detail: '' })); // 🟢 Clear PIN
 
         if (!window.Peer) { this.helperStatus = 'error'; return; }
 
@@ -1156,11 +1158,9 @@ export class AssistantView extends LitElement {
                         <div class="control-row">
                             <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
                             <button class="action-btn" @click=${async () => {
-                                this.tacThinkMode = !this.tacThinkMode;
-                                this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+                                this.tacThinkMode = !this.tacThinkMode; this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
                                 if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
-                                await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
-                                this.requestUpdate();
+                                await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate();
                             }}>
                                 ${this.tacThinkMode ? '🧠 THINK' : '⚡ FAST'}
                             </button>
@@ -1181,44 +1181,50 @@ export class AssistantView extends LitElement {
                             </div>
                         </div>
 
-                        <div class="control-row">
-                            ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-                                <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
-                                    ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode (Vetting)'}
-                                </button>
-                            ` : ''}
-                            
-                            ${this.renderProfileSelector()}
-                            
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
-                                <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
-                                <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
-                                <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
-                            </div>
-                            
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
-                                <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
-                                <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 0 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
-                                <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
-                                
+                        <div class="control-row" style="display: flex; width: 100%; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1; display: flex; justify-content: flex-start; align-items: center; gap: 8px;">
+                                ${this.renderProfileSelector()}
                                 ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-                                    <div style="width: 1px; background: var(--border-color); margin: 0 4px;"></div>
-                                    <button class="nav-button" style="color: #00cc66; font-weight: bold; padding: 4px 8px;" 
-                                            @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
+                                    <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center; height: 32px; box-sizing: border-box;">
+                                        <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
+                                        <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
+                                        <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+
+                            <div style="flex: 1; display: flex; justify-content: center; align-items: center;">
+                                <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center; height: 32px; box-sizing: border-box;">
+                                    <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
+                                    <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 0 8px; min-width: 45px; text-align: center;">${this.localChatHistory.length ? `${this.localChatIndex + 1}/${this.localChatHistory.length}` : '0/0'}</span>
+                                    <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
+                                </div>
+                            </div>
+
+                            <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+                                ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
+                                    <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" style="height: 32px; box-sizing: border-box;" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
+                                        ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode'}
+                                    </button>
+                                    <button class="action-btn" style="background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; height: 32px; box-sizing: border-box;" @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
                                         🚀 PUSH TO SCREEN
                                     </button>
-                                ` : ''}
+                                ` : html`
+                                    <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center; height: 32px; box-sizing: border-box;">
+                                        <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
+                                        <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
+                                        <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
+                                    </div>
+                                `}
                             </div>
                         </div>
                     ` : html`
                         <div class="control-row">
                             <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
                             <button class="action-btn" @click=${async () => {
-                                this.tacThinkMode = !this.tacThinkMode;
-                                this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+                                this.tacThinkMode = !this.tacThinkMode; this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
                                 if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
-                                await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
-                                this.requestUpdate();
+                                await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate();
                             }}>
                                 ${this.tacThinkMode ? '🧠 THINK' : '⚡ FAST'}
                             </button>
@@ -1230,33 +1236,25 @@ export class AssistantView extends LitElement {
                             </button>
                         </div>
                         
-                        <div class="control-row">
-                            ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-                                <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
-                                    ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode (Vetting)'}
-                                </button>
-                            ` : ''}
-                            
-                            ${this.renderProfileSelector()}
-                            
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
-                                <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
-                                <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
-                                <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
+                        <div class="control-row" style="display: flex; width: 100%; justify-content: space-between; align-items: center;">
+                            <div style="flex: 1; display: flex; justify-content: flex-start; align-items: center; gap: 8px;">
+                                ${this.renderProfileSelector()}
                             </div>
-                            
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
-                                <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
-                                <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 0 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
-                                <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
-                                
-                                ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-                                    <div style="width: 1px; background: var(--border-color); margin: 0 4px;"></div>
-                                    <button class="nav-button" style="color: #00cc66; font-weight: bold; padding: 4px 8px;" 
-                                            @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
-                                        🚀 PUSH TO SCREEN
-                                    </button>
-                                ` : ''}
+
+                            <div style="flex: 1; display: flex; justify-content: center; align-items: center;">
+                                <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center; height: 32px; box-sizing: border-box;">
+                                    <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
+                                    <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 0 8px; min-width: 45px; text-align: center;">${this.localChatHistory.length ? `${this.localChatIndex + 1}/${this.localChatHistory.length}` : '0/0'}</span>
+                                    <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
+                                </div>
+                            </div>
+
+                            <div style="flex: 1; display: flex; justify-content: flex-end; align-items: center; gap: 8px;">
+                                <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center; height: 32px; box-sizing: border-box;">
+                                    <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
+                                    <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
+                                    <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
+                                </div>
                             </div>
                         </div>
                     `}
