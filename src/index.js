@@ -155,7 +155,6 @@ function launchAIWindow() {
     aiWebWindow.webContents.setAudioMuted(true);
     aiWebWindow.loadURL(provider.url);
 
-    // 🐛 FIX: Nuke the hand cursor on the actual AI websites!
     aiWebWindow.webContents.on('dom-ready', () => {
         aiWebWindow.webContents.insertCSS('* { cursor: default !important; }');
     });

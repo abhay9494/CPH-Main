@@ -60,7 +60,7 @@ export class AppHeader extends LitElement {
             display: flex;
             align-items: center;
             gap: 5px;
-            cursor: pointer !important;
+            cursor: default !important;
         }
         .blinking-alert.stop-btn:hover {
             background: #f14c4c;
@@ -125,7 +125,7 @@ export class AppHeader extends LitElement {
             font-weight: bold;
             margin-right: 15px;
             letter-spacing: 1px;
-            cursor: pointer !important;
+            cursor: default !important;
             transition: 0.2s;
         }
         .header-pin:hover {
@@ -151,7 +151,7 @@ export class AppHeader extends LitElement {
             align-items: center;
             justify-content: center;
             transition: 0.15s ease;
-            cursor: pointer !important;
+            cursor: default !important;
         }
         .icon-button:hover {
             background: rgba(255, 255, 255, 0.15);
@@ -315,7 +315,6 @@ export class AppHeader extends LitElement {
                                       e.target.innerText = oldText;
                                   }, 1500);
                               }}
-                              title="Click to copy PIN"
                           >
                               🔗 PIN: ${this.connectionPin}
                           </div>
@@ -338,7 +337,7 @@ export class AppHeader extends LitElement {
                     : ''}
 
                 <div class="header-actions">
-                    <button @click=${this.handleHardClose} class="icon-button danger" title="Close">
+                    <button @click=${this.handleHardClose} class="icon-button danger">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24"
@@ -354,7 +353,7 @@ export class AppHeader extends LitElement {
                             <line x1="6" y1="6" x2="18" y2="18"></line>
                         </svg>
                     </button>
-                    <button @click=${this.onHideClick} class="icon-button window-close" title="Minimize (Ctrl+Shift+)">
+                    <button @click=${this.onHideClick} class="icon-button window-close">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24"

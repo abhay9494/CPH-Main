@@ -5,7 +5,7 @@ export class HelpView extends LitElement {
     static styles = css`
         * {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            cursor: default !important; /* 🐛 FIX: Nuke the hand cursor globally! */
+            cursor: default !important;
             user-select: none;
             box-sizing: border-box;
         }
@@ -46,13 +46,13 @@ export class HelpView extends LitElement {
             font-size: 12px;
             line-height: 1.4;
             user-select: text;
-            cursor: text !important;
+            cursor: default !important;
         }
 
         .description strong {
             color: var(--text-color);
             font-weight: 500;
-            cursor: text !important;
+            cursor: default !important;
         }
 
         .link {

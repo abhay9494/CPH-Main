@@ -10,10 +10,20 @@ import { OnboardingView } from '../views/OnboardingView.js';
 export class CheatingDaddyApp extends LitElement {
     static styles = css`
         /* Universal Scrollbar Styling */
-        *::-webkit-scrollbar { width: 8px; height: 8px; }
-        *::-webkit-scrollbar-track { background: transparent; }
-        *::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
-        *::-webkit-scrollbar-thumb:hover { background: #444; }
+        *::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        *::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        *::-webkit-scrollbar-thumb {
+            background: #333;
+            border-radius: 4px;
+        }
+        *::-webkit-scrollbar-thumb:hover {
+            background: #444;
+        }
         * {
             box-sizing: border-box;
             font-family:
@@ -108,15 +118,51 @@ export class CheatingDaddyApp extends LitElement {
             flex-direction: column;
             align-items: center;
             gap: 12px;
-            background: rgba(20, 20, 20, 0.8);
+            background: transparent !important;
             padding: 15px 8px;
-            border-radius: 8px;
-            border: 1px solid var(--border-color);
+            border: none !important;
             z-index: 9999;
             -webkit-app-region: no-drag;
+            box-shadow: none !important;
+            // opacity: 0;
+            transition: opacity 0.3s ease;
         }
-        .slider-left { left: 5px; }
-        .slider-right { right: 5px; }
+        /* Only reveal them when the mouse is physically over the edge */
+        // .vertical-slider-wrapper:hover {
+        //     opacity: 1;
+        // }
+
+        /* Strip the ugly native browser styling */
+        .vertical-slider-wrapper input[type='range'] {
+            -webkit-appearance: none !important;
+            background: transparent !important;
+            border: none !important;
+            outline: none !important;
+        }
+
+        /* Make the track a subtle, borderless frosted line */
+        .vertical-slider-wrapper input[type='range']::-webkit-slider-runnable-track {
+            background: rgba(255, 255, 255, 0.1) !important;
+            border: none !important;
+            border-radius: 10px;
+        }
+
+        /* Make the white thumb semi-transparent with no borders or shadows */
+        .vertical-slider-wrapper input[type='range']::-webkit-slider-thumb {
+            -webkit-appearance: none !important;
+            background: rgba(255, 255, 255, 0.5) !important; /* Soft frosted white */
+            border: none !important;
+            box-shadow: none !important;
+            border-radius: 50%;
+            height: 14px;
+            width: 14px;
+        }
+        .slider-left {
+            left: 5px;
+        }
+        .slider-right {
+            right: 5px;
+        }
         .vertical-slider-wrapper span {
             font-size: 11px;
             color: var(--text-muted);
@@ -130,6 +176,42 @@ export class CheatingDaddyApp extends LitElement {
             background: transparent;
             margin: 0;
             padding: 0;
+        }
+        /* ==============================================================
+   🟢 TRUE GLASS MODE: Tie all borders and button backgrounds to the slider
+============================================================== */
+        :root {
+            /* When --bg-alpha drops to 0, these values mathematically become 0 */
+            --dynamic-border: rgba(255, 255, 255, calc(var(--bg-alpha) * 0.3));
+            --dynamic-bg: rgba(255, 255, 255, calc(var(--bg-alpha) * 0.05));
+            --dynamic-header: rgba(15, 15, 15, calc(var(--bg-alpha) * 0.9));
+        }
+
+        /* Apply to all structural elements */
+        .header,
+        .chat-container,
+        .markdown-body {
+            background: var(--dynamic-header) !important;
+            border-color: var(--dynamic-border) !important;
+            box-shadow: none !important;
+        }
+
+        /* Apply to all buttons and inputs */
+        .btn,
+        .danger-btn,
+        .action-btn,
+        .icon-button,
+        .back-btn,
+        .prompt-input,
+        textarea,
+        input {
+            border-color: var(--dynamic-border) !important;
+            background-color: var(--dynamic-bg) !important;
+        }
+
+        /* Fade out the scrollbar track itself when transparency drops */
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, calc(var(--bg-alpha) * 0.2)) !important;
         }
     `;
 
@@ -252,12 +334,22 @@ export class CheatingDaddyApp extends LitElement {
         this.updateLayoutMode();
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
-            ipcRenderer.on('new-response', (_, response) => { this.addNewResponse(response); });
-            ipcRenderer.on('update-response', (_, response) => { this.updateCurrentResponse(response); });
-            ipcRenderer.on('update-status', (_, status) => { this.setStatus(status); });
-            ipcRenderer.on('click-through-toggled', (_, isEnabled) => { this._isClickThrough = isEnabled; });
-            ipcRenderer.on('reconnect-failed', (_, data) => { this.addNewResponse(data.message); });
-            
+            ipcRenderer.on('new-response', (_, response) => {
+                this.addNewResponse(response);
+            });
+            ipcRenderer.on('update-response', (_, response) => {
+                this.updateCurrentResponse(response);
+            });
+            ipcRenderer.on('update-status', (_, status) => {
+                this.setStatus(status);
+            });
+            ipcRenderer.on('click-through-toggled', (_, isEnabled) => {
+                this._isClickThrough = isEnabled;
+            });
+            ipcRenderer.on('reconnect-failed', (_, data) => {
+                this.addNewResponse(data.message);
+            });
+
             // 🟢 FIX: The Global Phantom Mutator to cure the Electron Transparency Bug
             ipcRenderer.on('app-made-visible', () => {
                 document.body.style.backgroundColor = 'rgba(0,0,0,0.01)';
@@ -267,7 +359,7 @@ export class CheatingDaddyApp extends LitElement {
                 this.requestUpdate();
             });
         }
-        this.syncListener = (e) => {
+        this.syncListener = e => {
             if (e.detail && e.detail.key) {
                 if (e.detail.key === 'backgroundTransparency') {
                     if (this.bgTransparency !== e.detail.value) {
@@ -468,7 +560,7 @@ export class CheatingDaddyApp extends LitElement {
     handleStart() {
         // NEUTERED: This catches legacy Ctrl+Enter commands from the old architecture
         // and prevents it from turning on navigator.mediaDevices (which triggers the Taskbar Mic warning).
-        console.log("Legacy start intercepted and silenced for stealth.");
+        console.log('Legacy start intercepted and silenced for stealth.');
     }
 
     async handleHubNavigation(destination) {
@@ -477,7 +569,7 @@ export class CheatingDaddyApp extends LitElement {
             await ipcRenderer.invoke('quit-application');
             return;
         }
-        
+
         if (destination === 'main') {
             window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false }));
             this.currentView = destination;
@@ -487,11 +579,11 @@ export class CheatingDaddyApp extends LitElement {
 
         if (destination === 'oa' || destination === 'interview' || destination === 'companion') {
             this.sessionMode = destination === 'oa' ? 'oa' : 'interview';
-            
-            const targetEngine = destination === 'oa' ? 1 : 0; 
+
+            const targetEngine = destination === 'oa' ? 1 : 0;
             const { ipcRenderer } = window.require('electron');
             await ipcRenderer.invoke('set-ai-provider', targetEngine);
-            
+
             this.currentView = 'assistant';
             this.requestUpdate();
 
@@ -511,7 +603,7 @@ export class CheatingDaddyApp extends LitElement {
         this.bgTransparency = parseFloat(e.target.value);
         await cheatingDaddy.storage.updatePreference('backgroundTransparency', this.bgTransparency);
         this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency);
-        
+
         // 🐛 FIX: Instantly sync the slider directly to the widget!
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
@@ -545,7 +637,7 @@ export class CheatingDaddyApp extends LitElement {
         if (changedProperties.has('currentView') && window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.send('view-changed', this.currentView);
-            
+
             if (this.currentView !== 'assistant') {
                 ipcRenderer.invoke('hide-widget').catch(() => {});
                 ipcRenderer.invoke('hide-companion-chat').catch(() => {});
@@ -567,13 +659,19 @@ export class CheatingDaddyApp extends LitElement {
     }
 
     getDynamicHeaderTitle() {
-        switch(this.currentView) {
-            case 'main': return "CP Helper 20";
-            case 'assistant': return this.sessionMode === 'oa' ? "CP Helper 20 - Online Assessment" : "CP Helper 20 - Live Interview";
-            case 'customize': return "CP Helper 20 - Settings";
-            case 'history': return "CP Helper 20 - History";
-            case 'help': return "CP Helper 20 - Help";
-            default: return "CP Helper 20";
+        switch (this.currentView) {
+            case 'main':
+                return 'CP Helper 20';
+            case 'assistant':
+                return this.sessionMode === 'oa' ? 'CP Helper 20 - Online Assessment' : 'CP Helper 20 - Live Interview';
+            case 'customize':
+                return 'CP Helper 20 - Settings';
+            case 'history':
+                return 'CP Helper 20 - History';
+            case 'help':
+                return 'CP Helper 20 - Help';
+            default:
+                return 'CP Helper 20';
         }
     }
 
@@ -645,21 +743,30 @@ export class CheatingDaddyApp extends LitElement {
     render() {
         return html`
             <div class="window-container">
-                
                 <div class="vertical-slider-wrapper slider-left">
                     <span>BG</span>
-                    <input type="range" class="vertical-slider" min="0" max="1" step="0.05" 
-                           .value=${this.bgTransparency} 
-                           @input=${this.handleTransparencyChange}
-                           >
+                    <input
+                        type="range"
+                        class="vertical-slider"
+                        min="0"
+                        max="1"
+                        step="0.05"
+                        .value=${this.bgTransparency}
+                        @input=${this.handleTransparencyChange}
+                    />
                 </div>
 
                 <div class="vertical-slider-wrapper slider-right">
                     <span>Aa</span>
-                    <input type="range" class="vertical-slider" min="12" max="32" step="1" 
-                           .value=${this.fontSize} 
-                           @input=${this.handleFontSizeChange}
-                           >
+                    <input
+                        type="range"
+                        class="vertical-slider"
+                        min="12"
+                        max="32"
+                        step="1"
+                        .value=${this.fontSize}
+                        @input=${this.handleFontSizeChange}
+                    />
                 </div>
 
                 <div class="container" style="padding: 0 45px;">
@@ -673,26 +780,26 @@ export class CheatingDaddyApp extends LitElement {
                             await ipcRenderer.invoke('quit-application');
                         }}
                     ></app-header>
-                    
+
                     <div class="main-content">
                         <div class="view-container">
-                            ${this.currentView === 'main' ? html`
-                                <main-view .onNavigate=${(dest) => this.handleHubNavigation(dest)}></main-view>
-                            ` : this.currentView === 'customize' ? html`
-                                <customize-view></customize-view>
-                            ` : this.currentView === 'history' ? html`
-                                <history-view></history-view>
-                            ` : this.currentView === 'help' ? html`
-                                <help-view></help-view>
-                            ` : this.currentView === 'assistant' ? html`
-                                <assistant-view .currentMode=${this.sessionMode}></assistant-view>
-                            ` : ''}
+                            ${this.currentView === 'main'
+                                ? html` <main-view .onNavigate=${dest => this.handleHubNavigation(dest)}></main-view> `
+                                : this.currentView === 'customize'
+                                  ? html` <customize-view></customize-view> `
+                                  : this.currentView === 'history'
+                                    ? html` <history-view></history-view> `
+                                    : this.currentView === 'help'
+                                      ? html` <help-view></help-view> `
+                                      : this.currentView === 'assistant'
+                                        ? html` <assistant-view .currentMode=${this.sessionMode}></assistant-view> `
+                                        : ''}
                         </div>
                     </div>
                 </div>
             </div>
         `;
-    }   
+    }
 
     updateLayoutMode() {
         // Apply or remove compact layout class to document root

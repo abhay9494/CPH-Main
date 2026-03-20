@@ -104,7 +104,7 @@ export class CustomizeView extends LitElement {
             padding: 0;
             background: transparent;
             accent-color: #4285f4;
-            cursor: pointer !important;
+            cursor: default !important;
         }
         textarea {
             resize: vertical;

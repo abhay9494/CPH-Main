@@ -1,98 +1,145 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <title>Stealth Microphone Link</title>
-    <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: #121212; color: #fff; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
-        .btn { background: #4285f4; color: white; border: none; padding: 15px 30px; font-size: 18px; border-radius: 8px; cursor: pointer; font-weight: bold; }
-        .btn.active { background: #f14c4c; animation: pulse 1.5s infinite; }
-        #status { margin-top: 20px; font-size: 14px; color: #aaa; }
-        #log { margin-top: 20px; padding: 15px; background: #1e1e1e; border: 1px solid #333; width: 80%; max-width: 600px; height: 200px; overflow-y: auto; font-style: italic; color: #d4d4d4; }
-        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.7; } 100% { opacity: 1; } }
-    </style>
-</head>
-<body>
+    <head>
+        <meta charset="UTF-8" />
+        <title>Stealth Microphone Link</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                background: #121212;
+                color: #fff;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                height: 100vh;
+                margin: 0;
+            }
+            .btn {
+                background: #4285f4;
+                color: white;
+                border: none;
+                padding: 15px 30px;
+                font-size: 18px;
+                border-radius: 8px;
+                cursor: default !important;
+                font-weight: bold;
+            }
+            .btn.active {
+                background: #f14c4c;
+                animation: pulse 1.5s infinite;
+            }
+            #status {
+                margin-top: 20px;
+                font-size: 14px;
+                color: #aaa;
+            }
+            #log {
+                margin-top: 20px;
+                padding: 15px;
+                background: #1e1e1e;
+                border: 1px solid #333;
+                width: 80%;
+                max-width: 600px;
+                height: 200px;
+                overflow-y: auto;
+                font-style: italic;
+                color: #d4d4d4;
+            }
+            @keyframes pulse {
+                0% {
+                    opacity: 1;
+                }
+                50% {
+                    opacity: 0.7;
+                }
+                100% {
+                    opacity: 1;
+                }
+            }
+        </style>
+    </head>
+    <body>
+        <h2>Stealth Audio Link</h2>
+        <button id="micBtn" class="btn">Start Listening</button>
+        <div id="status">Waiting to start...</div>
+        <div id="log"></div>
 
-    <h2>Stealth Audio Link</h2>
-    <button id="micBtn" class="btn">Start Listening</button>
-    <div id="status">Waiting to start...</div>
-    <div id="log"></div>
+        <script>
+            const btn = document.getElementById('micBtn');
+            const status = document.getElementById('status');
+            const log = document.getElementById('log');
+            let recognition;
+            let isListening = false;
 
-    <script>
-        const btn = document.getElementById('micBtn');
-        const status = document.getElementById('status');
-        const log = document.getElementById('log');
-        let recognition;
-        let isListening = false;
-
-        function sendToElectron(type, text) {
-            fetch('http://localhost:3742/transcript', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ type, text })
-            }).catch(e => console.error("Electron app not running?", e));
-        }
-
-        btn.addEventListener('click', () => {
-            if (isListening) {
-                recognition.stop();
-                return;
+            function sendToElectron(type, text) {
+                fetch('http://localhost:3742/transcript', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ type, text }),
+                }).catch(e => console.error('Electron app not running?', e));
             }
 
-            const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-            if (!SpeechRecognition) {
-                alert("Please open this in normal Google Chrome!");
-                return;
-            }
-
-            recognition = new SpeechRecognition();
-            recognition.continuous = true;
-            recognition.interimResults = true;
-            recognition.lang = 'en-US';
-
-            recognition.onstart = () => {
-                isListening = true;
-                btn.textContent = "🔴 Listening... (Click to Stop)";
-                btn.classList.add('active');
-                status.textContent = "Audio linked to Electron.";
-            };
-
-            recognition.onresult = (event) => {
-                let interim = '';
-                let finalStr = '';
-                for (let i = event.resultIndex; i < event.results.length; ++i) {
-                    if (event.results[i].isFinal) finalStr += event.results[i][0].transcript;
-                    else interim += event.results[i][0].transcript;
+            btn.addEventListener('click', () => {
+                if (isListening) {
+                    recognition.stop();
+                    return;
                 }
-                
-                log.innerText = interim || finalStr;
-                log.scrollTop = log.scrollHeight;
 
-                // Send every syllable to Electron for live teleprompter!
-                sendToElectron('interim', (finalStr + " " + interim).trim());
-                
-                // If Chrome thinks the sentence is fully done, flag it
-                if (finalStr.trim()) {
-                    sendToElectron('final', finalStr.trim());
+                const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+                if (!SpeechRecognition) {
+                    alert('Please open this in normal Google Chrome!');
+                    return;
                 }
-            };
 
-            recognition.onerror = (e) => {
-                if (e.error !== 'no-speech') status.textContent = "Error: " + e.error;
-            };
+                recognition = new SpeechRecognition();
+                recognition.continuous = true;
+                recognition.interimResults = true;
+                recognition.lang = 'en-US';
 
-            recognition.onend = () => {
-                if (isListening) recognition.start(); // Auto-restart to stay alive
-                else {
-                    btn.textContent = "Start Listening";
-                    btn.classList.remove('active');
-                    status.textContent = "Paused.";
-                }
-            };
+                recognition.onstart = () => {
+                    isListening = true;
+                    btn.textContent = '🔴 Listening... (Click to Stop)';
+                    btn.classList.add('active');
+                    status.textContent = 'Audio linked to Electron.';
+                };
 
-            recognition.start();
-        });
-    </script>
-</body>
+                recognition.onresult = event => {
+                    let interim = '';
+                    let finalStr = '';
+                    for (let i = event.resultIndex; i < event.results.length; ++i) {
+                        if (event.results[i].isFinal) finalStr += event.results[i][0].transcript;
+                        else interim += event.results[i][0].transcript;
+                    }
+
+                    log.innerText = interim || finalStr;
+                    log.scrollTop = log.scrollHeight;
+
+                    // Send every syllable to Electron for live teleprompter!
+                    sendToElectron('interim', (finalStr + ' ' + interim).trim());
+
+                    // If Chrome thinks the sentence is fully done, flag it
+                    if (finalStr.trim()) {
+                        sendToElectron('final', finalStr.trim());
+                    }
+                };
+
+                recognition.onerror = e => {
+                    if (e.error !== 'no-speech') status.textContent = 'Error: ' + e.error;
+                };
+
+                recognition.onend = () => {
+                    if (isListening)
+                        recognition.start(); // Auto-restart to stay alive
+                    else {
+                        btn.textContent = 'Start Listening';
+                        btn.classList.remove('active');
+                        status.textContent = 'Paused.';
+                    }
+                };
+
+                recognition.start();
+            });
+        </script>
+    </body>
 </html>

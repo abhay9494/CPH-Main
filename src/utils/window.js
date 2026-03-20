@@ -456,7 +456,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 <body>
                     <div style="-webkit-app-region:drag; font-size:12px; font-weight:bold; color:#00cc66; margin-bottom:10px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #333;">
                         <span>🟢 Linked with ${data.name}</span>
-                        <span style="-webkit-app-region:no-drag; cursor:pointer; color:#f14c4c; font-size:14px;" onclick="require('electron').ipcRenderer.send('close-companion-chat')">X</span>
+                        <span style="-webkit-app-region:no-drag; cursor: default !important; color:#f14c4c; font-size:14px;" onclick="require('electron').ipcRenderer.send('close-companion-chat')">X</span>
                     </div>
                     <div id="msgs" style="flex:1; overflow-y:auto; display:flex; flex-direction:column;"></div>
                     <script>
@@ -523,7 +523,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 <body>
                     <div style="-webkit-app-region:drag; font-size:12px; font-weight:bold; color:#888; margin-bottom:10px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #333;">
                         <span>Whisper Log</span>
-                        <span style="-webkit-app-region:no-drag; cursor:pointer; color:#f14c4c; font-size:14px;" onclick="require('electron').ipcRenderer.send('close-companion-chat')">X</span>
+                        <span style="-webkit-app-region:no-drag; cursor: default !important; color:#f14c4c; font-size:14px;" onclick="require('electron').ipcRenderer.send('close-companion-chat')">X</span>
                     </div>
                     <div id="msgs" style="flex:1; overflow-y:auto; display:flex; flex-direction:column;"></div>
                     <script>

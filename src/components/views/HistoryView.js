@@ -24,7 +24,7 @@ export class HistoryView extends LitElement {
         
         .session-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 8px; }
         
-        .icon-button { background: transparent; color: var(--text-muted); border: none; padding: 2px; height: 20px; width: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; transition: 0.2s; cursor: pointer; }
+        .icon-button { background: transparent; color: var(--text-muted); border: none; padding: 2px; height: 20px; width: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; transition: 0.2s; cursor: default !important; }
         .icon-button:hover { background: rgba(255,255,255,0.1); color: var(--text-color); transform: scale(1.1); }
         .icon-button.danger:hover { background: rgba(241, 76, 76, 0.1); color: #f14c4c; }
 
@@ -71,7 +71,7 @@ export class HistoryView extends LitElement {
             height: auto; 
             border-radius: 6px; 
             border: 1px solid var(--border-color, #444); 
-            cursor: zoom-in; 
+            cursor: default !important;
             margin: 0; 
             transition: 0.2s ease-in-out; 
             box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
@@ -85,7 +85,7 @@ export class HistoryView extends LitElement {
         .code-block-wrapper { background: var(--bg-secondary); border: 1px solid var(--border-color, #333); border-radius: 6px; margin-bottom: 15px; overflow: hidden; position: relative; }
         .code-header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 5px 10px; border-bottom: 1px solid var(--border-color, #333); }
         .lang-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
-        .copy-code-btn { background: transparent; border: 1px solid #555; color: #ccc; padding: 3px 8px; border-radius: 4px; font-size: 11px; transition: 0.2s; cursor: pointer; }
+        .copy-code-btn { background: transparent; border: 1px solid #555; color: #ccc; padding: 3px 8px; border-radius: 4px; font-size: 11px; transition: 0.2s; cursor: default !important; }
         .copy-code-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
         .code-block-wrapper pre { margin: 0; padding: 15px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
         .code-block-wrapper pre code { background: transparent; padding: 0; border-radius: 0; }
@@ -93,7 +93,7 @@ export class HistoryView extends LitElement {
         .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); text-align: center; }
 
         /* 🟢 Image Modal */
-        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: zoom-out; backdrop-filter: blur(5px); }
+        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: default !important; backdrop-filter: blur(5px); }
         .image-modal img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: contain; }
 
         ::-webkit-scrollbar { width: 8px; }
@@ -284,13 +284,13 @@ export class HistoryView extends LitElement {
                             ` : html`
                                 <span class="session-title">${title}</span>
                                 <div class="session-actions">
-                                    <button class="icon-button" @click=${(e) => this.startEditing(e, session)} title="Rename">
+                                    <button class="icon-button" @click=${(e) => this.startEditing(e, session)}>
                                         <svg style="pointer-events: none;" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
                                             <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
                                         </svg>
                                     </button>
-                                    <button class="icon-button danger" @click=${(e) => this.handleDeleteSession(e, session.sessionId)} title="Delete">
+                                    <button class="icon-button danger" @click=${(e) => this.handleDeleteSession(e, session.sessionId)}>
                                         <svg style="pointer-events: none;" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                                             <polyline points="3 6 5 6 21 6"></polyline>
                                             <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>

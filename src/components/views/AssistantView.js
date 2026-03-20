@@ -7,6 +7,13 @@ export class AssistantView extends LitElement {
         *::-webkit-scrollbar-track { background: transparent; }
         *::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #333); border-radius: 4px; }
         *::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover, #444); }
+        /* 🟢 NUCLEAR CURSOR OVERRIDE (Anti-I-Beam) */
+        input, textarea, 
+        input:hover, textarea:hover, 
+        input:focus, textarea:focus, 
+        input:active, textarea:active {
+            cursor: default !important;
+        }
         :host { height: 100%; display: flex; flex-direction: column; }
         * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; cursor: default !important; }
         .response-container { height: calc(100% - 50px); overflow-y: auto; font-size: var(--response-font-size, 16px); line-height: 1.6; background: var(--bg-primary); padding: 12px; scroll-behavior: smooth; user-select: text; }
@@ -47,7 +54,7 @@ export class AssistantView extends LitElement {
             height: auto; /* Retain proportional aspect ratio */
             border-radius: 6px; 
             border: 1px solid var(--border-color, #444); 
-            cursor: zoom-in; 
+            cursor: default !important; 
             margin: 0; /* Clear previous margins, handled by grid gap now */
             transition: 0.2s ease-in-out; 
             box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
@@ -57,7 +64,7 @@ export class AssistantView extends LitElement {
         .markdown-body img:hover { opacity: 0.8; transform: scale(1.02); }
         
         /* 🟢 Image Expansion Modal */
-        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: zoom-out; backdrop-filter: blur(5px); }
+        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: default !important; backdrop-filter: blur(5px); }
         .image-modal img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: contain; }
         
         .code-block-wrapper { background: var(--bg-secondary); border: 1px solid var(--border-color, #333); border-radius: 6px; margin-bottom: 15px; overflow: hidden; position: relative; }
@@ -100,8 +107,8 @@ export class AssistantView extends LitElement {
         }
         
         .format-toggles { display: flex; gap: 12px; align-items: center; justify-content: center; width: 100%; }
-        .format-toggles label { font-size: 10px; color: var(--text-color); display: flex; align-items: center; gap: 4px; cursor: pointer !important; white-space: nowrap; font-weight: bold; }
-        .format-toggles input[type="checkbox"] { width: 12px; height: 12px; margin: 0; cursor: pointer !important; accent-color: #a142f4; }
+        .format-toggles label { font-size: 10px; color: var(--text-color); display: flex; align-items: center; gap: 4px; cursor: default !important; white-space: nowrap; font-weight: bold; }
+        .format-toggles input[type="checkbox"] { width: 12px; height: 12px; margin: 0; cursor: default !important; accent-color: #a142f4; }
 
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -1034,7 +1041,7 @@ export class AssistantView extends LitElement {
                         }
 
                         return html`
-                            <div id="typer-line-${idx}" style="display: flex; cursor: pointer; border-radius: 4px; padding: 2px 4px; margin-bottom: 2px; transition: 0.2s; background: ${bgStyle}; border: ${borderStyle}; color: ${textColor};" 
+                            <div id="typer-line-${idx}" style="display: flex; cursor: default !important; border-radius: 4px; padding: 2px 4px; margin-bottom: 2px; transition: 0.2s; background: ${bgStyle}; border: ${borderStyle}; color: ${textColor};" 
                                  @click=${() => this.handleLineClick(idx)}>
                                 <div style="width: 40px; min-width: 40px; text-align: right; padding-right: 12px; font-weight: bold; color: ${numColor}; user-select: none;">${idx + 1}</div>
                                 <div style="white-space: pre-wrap; word-wrap: break-word; flex: 1;">${line || ' '}</div>

@@ -10,7 +10,7 @@ export class OnboardingView extends LitElement {
                 'Segoe UI',
                 Roboto,
                 sans-serif;
-            cursor: default;
+            cursor: default !important;
             user-select: none;
             margin: 0;
             padding: 0;
