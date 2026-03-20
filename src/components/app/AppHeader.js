@@ -117,12 +117,6 @@ export class AppHeader extends LitElement {
                         ${this.helperStatus === 'connected' ? '🟢 LINKED' : '🔴 DISCONNECTED'}
                     </div>
                 ` : ''}
-                
-                ${this.typingState !== 'idle' ? html`
-                    <div class="blinking-alert stop-btn" @click=${this.handleStopTyping}>
-                        ${this.typingState === 'countdown' ? `⏳ Starts in ${this.typingCountdown}s (Click to Cancel)` : '🛑 STOP TYPING'}
-                    </div>
-                ` : ''}
 
                 ${(this.missingAccount || this.missingContext) && this.typingState === 'idle' && !this.isTyperMode && !this.isHelpingMode ? html`
                     <div class="blinking-alert" style="cursor: default !important;">

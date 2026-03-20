@@ -44,8 +44,7 @@ function createWindow(sendToRenderer, geminiSessionRef) {
     );
 
     mainWindow.setResizable(false);
-    // mainWindow.setContentProtection(false);
-    mainWindow.setContentProtection(true);
+    mainWindow.setContentProtection(false);
     // if (process.platform === 'win32') mainWindow.setDisplayAffinity('exclude_from_capture');
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
@@ -425,7 +424,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
             
-            companionChatWindow.setContentProtection(true);
+            companionChatWindow.setContentProtection(false);
             
             const htmlContent = `
                 <html>
@@ -492,7 +491,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
             
-            companionChatWindow.setContentProtection(true);
+            companionChatWindow.setContentProtection(false);
             
             const htmlContent = `
                 <html>

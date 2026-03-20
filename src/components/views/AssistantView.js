@@ -17,7 +17,48 @@ export class AssistantView extends LitElement {
         .response-container::-webkit-scrollbar { width: 8px; }
         .response-container::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb); border-radius: 4px; }
 
+        /* 🟢 The Core Chat Container (Restores flex: 1 to push buttons to the bottom) */
         .markdown-body { flex: 1; width: 100%; padding: 20px; padding-top: 15px; font-size: var(--response-font-size, 15px); line-height: 1.6; color: #d4d4d4; overflow-y: auto; overflow-x: hidden; word-wrap: break-word; font-family: 'Inter', sans-serif; }
+        
+        /* 🐛 FIX: The image layout fix (Grid view) */
+        
+        /* The CSS markdown parser often injects <br> tags. We must hide them so they don't become empty grid items. */
+        .markdown-body br { display: none; } 
+        
+        /* Target the exact message content div generated for the User prompt */
+        .markdown-body strong + br + p img,
+        .markdown-body strong + br + img,
+        .markdown-body p:has(img) {
+            display: grid;
+            /* Creates exactly 5 columns of equal width automatically */
+            grid-template-columns: repeat(5, minmax(0, 1fr)); 
+            /* Vertical and horizontal gapping between images */
+            gap: 12px; 
+            margin-top: 15px;
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.15); /* Slightly darker bg to make images pop */
+            border-radius: 6px;
+        }
+
+        /* Update image styles so they fit perfectly into the new grid cells */
+        .markdown-body img { 
+            width: 100%; /* Force image to fill cell width */
+            height: auto; /* Retain proportional aspect ratio */
+            border-radius: 6px; 
+            border: 1px solid var(--border-color, #444); 
+            cursor: zoom-in; 
+            margin: 0; /* Clear previous margins, handled by grid gap now */
+            transition: 0.2s ease-in-out; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
+            object-fit: contain; /* Prevents weird stretching */
+        }
+        
+        .markdown-body img:hover { opacity: 0.8; transform: scale(1.02); }
+        
+        /* 🟢 Image Expansion Modal */
+        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: zoom-out; backdrop-filter: blur(5px); }
+        .image-modal img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: contain; }
         
         .code-block-wrapper { background: var(--bg-secondary); border: 1px solid var(--border-color, #333); border-radius: 6px; margin-bottom: 15px; overflow: hidden; position: relative; }
         .code-header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 5px 10px; border-bottom: 1px solid var(--border-color, #333); }
@@ -107,6 +148,8 @@ export class AssistantView extends LitElement {
         autoSyncMode: { type: Boolean },
         currentMode: { type: String },
         hasReceivedCompanionProfile: { type: Boolean },
+        currentSessionId: { type: String },
+        modalImage: { type: String },
     };
 
     constructor() {
@@ -148,6 +191,8 @@ export class AssistantView extends LitElement {
         this.missedPongs = 0;
         this.autoSyncMode = false; // Default to Draft Mode (Vetting ON)
         this.hasReceivedCompanionProfile = false;
+        this.currentSessionId = Date.now().toString();
+        this.modalImage = null;
     }
 
     navigateToPreviousResponse() {
@@ -260,6 +305,7 @@ export class AssistantView extends LitElement {
                 if (this.typingState === 'idle') {
                     this.viewMode = 'chat';
                     window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
+                    if (window.require) window.require('electron').ipcRenderer.invoke('show-widget'); // 🐛 FIX: Restore widget
                     this.requestUpdate();
                 }
             };
@@ -300,6 +346,7 @@ export class AssistantView extends LitElement {
                 }
                 
                 this.requestUpdate(); 
+                this.saveCurrentSession();
                 if (this.localChatHistory.length > 0 && this.autoSyncMode) {
                     this.transmitCleanPayload(this.localChatHistory[this.localChatHistory.length - 1]);
                 }
@@ -312,7 +359,7 @@ export class AssistantView extends LitElement {
                     this.localChatHistory = a;
                     
                     this.requestUpdate();
-                    
+                    this.saveCurrentSession();
                     if (this.autoSyncMode) {
                         this.transmitCleanPayload(this.localChatHistory[this.localChatHistory.length - 1]);
                     }
@@ -594,6 +641,11 @@ export class AssistantView extends LitElement {
     }
 
     handleMarkdownClick(e) {
+        if (e.target.tagName === 'IMG') {
+            this.modalImage = e.target.src;
+            this.requestUpdate();
+            return;
+        }
         if (e.target.classList.contains('copy-code-btn')) {
             const code = decodeURIComponent(e.target.getAttribute('data-code'));
             if (window.require) window.require('electron').clipboard.writeText(code);
@@ -614,6 +666,7 @@ export class AssistantView extends LitElement {
             // 🟢 Signal to morph layout
             this.viewMode = 'typer';
             window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: true }));
+            if (window.require) window.require('electron').ipcRenderer.invoke('hide-widget'); // 🐛 FIX: Hide widget in Typer
             this.requestUpdate();
         }
     }
@@ -685,6 +738,29 @@ export class AssistantView extends LitElement {
         return true;
     }
 
+    async saveCurrentSession() {
+        if (!this.localChatHistory || this.localChatHistory.length === 0) return;
+        
+        const formattedHistory = this.localChatHistory.map(msg => {
+            const parts = msg.split('🤖 AI:');
+            let userText = parts[0] ? parts[0].replace('👤 You:', '').trim() : '';
+            let aiText = parts[1] ? parts[1].replace(/^\n/, '').trim() : '';
+            
+            return {
+                transcription: userText,
+                ai_response: aiText,
+                timestamp: parseInt(this.currentSessionId)
+            };
+        });
+
+        if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+            await window.cheatingDaddy.storage.saveSession(this.currentSessionId, {
+                profile: this.currentMode || 'Auto',
+                conversationHistory: formattedHistory
+            });
+        }
+    }
+
     async handleSendManualText() {
         const input = this.shadowRoot.querySelector('#manualPromptInput');
         if (input && input.value.trim() && window.require) {
@@ -705,6 +781,7 @@ export class AssistantView extends LitElement {
             this.localChatIndex = this.localChatHistory.length - 1;
             input.value = '';
             this.requestUpdate();
+            this.saveCurrentSession();
             
             // Then let the backend do the heavy lifting
             await ipcRenderer.invoke('send-manual-text', payload);
@@ -741,12 +818,19 @@ export class AssistantView extends LitElement {
             const { ipcRenderer } = window.require('electron');
             this.isSolving = true;
             const imgCount = this.capturedCount;
+            
+            // 🐛 FIX: Fetch the actual Base64 images from the backend before clearing!
+            const imagesB64 = await ipcRenderer.invoke('get-screenshots');
             this.capturedCount = 0;
             
-            this.lastUserPrompt = `📸 Uploaded ${imgCount} Screenshot(s) & Triggered AI`;
+            // 🐛 FIX: Embed them as markdown HTML so the markdown parser renders them perfectly!
+            const imgHtml = imagesB64.map(src => `<img src="${src}" />`).join('');
+            
+            this.lastUserPrompt = `📸 Uploaded ${imgCount} Screenshot(s) & Triggered AI\n\n${imgHtml}`;
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Solving...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
+            this.saveCurrentSession();
 
             await ipcRenderer.invoke('send-oa-automation', this.getFinalLanguage());
 
@@ -762,6 +846,7 @@ export class AssistantView extends LitElement {
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Refactoring...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
+            this.saveCurrentSession();
             await window.require('electron').ipcRenderer.invoke('send-oa-refactor');
         }
     }
@@ -783,6 +868,7 @@ export class AssistantView extends LitElement {
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ingesting context...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
+            this.saveCurrentSession();
 
             await ipcRenderer.invoke('send-manual-text', payload);
         }
@@ -800,11 +886,14 @@ export class AssistantView extends LitElement {
 
     async handleNewChat() {
         if (window.require) {
-            this.isMicOn = false; 
+            this.isMicOn = false;
+            this.currentSessionId = Date.now().toString(); // 🐛 FIX: Generate a new ID for History
             this.lastUserPrompt = "✨ Fresh Chat Context Started";
-            this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ready for new input...)`];
-            this.localChatIndex = this.localChatHistory.length - 1;
+            // 🐛 FIX: Wipe the array clean instead of appending!
+            this.localChatHistory = [`${this.lastUserPrompt}\n\n🤖 AI: (Ready for new input...)`];
+            this.localChatIndex = 0;
             this.requestUpdate();
+            this.saveCurrentSession(); // Save the initial state of the new session
             await window.require('electron').ipcRenderer.invoke('new-chat');
         }
     }
@@ -1142,8 +1231,13 @@ export class AssistantView extends LitElement {
                     `}
                 </div>
             </div>
+
+            ${this.modalImage ? html`
+                <div class="image-modal" @click=${() => { this.modalImage = null; this.requestUpdate(); }}>
+                    <img src=${this.modalImage} @click=${(e) => e.stopPropagation()} />
+                </div>
+            ` : ''}
         `;
     }
-    
 }
 customElements.define('assistant-view', AssistantView);

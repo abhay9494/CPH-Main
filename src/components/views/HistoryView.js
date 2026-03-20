@@ -3,351 +3,86 @@ import { resizeLayout } from '../../utils/windowResize.js';
 
 export class HistoryView extends LitElement {
     static styles = css`
-        * {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            cursor: default;
-            user-select: none;
-        }
+        /* 🟢 Import Highlight.js theme directly into the Shadow DOM */
+        @import url('[https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css](https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css)');
 
-        :host {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            width: 100%;
-        }
+        * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; box-sizing: border-box; }
+        :host { height: 100%; display: flex; flex-direction: column; width: 100%; color: var(--text-color); }
+        
+        .history-container { display: flex; width: 100%; height: 100%; }
+        
+        /* 🟢 Sidebar */
+        .sessions-list { width: 260px; border-right: 1px solid var(--border-color); overflow-y: auto; background: var(--bg-primary); display: flex; flex-direction: column; }
+        
+        .session-item { padding: 15px; border-bottom: 1px solid var(--border-color); transition: 0.2s; cursor: default !important; border-left: 3px solid transparent; position: relative; }
+        .session-item:hover { background: var(--hover-background); }
+        .session-item.selected { background: var(--bg-tertiary); border-left-color: #a142f4; }
+        
+        .session-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+        .session-title { font-weight: bold; font-size: 13px; color: var(--text-color); flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .title-input { width: 100%; background: var(--bg-tertiary); color: var(--text-color); border: 1px solid #4285f4; border-radius: 3px; font-size: 13px; padding: 2px 4px; outline: none; box-sizing: border-box; }
+        
+        .session-actions { display: flex; gap: 4px; flex-shrink: 0; margin-left: 8px; }
+        
+        .icon-button { background: transparent; color: var(--text-muted); border: none; padding: 2px; height: 20px; width: 20px; border-radius: 3px; display: flex; align-items: center; justify-content: center; transition: 0.2s; cursor: pointer; }
+        .icon-button:hover { background: rgba(255,255,255,0.1); color: var(--text-color); transform: scale(1.1); }
+        .icon-button.danger:hover { background: rgba(241, 76, 76, 0.1); color: #f14c4c; }
 
-        .history-container {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-        }
+        .session-meta-row { display: flex; justify-content: space-between; align-items: center; }
+        .session-date { font-size: 11px; color: var(--text-muted); }
+        .session-count { font-size: 10px; color: #666; font-family: monospace; }
 
-        .sessions-list {
-            flex: 1;
-            overflow-y: auto;
-        }
+        /* 🟢 Right Pane Layout */
+        .main-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg-primary); overflow: hidden; }
+        .pane-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); }
+        .header-title { font-size: 14px; font-weight: bold; color: var(--text-color); margin: 0; }
 
-        .session-item {
-            padding: 12px;
-            border-bottom: 1px solid var(--border-color);
-            transition: background 0.1s ease;
-        }
+        /* 🟢 Markdown Chat Feed & Images */
+        .conversation-view { flex: 1; overflow-y: auto; background: var(--bg-primary); }
+        .markdown-body { width: 100%; padding: 20px 25px; font-size: var(--response-font-size, 13px); line-height: 1.6; color: var(--text-color); overflow-x: hidden; word-wrap: break-word; font-family: 'Inter', sans-serif; }
+        
+        /* 🐛 FIX: Bulletproof Gap Removal */
+        .message-block { margin-bottom: 25px; }
+        .message-label { font-size: 13px; font-weight: bold; margin-bottom: 4px; display: block; }
+        .message-label.me { color: #4285f4; }
+        .message-label.ai { color: #ef4444; }
+        
+        .message-content { margin-top: 4px; }
+        .message-content > *:first-child { margin-top: 0 !important; }
+        .message-content > *:last-child { margin-bottom: 0 !important; }
 
-        .session-item:hover {
-            background: var(--hover-background);
-        }
+        .markdown-body img { max-width: 100%; border-radius: 6px; border: 1px solid var(--border-color); cursor: zoom-in; margin: 10px 0; transition: opacity 0.2s; }
+        .markdown-body img:hover { opacity: 0.8; }
+        .markdown-body p { margin: 0.8em 0; }
+        
+        /* 🟢 Code Block Formatting */
+        .code-block-wrapper { background: var(--bg-secondary); border: 1px solid var(--border-color, #333); border-radius: 6px; margin-bottom: 15px; overflow: hidden; position: relative; }
+        .code-header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 5px 10px; border-bottom: 1px solid var(--border-color, #333); }
+        .lang-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
+        .copy-code-btn { background: transparent; border: 1px solid #555; color: #ccc; padding: 3px 8px; border-radius: 4px; font-size: 11px; transition: 0.2s; cursor: pointer; }
+        .copy-code-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+        .code-block-wrapper pre { margin: 0; padding: 15px; overflow-x: auto; white-space: pre-wrap; word-wrap: break-word; }
+        .code-block-wrapper pre code { background: transparent; padding: 0; border-radius: 0; }
 
-        .session-item.selected {
-            background: var(--bg-secondary);
-        }
+        .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; color: var(--text-muted); text-align: center; }
 
-        .session-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 4px;
-        }
+        /* 🟢 Image Modal */
+        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: zoom-out; backdrop-filter: blur(5px); }
+        .image-modal img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: contain; }
 
-        .session-date {
-            font-size: 12px;
-            font-weight: 500;
-            color: var(--text-color);
-        }
-
-        .session-time {
-            font-size: 11px;
-            color: var(--text-muted);
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-
-        .session-preview {
-            font-size: 11px;
-            color: var(--text-muted);
-            line-height: 1.3;
-        }
-
-        .conversation-view {
-            flex: 1;
-            overflow-y: auto;
-            background: var(--bg-primary);
-            padding: 12px 0;
-            user-select: text;
-        }
-
-        .message {
-            margin-bottom: 8px;
-            padding: 8px 12px;
-            border-left: 2px solid transparent;
-            font-size: 12px;
-            line-height: 1.4;
-            background: var(--bg-secondary);
-            user-select: text;
-            white-space: pre-wrap;
-            word-wrap: break-word;
-        }
-
-        .message.user {
-            border-left-color: #3b82f6;
-        }
-
-        .message.ai {
-            border-left-color: #ef4444;
-        }
-
-        .back-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-            padding: 12px 12px 12px 12px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .back-button {
-            background: transparent;
-            color: var(--text-color);
-            border: 1px solid var(--border-color);
-            padding: 6px 12px;
-            border-radius: 3px;
-            font-size: 11px;
-            font-weight: 500;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            transition: background 0.1s ease;
-        }
-
-        .back-button:hover {
-            background: var(--hover-background);
-        }
-
-        .legend {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-        }
-
-        .legend-item {
-            display: flex;
-            align-items: center;
-            gap: 4px;
-            font-size: 10px;
-            color: var(--text-muted);
-        }
-
-        .legend-dot {
-            width: 8px;
-            height: 2px;
-        }
-
-        .legend-dot.user {
-            background-color: #3b82f6;
-        }
-
-        .legend-dot.ai {
-            background-color: #ef4444;
-        }
-
-        .legend-dot.screen {
-            background-color: #22c55e;
-        }
-
-        .session-context {
-            padding: 8px 12px;
-            margin-bottom: 8px;
-            background: var(--bg-tertiary);
-            border-radius: 4px;
-            font-size: 11px;
-        }
-
-        .session-context-row {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 4px;
-        }
-
-        .session-context-row:last-child {
-            margin-bottom: 0;
-        }
-
-        .context-label {
-            color: var(--text-muted);
-            min-width: 80px;
-        }
-
-        .context-value {
-            color: var(--text-color);
-            font-weight: 500;
-        }
-
-        .custom-prompt-value {
-            color: var(--text-secondary);
-            font-style: italic;
-            word-break: break-word;
-            white-space: pre-wrap;
-        }
-
-        .view-tabs {
-            display: flex;
-            gap: 0;
-            border-bottom: 1px solid var(--border-color);
-            margin-bottom: 8px;
-        }
-
-        .view-tab {
-            background: transparent;
-            color: var(--text-muted);
-            border: none;
-            padding: 8px 16px;
-            font-size: 11px;
-            font-weight: 500;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -1px;
-            transition: color 0.1s ease;
-        }
-
-        .view-tab:hover {
-            color: var(--text-color);
-        }
-
-        .view-tab.active {
-            color: var(--text-color);
-            border-bottom-color: var(--text-color);
-        }
-
-        .message.screen {
-            border-left-color: #22c55e;
-        }
-
-        .analysis-meta {
-            font-size: 10px;
-            color: var(--text-muted);
-            margin-bottom: 4px;
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-
-        .empty-state {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 12px;
-            margin-top: 32px;
-        }
-
-        .empty-state-title {
-            font-size: 14px;
-            font-weight: 500;
-            margin-bottom: 6px;
-            color: var(--text-secondary);
-        }
-
-        .loading {
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 12px;
-            margin-top: 32px;
-        }
-
-        .sessions-list::-webkit-scrollbar,
-        .conversation-view::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .sessions-list::-webkit-scrollbar-track,
-        .conversation-view::-webkit-scrollbar-track {
-            background: transparent;
-        }
-
-        .sessions-list::-webkit-scrollbar-thumb,
-        .conversation-view::-webkit-scrollbar-thumb {
-            background: var(--scrollbar-thumb);
-            border-radius: 4px;
-        }
-
-        .sessions-list::-webkit-scrollbar-thumb:hover,
-        .conversation-view::-webkit-scrollbar-thumb:hover {
-            background: var(--scrollbar-thumb-hover);
-        }
-
-        .tabs-container {
-            display: flex;
-            gap: 0;
-            margin-bottom: 16px;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .tab {
-            background: transparent;
-            color: var(--text-muted);
-            border: none;
-            padding: 8px 16px;
-            font-size: 12px;
-            font-weight: 500;
-            transition: color 0.1s ease;
-            border-bottom: 2px solid transparent;
-            margin-bottom: -1px;
-        }
-
-        .tab:hover {
-            color: var(--text-color);
-        }
-
-        .tab.active {
-            color: var(--text-color);
-            border-bottom-color: var(--text-color);
-        }
-
-        .saved-response-item {
-            padding: 12px 0;
-            border-bottom: 1px solid var(--border-color);
-        }
-
-        .saved-response-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 6px;
-        }
-
-        .saved-response-profile {
-            font-size: 11px;
-            font-weight: 500;
-            color: var(--text-secondary);
-            text-transform: capitalize;
-        }
-
-        .saved-response-date {
-            font-size: 10px;
-            color: var(--text-muted);
-            font-family: 'SF Mono', Monaco, monospace;
-        }
-
-        .saved-response-content {
-            font-size: 12px;
-            color: var(--text-color);
-            line-height: 1.4;
-            user-select: text;
-        }
-
-        .delete-button {
-            background: transparent;
-            color: var(--text-muted);
-            border: none;
-            padding: 4px;
-            border-radius: 3px;
-            transition: all 0.1s ease;
-        }
-
-        .delete-button:hover {
-            background: rgba(241, 76, 76, 0.1);
-            color: var(--error-color);
-        }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-color); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #666; }
     `;
 
     static properties = {
         sessions: { type: Array },
         selectedSession: { type: Object },
         loading: { type: Boolean },
-        activeTab: { type: String },
+        editingSessionId: { type: String },
+        editTitleValue: { type: String },
+        modalImage: { type: String }
     };
 
     constructor() {
@@ -355,22 +90,24 @@ export class HistoryView extends LitElement {
         this.sessions = [];
         this.selectedSession = null;
         this.loading = true;
-        this.activeTab = 'conversation'; // 'conversation' or 'screen'
+        this.editingSessionId = null;
+        this.editTitleValue = '';
+        this.modalImage = null;
         this.loadSessions();
     }
 
     connectedCallback() {
         super.connectedCallback();
-        // Resize window for this view
         resizeLayout();
     }
 
     async loadSessions() {
         try {
             this.loading = true;
-            this.sessions = await cheatingDaddy.storage.getAllSessions();
+            let loaded = await window.cheatingDaddy.storage.getAllSessions();
+            this.sessions = loaded.sort((a, b) => b.createdAt - a.createdAt);
         } catch (error) {
-            console.error('Error loading conversation sessions:', error);
+            console.error('Error loading sessions:', error);
             this.sessions = [];
         } finally {
             this.loading = false;
@@ -378,264 +115,229 @@ export class HistoryView extends LitElement {
         }
     }
 
-    async loadSelectedSession(sessionId) {
+    async handleSessionClick(session) {
+        if (this.editingSessionId === session.sessionId) return;
         try {
-            const session = await cheatingDaddy.storage.getSession(sessionId);
-            if (session) {
-                this.selectedSession = session;
+            const fullSession = await window.cheatingDaddy.storage.getSession(session.sessionId);
+            if (fullSession) {
+                this.selectedSession = fullSession;
                 this.requestUpdate();
             }
-        } catch (error) {
-            console.error('Error loading session:', error);
+        } catch (error) { console.error('Error loading session:', error); }
+    }
+
+    async handleDeleteSession(e, sessionId) {
+        e.stopPropagation();
+        if (confirm("Permanently delete this session log?")) {
+            await window.cheatingDaddy.storage.deleteSession(sessionId);
+            if (this.selectedSession && this.selectedSession.sessionId === sessionId) {
+                this.selectedSession = null;
+            }
+            this.loadSessions();
         }
     }
 
-    formatDate(timestamp) {
-        const date = new Date(timestamp);
-        return date.toLocaleDateString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            year: 'numeric',
-        });
+    startEditing(e, session) {
+        e.stopPropagation();
+        this.editingSessionId = session.sessionId;
+        this.editTitleValue = session.customName || `Session ${new Date(session.createdAt).toLocaleDateString()}`;
+        this.requestUpdate();
+        setTimeout(() => {
+            const input = this.shadowRoot.querySelector(`#edit-input-${session.sessionId}`);
+            if (input) { input.focus(); input.select(); }
+        }, 50);
     }
 
-    formatTime(timestamp) {
-        const date = new Date(timestamp);
-        return date.toLocaleTimeString('en-US', {
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    }
-
-    formatTimestamp(timestamp) {
-        const date = new Date(timestamp);
-        return date.toLocaleString('en-US', {
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit',
-        });
-    }
-
-    getSessionPreview(session) {
-        const parts = [];
-        if (session.messageCount > 0) {
-            parts.push(`${session.messageCount} messages`);
+    async saveSessionName(e, session) {
+        if (e.type === 'blur' || e.key === 'Enter') {
+            e.preventDefault();
+            const newName = this.editTitleValue.trim();
+            if (newName) {
+                try {
+                    const fullSession = await window.cheatingDaddy.storage.getSession(session.sessionId);
+                    if (fullSession) {
+                        fullSession.customName = newName;
+                        await window.cheatingDaddy.storage.saveSession(session.sessionId, fullSession);
+                        if (this.selectedSession && this.selectedSession.sessionId === session.sessionId) {
+                            this.selectedSession.customName = newName;
+                        }
+                        await this.loadSessions();
+                    }
+                } catch (error) { console.error("Failed to rename", error); }
+            }
+            this.editingSessionId = null;
+            this.requestUpdate();
         }
-        if (session.screenAnalysisCount > 0) {
-            parts.push(`${session.screenAnalysisCount} screen analysis`);
+        if (e.key === 'Escape') {
+            this.editingSessionId = null;
+            this.requestUpdate();
         }
-        if (session.profile) {
-            const profileNames = this.getProfileNames();
-            parts.push(profileNames[session.profile] || session.profile);
+    }
+
+    renderMarkdown(text) {
+        if (!text) return '';
+        if (window.marked && window.hljs) {
+            try {
+                const renderer = new window.marked.Renderer();
+                renderer.code = function(code, language) {
+                    const codeStr = typeof code === 'object' ? (code.text || '') : (code || '');
+                    const langStr = typeof code === 'object' ? (code.lang || '') : (language || '');
+                    
+                    // 🐛 THE FIX: This single missing line was crashing the parser and causing the raw backticks!
+                    const langName = langStr.toLowerCase(); 
+                    
+                    const validLang = (langName && window.hljs.getLanguage(langName)) ? langName : 'plaintext';
+                    let highlighted = codeStr;
+                    try { highlighted = window.hljs.highlight(codeStr, { language: validLang }).value; } 
+                    catch (e) { highlighted = codeStr.replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+                    
+                    const encodedCode = encodeURIComponent(codeStr); 
+                    const displayLang = validLang === 'plaintext' ? 'code' : validLang;
+                    
+                    return `
+                        <div class="code-block-wrapper">
+                            <div class="code-header">
+                                <span class="lang-label">${displayLang}</span>
+                                <div><button class="copy-code-btn" data-code="${encodedCode}">📋 Copy</button></div>
+                            </div>
+                            <pre><code class="hljs ${validLang}">${highlighted}</code></pre>
+                        </div>`;
+                };
+                if (typeof window.marked.parse === 'function') return window.marked.parse(text, { renderer: renderer, breaks: true });
+                else { window.marked.setOptions({ renderer: renderer, breaks: true }); return window.marked(text); }
+            } catch (e) {
+                console.error("Markdown Parser Error:", e);
+            }
         }
-        return parts.length > 0 ? parts.join(' • ') : 'Empty session';
+        return `<pre style="white-space: pre-wrap; margin: 0;">${text}</pre>`; 
     }
 
-    handleSessionClick(session) {
-        this.loadSelectedSession(session.sessionId);
+    handleMarkdownClick(e) {
+        if (e.target.tagName === 'IMG') {
+            this.modalImage = e.target.src;
+            this.requestUpdate();
+        }
+        if (e.target.classList.contains('copy-code-btn')) {
+            const code = decodeURIComponent(e.target.getAttribute('data-code'));
+            if (window.require) window.require('electron').clipboard.writeText(code);
+            e.target.innerText = '✅ Copied!';
+            setTimeout(() => { e.target.innerText = '📋 Copy'; }, 2000);
+        }
     }
 
-    handleBackClick() {
-        this.selectedSession = null;
-        this.activeTab = 'conversation';
-    }
-
-    handleTabClick(tab) {
-        this.activeTab = tab;
-    }
-
-    getProfileNames() {
-        return {
-            interview: 'Job Interview',
-            sales: 'Sales Call',
-            meeting: 'Business Meeting',
-            presentation: 'Presentation',
-            negotiation: 'Negotiation',
-            exam: 'Exam Assistant',
-        };
+    formatDateMeta(timestamp) { 
+        const d = new Date(timestamp);
+        return `${d.toLocaleDateString()} \u00A0 ${d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`; 
     }
 
     renderSessionsList() {
-        if (this.loading) {
-            return html`<div class="loading">Loading conversation history...</div>`;
-        }
-
-        if (this.sessions.length === 0) {
-            return html`
-                <div class="empty-state">
-                    <div class="empty-state-title">No conversations yet</div>
-                    <div>Start a session to see your conversation history here</div>
-                </div>
-            `;
-        }
+        if (this.loading) return html`<div class="empty-state" style="font-size: 12px;">Loading...</div>`;
+        if (this.sessions.length === 0) return html`
+            <div class="empty-state">
+                <div style="font-size: 24px; margin-bottom: 5px;">📭</div>
+                <div style="font-size: 12px;">No sessions yet</div>
+            </div>`;
 
         return html`
             <div class="sessions-list">
-                ${this.sessions.map(
-                    session => html`
-                        <div class="session-item" @click=${() => this.handleSessionClick(session)}>
-                            <div class="session-header">
-                                <div class="session-date">${this.formatDate(session.createdAt)}</div>
-                                <div class="session-time">${this.formatTime(session.createdAt)}</div>
-                            </div>
-                            <div class="session-preview">${this.getSessionPreview(session)}</div>
+                ${this.sessions.map(session => {
+                    const title = session.customName || `Session ${new Date(session.createdAt).toLocaleDateString()}`;
+                    const isEditing = this.editingSessionId === session.sessionId;
+                    
+                    return html`
+                    <div class="session-item ${this.selectedSession?.sessionId === session.sessionId ? 'selected' : ''}" @click=${() => this.handleSessionClick(session)}>
+                        
+                        <div class="session-title-row">
+                            ${isEditing ? html`
+                                <input class="title-input" id="edit-input-${session.sessionId}"
+                                    .value=${this.editTitleValue} 
+                                    @input=${e => this.editTitleValue = e.target.value}
+                                    @keydown=${(e) => this.saveSessionName(e, session)}
+                                    @blur=${(e) => this.saveSessionName(e, session)}
+                                    @click=${e => e.stopPropagation()}>
+                            ` : html`
+                                <span class="session-title">${title}</span>
+                                <div class="session-actions">
+                                    <button class="icon-button" @click=${(e) => this.startEditing(e, session)} title="Rename">
+                                        <svg style="pointer-events: none;" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+                                            <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path>
+                                        </svg>
+                                    </button>
+                                    <button class="icon-button danger" @click=${(e) => this.handleDeleteSession(e, session.sessionId)} title="Delete">
+                                        <svg style="pointer-events: none;" xmlns="[http://www.w3.org/2000/svg](http://www.w3.org/2000/svg)" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="3 6 5 6 21 6"></polyline>
+                                            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+                                        </svg>
+                                    </button>
+                                </div>
+                            `}
                         </div>
-                    `
-                )}
-            </div>
-        `;
-    }
-
-    renderContextContent() {
-        const { profile, customPrompt } = this.selectedSession;
-        const profileNames = this.getProfileNames();
-
-        if (!profile && !customPrompt) {
-            return html`<div class="empty-state">No profile context available</div>`;
-        }
-
-        return html`
-            <div class="session-context">
-                ${profile ? html`
-                    <div class="session-context-row">
-                        <span class="context-label">Profile:</span>
-                        <span class="context-value">${profileNames[profile] || profile}</span>
+                        
+                        <div class="session-meta-row">
+                            <span class="session-date">${this.formatDateMeta(session.createdAt)}</span>
+                            <span class="session-count">${session.messageCount || 0} msgs</span>
+                        </div>
                     </div>
-                ` : ''}
-                ${customPrompt ? html`
-                    <div class="session-context-row">
-                        <span class="context-label">Custom Prompt:</span>
-                        <span class="custom-prompt-value">${customPrompt}</span>
-                    </div>
-                ` : ''}
+                `})}
             </div>
         `;
     }
 
     renderConversationContent() {
-        const { conversationHistory } = this.selectedSession;
-
-        // Flatten the conversation turns into individual messages
-        const messages = [];
-        if (conversationHistory) {
-            conversationHistory.forEach(turn => {
-                if (turn.transcription) {
-                    messages.push({
-                        type: 'user',
-                        content: turn.transcription,
-                        timestamp: turn.timestamp,
-                    });
-                }
-                if (turn.ai_response) {
-                    messages.push({
-                        type: 'ai',
-                        content: turn.ai_response,
-                        timestamp: turn.timestamp,
-                    });
-                }
-            });
-        }
-
-        if (messages.length === 0) {
-            return html`<div class="empty-state">No conversation data available</div>`;
-        }
-
-        return messages.map(message => html`<div class="message ${message.type}">${message.content}</div>`);
-    }
-
-    renderScreenAnalysisContent() {
-        const { screenAnalysisHistory } = this.selectedSession;
-
-        if (!screenAnalysisHistory || screenAnalysisHistory.length === 0) {
-            return html`<div class="empty-state">No screen analysis data available</div>`;
-        }
-
-        return screenAnalysisHistory.map(analysis => html`
-            <div class="message screen"><div class="analysis-meta">${this.formatTimestamp(analysis.timestamp)} • ${analysis.model || 'unknown model'}</div>${analysis.response}</div>
-        `);
-    }
-
-    renderConversationView() {
-        if (!this.selectedSession) return html``;
-
-        const { conversationHistory, screenAnalysisHistory, profile, customPrompt } = this.selectedSession;
-        const hasConversation = conversationHistory && conversationHistory.length > 0;
-        const hasScreenAnalysis = screenAnalysisHistory && screenAnalysisHistory.length > 0;
-        const hasContext = profile || customPrompt;
+        const history = this.selectedSession.conversationHistory || [];
+        if (history.length === 0) return html`<div class="empty-state">No conversation data found.</div>`;
 
         return html`
-            <div class="back-header">
-                <button class="back-button" @click=${this.handleBackClick}>
-                    <svg
-                        width="16px"
-                        height="16px"
-                        stroke-width="1.7"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        xmlns="http://www.w3.org/2000/svg"
-                        color="currentColor"
-                    >
-                        <path d="M15 6L9 12L15 18" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"></path>
-                    </svg>
-                    Back to Sessions
-                </button>
-                <div class="legend">
-                    <div class="legend-item">
-                        <div class="legend-dot user"></div>
-                        <span>Them</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-dot ai"></div>
-                        <span>Suggestion</span>
-                    </div>
-                    <div class="legend-item">
-                        <div class="legend-dot screen"></div>
-                        <span>Screen</span>
-                    </div>
-                </div>
-            </div>
-            <div class="view-tabs">
-                <button
-                    class="view-tab ${this.activeTab === 'conversation' ? 'active' : ''}"
-                    @click=${() => this.handleTabClick('conversation')}
-                >
-                    Conversation ${hasConversation ? `(${conversationHistory.length})` : ''}
-                </button>
-                <button
-                    class="view-tab ${this.activeTab === 'screen' ? 'active' : ''}"
-                    @click=${() => this.handleTabClick('screen')}
-                >
-                    Screen ${hasScreenAnalysis ? `(${screenAnalysisHistory.length})` : ''}
-                </button>
-                <button
-                    class="view-tab ${this.activeTab === 'context' ? 'active' : ''}"
-                    @click=${() => this.handleTabClick('context')}
-                >
-                    Context ${hasContext ? '' : '(empty)'}
-                </button>
-            </div>
-            <div class="conversation-view">
-                ${this.activeTab === 'conversation'
-                    ? this.renderConversationContent()
-                    : this.activeTab === 'screen'
-                        ? this.renderScreenAnalysisContent()
-                        : this.renderContextContent()}
+            <div class="markdown-body" @click=${this.handleMarkdownClick}>
+                ${history.map(turn => html`
+                    ${turn.transcription ? html`
+                        <div class="message-block">
+                            <span class="message-label me">👤 ME:</span>
+                            <div class="message-content" .innerHTML=${this.renderMarkdown(turn.transcription)}></div>
+                        </div>
+                    ` : ''}
+                    ${turn.ai_response ? html`
+                        <div class="message-block">
+                            <span class="message-label ai">🤖 AI:</span>
+                            <div class="message-content" .innerHTML=${this.renderMarkdown(turn.ai_response)}></div>
+                        </div>
+                    ` : ''}
+                `)}
             </div>
         `;
     }
 
     render() {
-        if (this.selectedSession) {
-            return html`<div class="history-container">${this.renderConversationView()}</div>`;
-        }
-
         return html`
             <div class="history-container">
                 ${this.renderSessionsList()}
+
+                <div class="main-pane">
+                    ${this.selectedSession ? html`
+                        <div class="pane-header">
+                            <h3 class="header-title">${this.selectedSession.customName || `Session ${new Date(this.selectedSession.createdAt).toLocaleDateString()}`}</h3>
+                        </div>
+                        
+                        <div class="conversation-view">
+                            ${this.renderConversationContent()}
+                        </div>
+                    ` : html`
+                        <div class="empty-state">
+                            <div style="font-size: 30px; margin-bottom: 10px; opacity: 0.3;">👈</div>
+                            <h3 style="margin-top: 0; margin-bottom: 5px;">Select a session</h3>
+                            <p style="font-size: 12px;">Choose a past session from the left sidebar to review it.</p>
+                        </div>
+                    `}
+                </div>
             </div>
+
+            ${this.modalImage ? html`
+                <div class="image-modal" @click=${() => { this.modalImage = null; this.requestUpdate(); }}>
+                    <img src=${this.modalImage} @click=${(e) => e.stopPropagation()} />
+                </div>
+            ` : ''}
         `;
     }
 }
-
 customElements.define('history-view', HistoryView);

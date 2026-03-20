@@ -138,7 +138,7 @@ function launchAIWindow() {
         }
     });
 
-    aiWebWindow.setContentProtection(true);
+    aiWebWindow.setContentProtection(false);
     aiWebWindow.webContents.setAudioMuted(true);
     aiWebWindow.loadURL(provider.url);
 
@@ -1052,6 +1052,10 @@ function setupGeneralIpcHandlers() {
         return 0;
     });
 
+    ipcMain.handle('get-screenshots', async () => {
+        return accumulatedScreenshots;
+    });
+
     ipcMain.handle('send-screenshots-to-ai', async (event, customPrompt) => {
         if (accumulatedScreenshots.length === 0 || !aiWebWindow) return false;
         
@@ -1589,7 +1593,7 @@ expected output`;
             if (process.platform === 'darwin') {
                 widgetWindow.setHiddenInMissionControl(true);
             }
-            widgetWindow.setContentProtection(true);
+            widgetWindow.setContentProtection(false);
             // if (process.platform === 'win32') widgetWindow.setDisplayAffinity('exclude_from_capture');
             widgetWindow.loadFile('src/widget.html');
         } else {
