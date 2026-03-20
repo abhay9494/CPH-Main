@@ -1085,6 +1085,160 @@ export class AssistantView extends LitElement {
         `;
     }
 
+    // render() {
+    //     if (this.viewMode === 'typer') return this.renderTyperMode();
+    //     if (this.isHelpingMode && this.helperStatus !== 'connected') return this.renderHelpingMode();
+
+    //     let m = "🟢 **System Online. Awaiting inputs...**";
+    //     if (!this.aiProfiles || this.aiProfiles.length === 0) m = "⚠️ **SYSTEM WARNING: No AI Accounts**\n\nPlease go to **Settings > Accounts** to log in to at least one AI provider.";
+        
+    //     const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
+
+    //     return html`
+    //         <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--bg-primary);">
+    //             ${this.activeDropdown ? html`<div class="dropdown-backdrop" @click=${this.closeDropdown}></div>` : ''}
+    //             <div class="markdown-body" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>
+    //             <div class="bottom-controls" @mousemove=${() => this.setGhostMode(false)}>                    
+                    
+    //                 <div class="control-row" style="display: flex; gap: 8px; width: 100%; align-items: flex-end;">
+    //                     <textarea id="manualPromptInput" class="prompt-input" rows="1" placeholder="Ask AI a follow-up... (Shift+Enter for newline)" 
+    //                               @input=${function(e) { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }}
+    //                               @keydown=${(e) => {
+    //                                   if (e.key === 'Enter' && !e.shiftKey) {
+    //                                       e.preventDefault();
+    //                                       this.handleSendManualText();
+    //                                       setTimeout(() => {
+    //                                           const ta = this.shadowRoot.querySelector('#manualPromptInput');
+    //                                           if(ta) ta.style.height = 'auto';
+    //                                       }, 10);
+    //                                   }
+    //                               }} style="flex: 1; resize: none; overflow: hidden; min-height: 38px; padding-top: 10px; font-family: inherit; font-size: 13px;"></textarea>
+                        
+    //                     ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
+    //                         <textarea id="whisperInput" class="prompt-input" rows="1" placeholder="Whisper to Friend... (Shift+Enter for newline)" 
+    //                                   @input=${function(e) { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }}
+    //                                   @keydown=${(e) => {
+    //                                       if (e.key === 'Enter' && !e.shiftKey) {
+    //                                           e.preventDefault();
+    //                                           this.handleWhisper();
+    //                                           setTimeout(() => {
+    //                                               const ta = this.shadowRoot.querySelector('#whisperInput');
+    //                                               if(ta) ta.style.height = 'auto';
+    //                                           }, 10);
+    //                                       }
+    //                                   }} style="flex: 1; border-color: #a142f4; resize: none; overflow: hidden; min-height: 38px; padding-top: 10px; font-family: inherit; font-size: 13px;"></textarea>
+    //                     ` : ''}
+
+    //                     <button class="action-btn ${this.isAiVisible ? 'danger' : ''}" @click=${this.handleToggleAiVisibility} style="flex-shrink: 0;">
+    //                         ${this.isAiVisible ? '👻 Hide AI' : '👁️ Show AI'}
+    //                     </button>
+    //                 </div>
+
+    //                 ${this.currentMode === 'interview' ? html`
+    //                     <div class="control-row">
+    //                         <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
+    //                         <button class="action-btn" @click=${async () => {
+    //                             this.tacThinkMode = !this.tacThinkMode;
+    //                             this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+    //                             if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
+    //                             await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
+    //                             this.requestUpdate();
+    //                         }}>
+    //                             ${this.tacThinkMode ? '🧠 THINK' : '⚡ FAST'}
+    //                         </button>
+    //                         ${this.renderEngineSelector()}
+    //                         ${this.renderLanguageSelector()}
+    //                         <button class="action-btn primary" @click=${this.handleSendProfileContext}>📄 Send Profile</button>
+    //                         <button class="action-btn ${this.isMicOn ? 'success' : ''}" @click=${this.handleToggleMic}>
+    //                             🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
+    //                         </button>
+    //                     </div>
+    //                     <div class="control-row">
+    //                         <div class="format-toggles" style="font-size: 11px; color: #a0a0a0; display: flex; gap: 10px; align-items: center;">
+    //                             <label><input type="checkbox" .checked=${this.tacBrief} @change=${(e)=>{this.tacBrief=e.target.checked; this.requestUpdate();}}> Brief</label>
+    //                             <label><input type="checkbox" .checked=${this.tacBullets} @change=${(e)=>{this.tacBullets=e.target.checked; this.requestUpdate();}}> Bullets</label>
+    //                             <label><input type="checkbox" .checked=${this.tacStar} @change=${(e)=>{this.tacStar=e.target.checked; this.requestUpdate();}}> STAR</label>
+    //                             <label><input type="checkbox" .checked=${this.tacConversational} @change=${(e)=>{this.tacConversational=e.target.checked; this.requestUpdate();}}> Human Tone</label>
+    //                         </div>
+    //                     </div>
+    //                     <div class="control-row">
+    //                         ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
+    //                             <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
+    //                                 ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode (Vetting)'}
+    //                             </button>
+    //                         ` : ''}
+                            
+    //                         ${this.renderProfileSelector()}
+    //                         </div>
+    //                         <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+    //                             <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
+    //                             <span style="font-size: 11px; color: var(--text-color); padding: 0 4px; display: flex; align-items: center;">Text Size</span>
+    //                             <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
+    //                         </div>
+    //                         <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+    //                             <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
+    //                             <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 8px 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
+    //                             <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
+                                
+    //                             ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
+    //                                 <button class="nav-button" style="color: #00cc66; font-weight: bold; border-left: 1px solid var(--border-color); padding-left: 10px;" 
+    //                                         @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
+    //                                     🚀 PUSH TO SCREEN
+    //                                 </button>
+    //                             ` : ''}
+    //                         </div>
+    //                     </div>
+    //                 ` : html`
+    //                     <div class="control-row">
+    //                         <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
+    //                         <button class="action-btn" @click=${async () => {
+    //                             this.tacThinkMode = !this.tacThinkMode;
+    //                             this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+    //                             if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
+    //                             await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
+    //                             this.requestUpdate();
+    //                         }}>
+    //                             ${this.tacThinkMode ? '🧠 THINK' : '⚡ FAST'}
+    //                         </button>
+    //                         ${this.renderEngineSelector()}
+    //                         ${this.renderLanguageSelector()}
+    //                         <button class="action-btn highlight" @click=${this.handleRefactor}>🛠️ Refactor</button>
+    //                         <button class="action-btn ${this.isMicOn ? 'success' : ''}" @click=${this.handleToggleMic}>
+    //                             🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
+    //                         </button>
+    //                     </div>
+    //                     <div class="control-row">
+    //                         ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
+    //                             <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
+    //                                 ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode (Vetting)'}
+    //                             </button>
+    //                         ` : ''}
+                            
+    //                         ${this.renderProfileSelector()}
+    //                         <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+    //                             <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
+    //                             <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 8px 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
+    //                             <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
+                                
+    //                             ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
+    //                                 <button class="nav-button" style="color: #00cc66; font-weight: bold; border-left: 1px solid var(--border-color); padding-left: 10px;" 
+    //                                         @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
+    //                                     🚀 PUSH TO SCREEN
+    //                                 </button>
+    //                             ` : ''}
+    //                         </div>
+    //                     </div>
+    //                 `}
+    //             </div>
+    //         </div>
+
+    //         ${this.modalImage ? html`
+    //             <div class="image-modal" @click=${() => { this.modalImage = null; this.requestUpdate(); }}>
+    //                 <img src=${this.modalImage} @click=${(e) => e.stopPropagation()} />
+    //             </div>
+    //         ` : ''}
+    //     `;
+    // }
     render() {
         if (this.viewMode === 'typer') return this.renderTyperMode();
         if (this.isHelpingMode && this.helperStatus !== 'connected') return this.renderHelpingMode();
@@ -1097,10 +1251,12 @@ export class AssistantView extends LitElement {
         return html`
             <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--bg-primary);">
                 ${this.activeDropdown ? html`<div class="dropdown-backdrop" @click=${this.closeDropdown}></div>` : ''}
+                
                 <div class="markdown-body" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>
+                
                 <div class="bottom-controls" @mousemove=${() => this.setGhostMode(false)}>                    
                     
-                    <div class="control-row" style="display: flex; gap: 8px; width: 100%; align-items: flex-end;">
+                    <div class="control-row" style="flex-wrap: nowrap; align-items: flex-end;">
                         <textarea id="manualPromptInput" class="prompt-input" rows="1" placeholder="Ask AI a follow-up... (Shift+Enter for newline)" 
                                   @input=${function(e) { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }}
                                   @keydown=${(e) => {
@@ -1129,7 +1285,7 @@ export class AssistantView extends LitElement {
                                       }} style="flex: 1; border-color: #a142f4; resize: none; overflow: hidden; min-height: 38px; padding-top: 10px; font-family: inherit; font-size: 13px;"></textarea>
                         ` : ''}
 
-                        <button class="action-btn ${this.isAiVisible ? 'danger' : ''}" @click=${this.handleToggleAiVisibility} style="flex-shrink: 0;">
+                        <button class="action-btn ${this.isAiVisible ? 'danger' : ''}" @click=${this.handleToggleAiVisibility} style="flex-shrink: 0; height: 38px;">
                             ${this.isAiVisible ? '👻 Hide AI' : '👁️ Show AI'}
                         </button>
                     </div>
@@ -1153,14 +1309,16 @@ export class AssistantView extends LitElement {
                                 🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
                             </button>
                         </div>
+                        
                         <div class="control-row">
-                            <div class="format-toggles" style="font-size: 11px; color: #a0a0a0; display: flex; gap: 10px; align-items: center;">
+                            <div class="format-toggles" style="font-size: 11px; color: #a0a0a0; display: flex; gap: 15px; align-items: center;">
                                 <label><input type="checkbox" .checked=${this.tacBrief} @change=${(e)=>{this.tacBrief=e.target.checked; this.requestUpdate();}}> Brief</label>
                                 <label><input type="checkbox" .checked=${this.tacBullets} @change=${(e)=>{this.tacBullets=e.target.checked; this.requestUpdate();}}> Bullets</label>
                                 <label><input type="checkbox" .checked=${this.tacStar} @change=${(e)=>{this.tacStar=e.target.checked; this.requestUpdate();}}> STAR</label>
                                 <label><input type="checkbox" .checked=${this.tacConversational} @change=${(e)=>{this.tacConversational=e.target.checked; this.requestUpdate();}}> Human Tone</label>
                             </div>
                         </div>
+
                         <div class="control-row">
                             ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
                                 <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
@@ -1169,19 +1327,21 @@ export class AssistantView extends LitElement {
                             ` : ''}
                             
                             ${this.renderProfileSelector()}
-                            </div>
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+                            
+                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
                                 <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
-                                <span style="font-size: 11px; color: var(--text-color); padding: 0 4px; display: flex; align-items: center;">Text Size</span>
+                                <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
                                 <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
                             </div>
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+                            
+                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
                                 <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
-                                <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 8px 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
+                                <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 0 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
                                 <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
                                 
                                 ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-                                    <button class="nav-button" style="color: #00cc66; font-weight: bold; border-left: 1px solid var(--border-color); padding-left: 10px;" 
+                                    <div style="width: 1px; background: var(--border-color); margin: 0 4px;"></div>
+                                    <button class="nav-button" style="color: #00cc66; font-weight: bold; padding: 4px 8px;" 
                                             @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
                                         🚀 PUSH TO SCREEN
                                     </button>
@@ -1207,6 +1367,7 @@ export class AssistantView extends LitElement {
                                 🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
                             </button>
                         </div>
+                        
                         <div class="control-row">
                             ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
                                 <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
@@ -1215,13 +1376,21 @@ export class AssistantView extends LitElement {
                             ` : ''}
                             
                             ${this.renderProfileSelector()}
-                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
+                            
+                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
+                                <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
+                                <span style="font-size: 11px; color: var(--text-color); padding: 0 6px;">Text Size</span>
+                                <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
+                            </div>
+                            
+                            <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color); align-items: center;">
                                 <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
-                                <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 8px 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
+                                <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 0 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
                                 <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
                                 
                                 ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-                                    <button class="nav-button" style="color: #00cc66; font-weight: bold; border-left: 1px solid var(--border-color); padding-left: 10px;" 
+                                    <div style="width: 1px; background: var(--border-color); margin: 0 4px;"></div>
+                                    <button class="nav-button" style="color: #00cc66; font-weight: bold; padding: 4px 8px;" 
                                             @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
                                         🚀 PUSH TO SCREEN
                                     </button>
