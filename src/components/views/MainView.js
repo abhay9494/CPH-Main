@@ -60,7 +60,6 @@ export class MainView extends LitElement {
             display: flex;
             flex-direction: column;
             align-items: flex-start;
-            transition: all 0.2s ease;
             position: relative;
             overflow: hidden;
             text-align: left;
@@ -68,24 +67,17 @@ export class MainView extends LitElement {
 
         .mode-card::before {
             content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
-            background: transparent; transition: 0.2s ease;
+            background: transparent;
         }
 
-        .mode-card:hover {
-            transform: translateY(-4px);
-            background: var(--bg-tertiary);
-            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
-            border-color: #555;
-        }
-
-        /* Card Specific Branding */
-        .card-oa:hover::before { background: #a142f4; }
+        /* Card Specific Branding (Permanent colors) */
+        .card-oa::before { background: #a142f4; }
         .card-oa .icon-wrapper { background: rgba(161, 66, 244, 0.15); color: #a142f4; border: 1px solid rgba(161, 66, 244, 0.3); }
 
-        .card-interview:hover::before { background: #4285f4; }
+        .card-interview::before { background: #4285f4; }
         .card-interview .icon-wrapper { background: rgba(66, 133, 244, 0.15); color: #4285f4; border: 1px solid rgba(66, 133, 244, 0.3); }
 
-        .card-companion:hover::before { background: #f59e0b; }
+        .card-companion::before { background: #f59e0b; }
         .card-companion .icon-wrapper { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
 
         .icon-wrapper {
@@ -116,14 +108,6 @@ export class MainView extends LitElement {
             display: flex;
             align-items: center;
             gap: 8px;
-            transition: all 0.2s ease;
-        }
-
-        .utility-btn:hover {
-            background: var(--hover-background, #333);
-            color: #fff;
-            border-color: #666;
-            transform: translateY(-1px);
         }
     `;
 

@@ -1046,199 +1046,61 @@ export class AssistantView extends LitElement {
         // 🟢 SHOW NAME APPROVAL SCREEN
         if (this.helperStatus === 'handshake') {
             return html`
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-primary);">
-                    <div style="font-size: 45px; margin-bottom: 10px;">🛡️</div>
-                    <h2 style="color: var(--text-color); margin: 0 0 5px 0;">Incoming Link Request</h2>
-                    <p style="color: #888; font-size: 13px; margin-bottom: 20px;">Someone is trying to connect to your session.</p>
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-primary); padding: 20px;">
                     
-                    <div style="background: rgba(161, 66, 244, 0.1); border: 1px solid rgba(161, 66, 244, 0.4); padding: 15px 30px; border-radius: 6px; margin-bottom: 25px;">
-                        <span style="color: #888; font-size: 12px; display: block; text-align: center; margin-bottom: 5px;">USER VERIFICATION:</span>
-                        <strong style="color: #a142f4; font-size: 24px; letter-spacing: 2px;">${this.handshakeName}</strong>
+                    <div style="text-align: center; margin-bottom: 25px;">
+                        <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Incoming Link Request</div>
+                        <div style="color: var(--text-muted); font-size: 13px;">Someone is trying to connect to your session.</div>
                     </div>
 
-                    <div style="display: flex; gap: 15px;">
-                        <button class="action-btn danger" style="padding: 10px 20px;" @click=${this.rejectHandshake}>❌ Reject</button>
-                        <button class="action-btn success" style="padding: 10px 20px;" @click=${this.approveHandshake}>✅ Approve</button>
+                    <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-top: 4px solid #a142f4; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
+                        <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(161, 66, 244, 0.15); color: #a142f4; border: 1px solid rgba(161, 66, 244, 0.3); margin-bottom: 20px;">🛡️</div>
+
+                        <span style="color: var(--text-muted); font-size: 11px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px;">User Verification</span>
+                        <strong style="color: #a142f4; font-size: 24px; letter-spacing: 1px; margin-bottom: 30px; text-align: center;">${this.handshakeName}</strong>
+
+                        <div style="display: flex; gap: 12px; width: 100%;">
+                            <button class="action-btn danger" style="flex: 1; justify-content: center; padding: 12px; font-size: 13px;" @click=${this.rejectHandshake}>❌ Reject</button>
+                            <button class="action-btn success" style="flex: 1; justify-content: center; padding: 12px; font-size: 13px;" @click=${this.approveHandshake}>✅ Approve</button>
+                        </div>
                     </div>
+
                 </div>
             `;
         }
 
-        // Default PIN Entry Screen
+        // 🟢 DEFAULT PIN ENTRY SCREEN (Matches Companion Hub)
         return html`
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-primary);">
-                <div style="font-size: 45px; margin-bottom: 15px;">🤝</div>
-                <h2 style="color: var(--text-color); margin: 0 0 10px 0;">Connect to Companion</h2>
-                <p style="color: #888; font-size: 13px; margin-bottom: 25px; text-align: center;">Enter the 6-character code from your friend's screen.</p>
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-primary); padding: 20px;">
                 
-                <input class="prompt-input" style="width: 250px; text-align: center; font-size: 24px; letter-spacing: 4px; text-transform: uppercase; margin-bottom: 20px; padding: 15px;" 
-                       placeholder="------" maxlength="6" 
-                       .value=${this.helperPinInput} 
-                       @input=${(e) => { this.helperPinInput = e.target.value.toUpperCase(); this.requestUpdate(); }}>
-                
-                <button class="action-btn success" style="padding: 10px 30px; font-size: 14px;" @click=${this.connectToCompanion}>
-                    ${this.helperStatus === 'connecting' ? 'Connecting...' : 'Establish Link'}
-                </button>
-                
-                ${this.helperStatus === 'error' ? html`<p style="color: #f14c4c; margin-top: 15px; font-size: 12px; font-weight: bold;">Connection failed. Check code.</p>` : ''}
+                <div style="text-align: center; margin-bottom: 25px;">
+                    <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Connect to Companion</div>
+                    <div style="color: var(--text-muted); font-size: 13px;">Enter the 6-character PIN from your friend's screen.</div>
+                </div>
+
+                <div style="background: var(--bg-secondary); border: 1px solid var(--border-color); border-top: 4px solid #f59e0b; border-radius: 12px; padding: 30px; width: 100%; max-width: 400px; display: flex; flex-direction: column; align-items: center; box-shadow: 0 8px 24px rgba(0,0,0,0.3);">
+                    <div style="width: 48px; height: 48px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 24px; background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); margin-bottom: 25px;">🤝</div>
+
+                    <input class="prompt-input" style="width: 100%; text-align: center; font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #f59e0b; background: rgba(245, 158, 11, 0.05); border: 1px solid rgba(245, 158, 11, 0.2) !important; padding: 15px; border-radius: 8px; box-shadow: inset 0 2px 10px rgba(0,0,0,0.2); margin-bottom: 20px; outline: none; text-transform: uppercase;" 
+                           placeholder="------" maxlength="6" 
+                           .value=${this.helperPinInput} 
+                           @input=${(e) => { this.helperPinInput = e.target.value.toUpperCase(); this.requestUpdate(); }}>
+
+                    <button class="action-btn" style="width: 100%; justify-content: center; padding: 12px; font-size: 14px; background: ${this.helperPinInput.length === 6 ? '#f59e0b' : 'var(--bg-tertiary)'}; color: ${this.helperPinInput.length === 6 ? '#000' : 'var(--text-muted)'}; border: none; font-weight: bold; transition: 0.2s;" @click=${this.connectToCompanion}>
+                        ${this.helperStatus === 'connecting' ? 'Connecting...' : 'Establish Link'}
+                    </button>
+
+                    ${this.helperStatus === 'error' ? html`
+                        <div style="margin-top: 15px; padding: 10px; border-radius: 6px; background: rgba(241, 76, 76, 0.1); border: 1px solid rgba(241, 76, 76, 0.3); color: #f14c4c; font-size: 12px; font-weight: bold; width: 100%; text-align: center;">
+                            Connection failed. Check PIN.
+                        </div>
+                    ` : ''}
+                </div>
+
             </div>
         `;
     }
 
-    // render() {
-    //     if (this.viewMode === 'typer') return this.renderTyperMode();
-    //     if (this.isHelpingMode && this.helperStatus !== 'connected') return this.renderHelpingMode();
-
-    //     let m = "🟢 **System Online. Awaiting inputs...**";
-    //     if (!this.aiProfiles || this.aiProfiles.length === 0) m = "⚠️ **SYSTEM WARNING: No AI Accounts**\n\nPlease go to **Settings > Accounts** to log in to at least one AI provider.";
-        
-    //     const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
-
-    //     return html`
-    //         <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--bg-primary);">
-    //             ${this.activeDropdown ? html`<div class="dropdown-backdrop" @click=${this.closeDropdown}></div>` : ''}
-    //             <div class="markdown-body" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>
-    //             <div class="bottom-controls" @mousemove=${() => this.setGhostMode(false)}>                    
-                    
-    //                 <div class="control-row" style="display: flex; gap: 8px; width: 100%; align-items: flex-end;">
-    //                     <textarea id="manualPromptInput" class="prompt-input" rows="1" placeholder="Ask AI a follow-up... (Shift+Enter for newline)" 
-    //                               @input=${function(e) { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }}
-    //                               @keydown=${(e) => {
-    //                                   if (e.key === 'Enter' && !e.shiftKey) {
-    //                                       e.preventDefault();
-    //                                       this.handleSendManualText();
-    //                                       setTimeout(() => {
-    //                                           const ta = this.shadowRoot.querySelector('#manualPromptInput');
-    //                                           if(ta) ta.style.height = 'auto';
-    //                                       }, 10);
-    //                                   }
-    //                               }} style="flex: 1; resize: none; overflow: hidden; min-height: 38px; padding-top: 10px; font-family: inherit; font-size: 13px;"></textarea>
-                        
-    //                     ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-    //                         <textarea id="whisperInput" class="prompt-input" rows="1" placeholder="Whisper to Friend... (Shift+Enter for newline)" 
-    //                                   @input=${function(e) { e.target.style.height = 'auto'; e.target.style.height = (e.target.scrollHeight) + 'px'; }}
-    //                                   @keydown=${(e) => {
-    //                                       if (e.key === 'Enter' && !e.shiftKey) {
-    //                                           e.preventDefault();
-    //                                           this.handleWhisper();
-    //                                           setTimeout(() => {
-    //                                               const ta = this.shadowRoot.querySelector('#whisperInput');
-    //                                               if(ta) ta.style.height = 'auto';
-    //                                           }, 10);
-    //                                       }
-    //                                   }} style="flex: 1; border-color: #a142f4; resize: none; overflow: hidden; min-height: 38px; padding-top: 10px; font-family: inherit; font-size: 13px;"></textarea>
-    //                     ` : ''}
-
-    //                     <button class="action-btn ${this.isAiVisible ? 'danger' : ''}" @click=${this.handleToggleAiVisibility} style="flex-shrink: 0;">
-    //                         ${this.isAiVisible ? '👻 Hide AI' : '👁️ Show AI'}
-    //                     </button>
-    //                 </div>
-
-    //                 ${this.currentMode === 'interview' ? html`
-    //                     <div class="control-row">
-    //                         <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
-    //                         <button class="action-btn" @click=${async () => {
-    //                             this.tacThinkMode = !this.tacThinkMode;
-    //                             this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
-    //                             if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
-    //                             await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
-    //                             this.requestUpdate();
-    //                         }}>
-    //                             ${this.tacThinkMode ? '🧠 THINK' : '⚡ FAST'}
-    //                         </button>
-    //                         ${this.renderEngineSelector()}
-    //                         ${this.renderLanguageSelector()}
-    //                         <button class="action-btn primary" @click=${this.handleSendProfileContext}>📄 Send Profile</button>
-    //                         <button class="action-btn ${this.isMicOn ? 'success' : ''}" @click=${this.handleToggleMic}>
-    //                             🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
-    //                         </button>
-    //                     </div>
-    //                     <div class="control-row">
-    //                         <div class="format-toggles" style="font-size: 11px; color: #a0a0a0; display: flex; gap: 10px; align-items: center;">
-    //                             <label><input type="checkbox" .checked=${this.tacBrief} @change=${(e)=>{this.tacBrief=e.target.checked; this.requestUpdate();}}> Brief</label>
-    //                             <label><input type="checkbox" .checked=${this.tacBullets} @change=${(e)=>{this.tacBullets=e.target.checked; this.requestUpdate();}}> Bullets</label>
-    //                             <label><input type="checkbox" .checked=${this.tacStar} @change=${(e)=>{this.tacStar=e.target.checked; this.requestUpdate();}}> STAR</label>
-    //                             <label><input type="checkbox" .checked=${this.tacConversational} @change=${(e)=>{this.tacConversational=e.target.checked; this.requestUpdate();}}> Human Tone</label>
-    //                         </div>
-    //                     </div>
-    //                     <div class="control-row">
-    //                         ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-    //                             <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
-    //                                 ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode (Vetting)'}
-    //                             </button>
-    //                         ` : ''}
-                            
-    //                         ${this.renderProfileSelector()}
-    //                         </div>
-    //                         <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
-    //                             <button class="nav-button" @click=${() => this.changeFontSize(-2)}>A-</button>
-    //                             <span style="font-size: 11px; color: var(--text-color); padding: 0 4px; display: flex; align-items: center;">Text Size</span>
-    //                             <button class="nav-button" @click=${() => this.changeFontSize(2)}>A+</button>
-    //                         </div>
-    //                         <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
-    //                             <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
-    //                             <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 8px 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
-    //                             <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
-                                
-    //                             ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-    //                                 <button class="nav-button" style="color: #00cc66; font-weight: bold; border-left: 1px solid var(--border-color); padding-left: 10px;" 
-    //                                         @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
-    //                                     🚀 PUSH TO SCREEN
-    //                                 </button>
-    //                             ` : ''}
-    //                         </div>
-    //                     </div>
-    //                 ` : html`
-    //                     <div class="control-row">
-    //                         <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
-    //                         <button class="action-btn" @click=${async () => {
-    //                             this.tacThinkMode = !this.tacThinkMode;
-    //                             this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
-    //                             if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
-    //                             await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
-    //                             this.requestUpdate();
-    //                         }}>
-    //                             ${this.tacThinkMode ? '🧠 THINK' : '⚡ FAST'}
-    //                         </button>
-    //                         ${this.renderEngineSelector()}
-    //                         ${this.renderLanguageSelector()}
-    //                         <button class="action-btn highlight" @click=${this.handleRefactor}>🛠️ Refactor</button>
-    //                         <button class="action-btn ${this.isMicOn ? 'success' : ''}" @click=${this.handleToggleMic}>
-    //                             🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
-    //                         </button>
-    //                     </div>
-    //                     <div class="control-row">
-    //                         ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-    //                             <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
-    //                                 ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode (Vetting)'}
-    //                             </button>
-    //                         ` : ''}
-                            
-    //                         ${this.renderProfileSelector()}
-    //                         <div style="display: flex; gap: 4px; background: var(--bg-secondary); padding: 4px; border-radius: 4px; border: 1px solid var(--border-color);">
-    //                             <button class="nav-button" @click=${this.navigateToPreviousResponse} ?disabled=${this.localChatIndex <= 0}>◀</button>
-    //                             <span style="font-size: 11px; color: var(--text-color); font-family: monospace; padding: 8px 8px;">${this.localChatHistory.length ? `${this.localChatIndex + 1} / ${this.localChatHistory.length}` : '0 / 0'}</span>
-    //                             <button class="nav-button" @click=${this.navigateToNextResponse} ?disabled=${this.localChatIndex >= this.localChatHistory.length - 1}>▶</button>
-                                
-    //                             ${this.isHelpingMode && this.helperStatus === 'connected' ? html`
-    //                                 <button class="nav-button" style="color: #00cc66; font-weight: bold; border-left: 1px solid var(--border-color); padding-left: 10px;" 
-    //                                         @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
-    //                                     🚀 PUSH TO SCREEN
-    //                                 </button>
-    //                             ` : ''}
-    //                         </div>
-    //                     </div>
-    //                 `}
-    //             </div>
-    //         </div>
-
-    //         ${this.modalImage ? html`
-    //             <div class="image-modal" @click=${() => { this.modalImage = null; this.requestUpdate(); }}>
-    //                 <img src=${this.modalImage} @click=${(e) => e.stopPropagation()} />
-    //             </div>
-    //         ` : ''}
-    //     `;
-    // }
     render() {
         if (this.viewMode === 'typer') return this.renderTyperMode();
         if (this.isHelpingMode && this.helperStatus !== 'connected') return this.renderHelpingMode();
