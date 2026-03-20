@@ -3,8 +3,20 @@ if (require('electron-squirrel-startup')) {
 }
 
 // const { app, BrowserWindow, shell, ipcMain, globalShortcut, session, desktopCapturer } = require('electron');
-const { app, BrowserWindow, shell, ipcMain, globalShortcut, session, desktopCapturer, clipboard, nativeImage } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, globalShortcut, session, desktopCapturer, clipboard, nativeImage, dialog } = require('electron');
 const http = require('http');
+
+// 🛑 RED FLAG PREVENTION: Permanently mute all native OS error popups
+dialog.showErrorBox = function(title, content) {
+    console.log(`[SILENT ERROR BOX DUMPED] ${title}: ${content}`);
+};
+process.on('uncaughtException', (error) => {
+    console.error('[SILENT CRASH PREVENTED] Uncaught Exception:', error);
+});
+process.on('unhandledRejection', (reason, promise) => {
+    console.error('[SILENT CRASH PREVENTED] Unhandled Rejection:', reason);
+});
+
 // ==========================================================
 // STEALTH RADIO: Bypass Chromium Audio/Mic Security Blocks
 // ==========================================================
