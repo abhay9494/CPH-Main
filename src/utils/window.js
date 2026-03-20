@@ -174,12 +174,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     });
 
     let hiddenWindowsStates = new Map();
-
     register('toggleVisibility', keybinds.toggleVisibility, () => {
-        console.log("[DEBUG-VISIBILITY] Ctrl+\\ pressed.");
+        // console.log("[DEBUG-VISIBILITY] Ctrl+\\ pressed.");
         if (mainWindow && !mainWindow.isDestroyed()) {
             if (mainWindow.isVisible()) {
-                console.log("[DEBUG-VISIBILITY] Hiding all windows.");
+                // console.log("[DEBUG-VISIBILITY] Hiding all windows.");
                 hiddenWindowsStates.clear();
                 BrowserWindow.getAllWindows().forEach(w => {
                     if (!w.isDestroyed()) {
@@ -188,21 +187,33 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                     }
                 });
             } else {
-                console.log("[DEBUG-VISIBILITY] Restoring previously visible windows.");
+                // console.log("[DEBUG-VISIBILITY] Restoring previously visible windows.");
+                let restoredAnything = false;
+                
                 BrowserWindow.getAllWindows().forEach(w => {
                     if (!w.isDestroyed()) {
                         const wasVisible = hiddenWindowsStates.get(w);
                         if (wasVisible) {
+                            restoredAnything = true;
                             if (w === mainWindow) {
                                 w.show();
                                 w.restore();
                                 w.focus();
                             } else {
-                                w.showInactive(); 
+                                w.showInactive();
                             }
                         }
                     }
                 });
+
+                // 🐛 FIX: If the memory map was empty (because the app was hidden via a UI button),
+                // forcefully show the main window anyway so the user is never permanently locked out!
+                if (!restoredAnything && !mainWindow.isDestroyed()) {
+                    mainWindow.show();
+                    mainWindow.restore();
+                    mainWindow.focus();
+                }
+
                 mainWindow.webContents.send('app-made-visible');
             }
         }

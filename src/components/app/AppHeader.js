@@ -114,7 +114,6 @@ export class AppHeader extends LitElement {
             }
         }
 
-        /* 🟢 NEW: Header Pin Badge */
         .header-pin {
             -webkit-app-region: no-drag;
             background: rgba(161, 66, 244, 0.15);
@@ -133,27 +132,35 @@ export class AppHeader extends LitElement {
             background: rgba(161, 66, 244, 0.25);
         }
 
+        /* 🟢 FIX: Clean Windows-Style Action Buttons */
         .header-actions {
             display: flex;
-            gap: var(--header-gap);
+            gap: 4px;
             align-items: center;
             -webkit-app-region: no-drag;
+            margin-left: 10px;
         }
         .icon-button {
             background: transparent;
             color: var(--text-secondary);
             border: none;
-            padding: var(--header-icon-padding);
-            border-radius: 3px;
+            width: 32px;
+            height: 32px;
+            border-radius: 4px;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.1s ease;
+            transition: 0.15s ease;
+            cursor: pointer !important;
         }
         .icon-button:hover {
-            background: var(--error-color);
-            color: white;
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
         }
+        .icon-button.danger:hover {
+            background: #e81123;
+            color: white;
+        } /* Classic Windows Red */
     `;
 
     static properties = {
@@ -161,7 +168,7 @@ export class AppHeader extends LitElement {
         currentView: { type: String },
         onBackClick: { type: Function },
         onHideClick: { type: Function },
-        onQuitClick: { type: Function },
+        /* Notice we ignored onQuitClick here to force our own logic */
         missingAccount: { type: Boolean },
         missingContext: { type: Boolean },
         typingState: { type: String },
@@ -169,7 +176,7 @@ export class AppHeader extends LitElement {
         isTyperMode: { type: Boolean },
         isHelpingMode: { type: Boolean },
         helperStatus: { type: String },
-        connectionPin: { type: String }, // 🟢 NEW State
+        connectionPin: { type: String },
     };
 
     constructor() {
@@ -214,7 +221,6 @@ export class AppHeader extends LitElement {
         };
         window.addEventListener('helper-status-changed', this.helperStatusHandler);
 
-        // 🟢 NEW: Listen for PIN updates
         this.pinHandler = e => {
             this.connectionPin = e.detail;
             this.requestUpdate();
@@ -254,6 +260,13 @@ export class AppHeader extends LitElement {
             this.missingAccount = profiles.length === 0;
             this.missingContext = !(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
             this.requestUpdate();
+        }
+    }
+
+    // 🟢 FIX: The absolute hard-kill function
+    handleHardClose() {
+        if (window.require) {
+            window.require('electron').ipcRenderer.invoke('quit-application');
         }
     }
 
@@ -319,7 +332,7 @@ export class AppHeader extends LitElement {
                     : ''}
 
                 <div class="header-actions">
-                    <button @click=${this.onQuitClick} class="icon-button danger" title="Close" style="color: #f14c4c;">
+                    <button @click=${this.handleHardClose} class="icon-button danger" title="Close">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"
                             viewBox="0 0 24 24"

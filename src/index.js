@@ -25,6 +25,7 @@ let aiWebWindow = null;
 let accumulatedScreenshots = [];
 let scrapingInterval = null;
 let micSpyInterval = null;
+let isAppQuitting = false;
 
 // ==========================================================
 // OA GLOBAL PROMPTS
@@ -55,7 +56,7 @@ let currentProfileIdx = 1;  // Profile 1 to 20
 let currentBrainMode = 'fast';
 
 function startUniversalAIBridge() {
-    console.log('🚀 Universal AI Bridge ACTIVE');
+    // console.log('🚀 Universal AI Bridge ACTIVE');
     launchAIWindow();
 }
 
@@ -147,9 +148,12 @@ function launchAIWindow() {
         aiWebWindow.webContents.insertCSS('* { cursor: default !important; }');
     });
 
+    // 🐛 FIX: Only prevent closing if the app isn't actually trying to quit!
     aiWebWindow.on('close', (event) => {
-        event.preventDefault(); // Stop it from destroying!
-        aiWebWindow.hide();     // Just hide it
+        if (!isAppQuitting) {
+            event.preventDefault(); 
+            aiWebWindow.hide();     
+        }
     });
 
     // 🐛 FIX 1: If you click outside the AI window, actively force it into a hidden state for stealth!
@@ -161,7 +165,7 @@ function launchAIWindow() {
 
     // 🐛 FIX 2: Universal Sync! No matter HOW the window hides (X button, clicking outside, or Ctrl+\), update the UI!
     aiWebWindow.on('hide', () => {
-        console.log('👻 AI Window officially HIDDEN');
+        // console.log('👻 AI Window officially HIDDEN');
         BrowserWindow.getAllWindows().forEach(w => {
             if (!w.isDestroyed() && w !== aiWebWindow) {
                 w.webContents.send('ai-window-hidden');
@@ -761,6 +765,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('before-quit', () => {
+    isAppQuitting = true; // 🐛 FIX: Tell all windows they are allowed to die now
     stopMacOSAudioCapture();
 });
 
@@ -1121,7 +1126,7 @@ function setupGeneralIpcHandlers() {
     // ==========================================================
     ipcMain.handle('new-chat', async () => {
         if (!aiWebWindow) return false;
-        console.log("✨ Silent wipe: Starting fresh chat...");
+        // console.log("✨ Silent wipe: Starting fresh chat...");
         // CRITICAL FIX: Reloads the CURRENT AI, instead of hardcoding Gemini!
         aiWebWindow.loadURL(AI_CONFIGS[currentProviderIdx].url);
         return true;
@@ -1180,7 +1185,7 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('set-ai-provider', async (event, targetIdx) => {
         // 🐛 FIX: If the window is destroyed, we MUST allow it to respawn here!
         if (currentProviderIdx !== targetIdx || !aiWebWindow || aiWebWindow.isDestroyed()) {
-            console.log(`🔄 Switching/Respawning AI Engine to: ${AI_CONFIGS[targetIdx].name}`);
+            // console.log(`🔄 Switching/Respawning AI Engine to: ${AI_CONFIGS[targetIdx].name}`);
             currentProviderIdx = targetIdx;
             launchAIWindow(); 
         }
@@ -1377,11 +1382,11 @@ expected output`;
         if (!aiWebWindow || aiWebWindow.isDestroyed()) return false;
         
         currentBrainMode = mode; 
-        console.log(`🧠 AI switched to: ${mode.toUpperCase()} mode (Manual Click: ${isManualClick})`);
+        // console.log(`🧠 AI switched to: ${mode.toUpperCase()} mode (Manual Click: ${isManualClick})`);
         
         if (currentProviderIdx === 0) {
             if (isManualClick) {
-                console.log("🧠 Triggering ChatGPT /thinking command from UI toggle...");
+                // console.log("🧠 Triggering ChatGPT /thinking command from UI toggle...");
                 
                 // 🐛 FIX 1: Wrap in IIFE `(() => { ... })()` so 'const' doesn't crash on multiple clicks!
                 await aiWebWindow.webContents.executeJavaScript(`
