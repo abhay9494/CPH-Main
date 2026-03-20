@@ -51,8 +51,34 @@ export class HistoryView extends LitElement {
         .message-content > *:first-child { margin-top: 0 !important; }
         .message-content > *:last-child { margin-bottom: 0 !important; }
 
-        .markdown-body img { max-width: 100%; border-radius: 6px; border: 1px solid var(--border-color); cursor: zoom-in; margin: 10px 0; transition: opacity 0.2s; }
-        .markdown-body img:hover { opacity: 0.8; }
+        /* 🐛 FIX: Grid Layout for Multiple Images */
+        .markdown-body br { display: none; }
+        
+        .message-content p:has(img) {
+            display: grid;
+            /* Automatically calculates how many ~140px images fit perfectly per row */
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); 
+            gap: 12px;
+            margin-top: 10px !important;
+            margin-bottom: 10px !important;
+            padding: 10px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 6px;
+        }
+
+        .markdown-body img { 
+            width: 100%; 
+            height: auto; 
+            border-radius: 6px; 
+            border: 1px solid var(--border-color, #444); 
+            cursor: zoom-in; 
+            margin: 0; 
+            transition: 0.2s ease-in-out; 
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
+            object-fit: contain; 
+        }
+        
+        .markdown-body img:hover { opacity: 0.8; transform: scale(1.02); }
         .markdown-body p { margin: 0.8em 0; }
         
         /* 🟢 Code Block Formatting */

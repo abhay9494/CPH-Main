@@ -68,7 +68,7 @@ export class AssistantView extends LitElement {
         .code-block-wrapper pre { margin: 0; padding: 15px; overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; }
         .code-block-wrapper pre code { background: transparent; padding: 0; border-radius: 0; white-space: pre-wrap; }
         
-        .bottom-controls { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--bg-primary); border-top: 1px solid var(--border-color, #444); box-shadow: 0 -4px 20px rgba(0,0,0,0.5); }
+        .bottom-controls { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--bg-primary); border-top: 1px solid var(--border-color, #444); }
         .control-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 
         .action-btn { background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: 0.2s; white-space: nowrap; }
