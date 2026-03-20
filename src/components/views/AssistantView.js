@@ -16,7 +16,7 @@ export class AssistantView extends LitElement {
         }
         :host { height: 100%; display: flex; flex-direction: column; }
         * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; cursor: default !important; }
-        .response-container { height: calc(100% - 50px); overflow-y: auto; font-size: var(--response-font-size, 16px); line-height: 1.6; background: var(--bg-primary); padding: 12px; scroll-behavior: smooth; user-select: text; }
+        .response-container { height: calc(100% - 50px); overflow-y: auto; font-size: var(--response-font-size, 16px); line-height: 1.6; background: transparent; padding: 12px; scroll-behavior: smooth; user-select: text; }
         .response-container * { user-select: text; }
         .response-container h1, .response-container h2, .response-container h3, .response-container h4, .response-container h5, .response-container h6 { margin: 1em 0 0.5em 0; color: var(--text-color); font-weight: 600; }
         .response-container p { margin: 0.6em 0; color: var(--text-color); }
@@ -75,15 +75,15 @@ export class AssistantView extends LitElement {
         .code-block-wrapper pre { margin: 0; padding: 15px; overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; }
         .code-block-wrapper pre code { background: transparent; padding: 0; border-radius: 0; white-space: pre-wrap; }
         
-        .bottom-controls { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: var(--bg-primary); border-top: 1px solid var(--border-color, #444); }
+        .bottom-controls { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: transparent; border-top: 1px solid var(--border-color, #444); }
         .control-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 
         .action-btn { background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; gap: 6px; transition: 0.2s; white-space: nowrap; }
         .action-btn:hover { background: var(--bg-hover); color: #fff; }
         .action-btn.primary { background: var(--bg-tertiary); color: white; border-color: var(--border-color, #555); }
-        .action-btn.highlight { background: rgba(161, 66, 244, 0.2); color: #a142f4; border-color: #a142f4; }
-        .action-btn.success { background: rgba(0, 204, 102, 0.2); color: #00cc66; border-color: #00cc66; }
-        .action-btn.danger { background: rgba(255, 68, 68, 0.2); color: #ff4444; border-color: #ff4444; }
+        .action-btn.highlight { background: rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.2)); color: #a142f4; border-color: rgba(161, 66, 244, var(--bg-alpha, 1)); }
+        .action-btn.success { background: rgba(0, 204, 102, calc(var(--bg-alpha, 1) * 0.2)); color: #00cc66; border-color: rgba(0, 204, 102, var(--bg-alpha, 1)); }
+        .action-btn.danger { background: rgba(255, 68, 68, calc(var(--bg-alpha, 1) * 0.2)); color: #ff4444; border-color: rgba(255, 68, 68, var(--bg-alpha, 1)); }
 
         input.prompt-input, textarea.prompt-input { flex: 1; background: var(--input-background); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 8px 12px; border-radius: 4px; font-size: 13px; font-family: 'Inter', sans-serif; }
 
@@ -1007,8 +1007,7 @@ export class AssistantView extends LitElement {
     // 🎯 THE NEW CLEAN SNIPER VIEW
     renderTyperMode() {
         return html`
-            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--bg-primary);">
-                
+            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent;">                
                 <div style="padding: 12px 16px;">
                     <div style="background: rgba(161, 66, 244, 0.15); border: 1px solid rgba(161, 66, 244, 0.5); padding: 10px 14px; border-radius: 6px; color: var(--text-color); font-size: 13px; line-height: 1.5;">
                         <strong style="color: #a142f4;">Select Range to Type.</strong> Area in purple will be written as it is.<br/>
@@ -1076,7 +1075,7 @@ export class AssistantView extends LitElement {
         // 🟢 SHOW NAME APPROVAL SCREEN
         if (this.helperStatus === 'handshake') {
             return html`
-                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-primary); padding: 20px;">
+                <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: transparent; padding: 20px;">
                     
                     <div style="text-align: center; margin-bottom: 25px;">
                         <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Incoming Link Request</div>
@@ -1101,7 +1100,7 @@ export class AssistantView extends LitElement {
 
         // 🟢 DEFAULT PIN ENTRY SCREEN (Matches Companion Hub)
         return html`
-            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: var(--bg-primary); padding: 20px;">
+            <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; background: transparent; padding: 20px;">
                 
                 <div style="text-align: center; margin-bottom: 25px;">
                     <div style="font-size: 24px; font-weight: bold; margin-bottom: 5px; color: var(--text-color);">Connect to Companion</div>
@@ -1141,7 +1140,7 @@ export class AssistantView extends LitElement {
         const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
 
         return html`
-            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: var(--bg-primary);">
+            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent;">
                 ${this.activeDropdown ? html`<div class="dropdown-backdrop" @click=${this.closeDropdown}></div>` : ''}
                 
                 <div class="markdown-body" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>

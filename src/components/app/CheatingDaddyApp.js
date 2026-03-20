@@ -177,42 +177,6 @@ export class CheatingDaddyApp extends LitElement {
             margin: 0;
             padding: 0;
         }
-        /* ==============================================================
-   🟢 TRUE GLASS MODE: Tie all borders and button backgrounds to the slider
-============================================================== */
-        :root {
-            /* When --bg-alpha drops to 0, these values mathematically become 0 */
-            --dynamic-border: rgba(255, 255, 255, calc(var(--bg-alpha) * 0.3));
-            --dynamic-bg: rgba(255, 255, 255, calc(var(--bg-alpha) * 0.05));
-            --dynamic-header: rgba(15, 15, 15, calc(var(--bg-alpha) * 0.9));
-        }
-
-        /* Apply to all structural elements */
-        .header,
-        .chat-container,
-        .markdown-body {
-            background: var(--dynamic-header) !important;
-            border-color: var(--dynamic-border) !important;
-            box-shadow: none !important;
-        }
-
-        /* Apply to all buttons and inputs */
-        .btn,
-        .danger-btn,
-        .action-btn,
-        .icon-button,
-        .back-btn,
-        .prompt-input,
-        textarea,
-        input {
-            border-color: var(--dynamic-border) !important;
-            background-color: var(--dynamic-bg) !important;
-        }
-
-        /* Fade out the scrollbar track itself when transparency drops */
-        ::-webkit-scrollbar-thumb {
-            background: rgba(255, 255, 255, calc(var(--bg-alpha) * 0.2)) !important;
-        }
     `;
 
     static properties = {
@@ -307,13 +271,19 @@ export class CheatingDaddyApp extends LitElement {
         const root = document.documentElement;
         const baseRgb = this.hexToRgb(backgroundColor);
 
-        // Generate color variants based on the base color
         const secondary = this.lightenColor(baseRgb, 7);
         const tertiary = this.lightenColor(baseRgb, 15);
         const hover = this.lightenColor(baseRgb, 20);
 
-        root.style.setProperty('--header-background', `rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, ${alpha})`);
-        root.style.setProperty('--main-content-background', `rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, ${alpha})`);
+        // 🟢 FIX 1: Broadcast the raw alpha value so CSS calc() functions can use it inside the Shadow DOM!
+        root.style.setProperty('--bg-alpha', alpha);
+
+        // 🟢 FIX 2: Make nested container backgrounds transparent so they don't stack and multiply! (Fixes different shades of grey)
+        root.style.setProperty('--header-background', `transparent`);
+        root.style.setProperty('--main-content-background', `transparent`);
+        root.style.setProperty('--scrollbar-background', `transparent`);
+
+        // Standard Backgrounds
         root.style.setProperty('--bg-primary', `rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, ${alpha})`);
         root.style.setProperty('--bg-secondary', `rgba(${secondary.r}, ${secondary.g}, ${secondary.b}, ${alpha})`);
         root.style.setProperty('--bg-tertiary', `rgba(${tertiary.r}, ${tertiary.g}, ${tertiary.b}, ${alpha})`);
@@ -321,7 +291,14 @@ export class CheatingDaddyApp extends LitElement {
         root.style.setProperty('--input-background', `rgba(${tertiary.r}, ${tertiary.g}, ${tertiary.b}, ${alpha})`);
         root.style.setProperty('--input-focus-background', `rgba(${tertiary.r}, ${tertiary.g}, ${tertiary.b}, ${alpha})`);
         root.style.setProperty('--hover-background', `rgba(${hover.r}, ${hover.g}, ${hover.b}, ${alpha})`);
-        root.style.setProperty('--scrollbar-background', `rgba(${baseRgb.r}, ${baseRgb.g}, ${baseRgb.b}, ${alpha})`);
+
+        // 🟢 FIX 3: Map all standard borders and scrollbars directly to the alpha slider so they melt into glass!
+        root.style.setProperty('--border-color', `rgba(60, 60, 60, ${alpha})`);
+        root.style.setProperty('--border-subtle', `rgba(60, 60, 60, ${alpha})`);
+        root.style.setProperty('--border-default', `rgba(74, 74, 74, ${alpha})`);
+        root.style.setProperty('--button-border', `rgba(60, 60, 60, ${alpha})`);
+        root.style.setProperty('--scrollbar-thumb', `rgba(60, 60, 60, ${alpha})`);
+        root.style.setProperty('--scrollbar-thumb-hover', `rgba(74, 74, 74, ${alpha})`);
     }
 
     // Keep old function name for backwards compatibility

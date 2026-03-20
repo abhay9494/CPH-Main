@@ -22,7 +22,7 @@ export class CustomizeView extends LitElement {
         }
         .sidebar {
             width: 180px;
-            background: var(--bg-secondary);
+            background: transparent; /* 🐛 FIX: Eradicate double-alpha stacking */
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
@@ -46,7 +46,7 @@ export class CustomizeView extends LitElement {
             color: var(--text-color);
         }
         .tab-btn.active {
-            background: var(--bg-tertiary);
+            background: rgba(255, 255, 255, 0.05); /* 🐛 FIX: Use pure flat overlay instead of alpha-stacking --bg-tertiary */
             color: var(--text-color);
             border-left: 3px solid #4285f4;
             font-weight: bold;

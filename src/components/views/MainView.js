@@ -10,8 +10,8 @@ export class MainView extends LitElement {
             height: 100%;
             width: 100%;
             color: var(--text-color);
-            background: var(--bg-primary);
-            overflow: hidden; /* 🐛 FIX: Strictly prohibits any scrollbars */
+            background: transparent; /* 🐛 FIX: Stop color stacking */
+            overflow: hidden; 
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
             cursor: default !important;
         }
@@ -70,15 +70,15 @@ export class MainView extends LitElement {
             background: transparent;
         }
 
-        /* Card Specific Branding (Permanent colors) */
-        .card-oa::before { background: #a142f4; }
-        .card-oa .icon-wrapper { background: rgba(161, 66, 244, 0.15); color: #a142f4; border: 1px solid rgba(161, 66, 244, 0.3); }
+        /* Card Specific Branding (Tied to Alpha) */
+        .card-oa::before { background: rgba(161, 66, 244, var(--bg-alpha, 1)); }
+        .card-oa .icon-wrapper { background: rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.15)); color: #a142f4; border: 1px solid rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.3)); }
 
-        .card-interview::before { background: #4285f4; }
-        .card-interview .icon-wrapper { background: rgba(66, 133, 244, 0.15); color: #4285f4; border: 1px solid rgba(66, 133, 244, 0.3); }
+        .card-interview::before { background: rgba(66, 133, 244, var(--bg-alpha, 1)); }
+        .card-interview .icon-wrapper { background: rgba(66, 133, 244, calc(var(--bg-alpha, 1) * 0.15)); color: #4285f4; border: 1px solid rgba(66, 133, 244, calc(var(--bg-alpha, 1) * 0.3)); }
 
-        .card-companion::before { background: #f59e0b; }
-        .card-companion .icon-wrapper { background: rgba(245, 158, 11, 0.15); color: #f59e0b; border: 1px solid rgba(245, 158, 11, 0.3); }
+        .card-companion::before { background: rgba(245, 158, 11, var(--bg-alpha, 1)); }
+        .card-companion .icon-wrapper { background: rgba(245, 158, 11, calc(var(--bg-alpha, 1) * 0.15)); color: #f59e0b; border: 1px solid rgba(245, 158, 11, calc(var(--bg-alpha, 1) * 0.3)); }
 
         .icon-wrapper {
             width: 42px; height: 42px; border-radius: 10px;

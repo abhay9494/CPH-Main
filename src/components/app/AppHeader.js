@@ -17,7 +17,7 @@ export class AppHeader extends LitElement {
             display: flex;
             align-items: center;
             padding: var(--header-padding);
-            background: var(--header-background);
+            background: transparent !important; /* 🐛 FIX: No more color stacking over the main window */
             border-bottom: 1px solid var(--border-color);
         }
         .back-btn {
@@ -47,9 +47,9 @@ export class AppHeader extends LitElement {
 
         .blinking-alert {
             -webkit-app-region: no-drag;
-            background: rgba(241, 76, 76, 0.15);
+            background: rgba(241, 76, 76, calc(var(--bg-alpha, 1) * 0.15));
             color: #f14c4c;
-            border: 1px solid #f14c4c;
+            border: 1px solid rgba(241, 76, 76, var(--bg-alpha, 1));
             padding: 4px 10px;
             border-radius: 4px;
             font-size: 11px;
@@ -92,11 +92,11 @@ export class AppHeader extends LitElement {
         }
         .status-badge.disconnected {
             color: #f14c4c;
-            background: rgba(241, 76, 76, 0.1);
+            background: rgba(241, 76, 76, calc(var(--bg-alpha, 1) * 0.1));
         }
         .status-badge.connected {
             color: #00cc66;
-            background: rgba(0, 204, 102, 0.1);
+            background: rgba(0, 204, 102, calc(var(--bg-alpha, 1) * 0.1));
             animation: pulse-green 2s infinite;
         }
         @keyframes pulse-green {
@@ -116,9 +116,9 @@ export class AppHeader extends LitElement {
 
         .header-pin {
             -webkit-app-region: no-drag;
-            background: rgba(161, 66, 244, 0.15);
+            background: rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.15));
             color: #a142f4;
-            border: 1px solid rgba(161, 66, 244, 0.4);
+            border: 1px solid rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.4));
             padding: 4px 12px;
             border-radius: 4px;
             font-size: 12px;

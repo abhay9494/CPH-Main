@@ -12,11 +12,11 @@ export class HistoryView extends LitElement {
         .history-container { display: flex; width: 100%; height: 100%; }
         
         /* 🟢 Sidebar */
-        .sessions-list { width: 260px; border-right: 1px solid var(--border-color); overflow-y: auto; background: var(--bg-primary); display: flex; flex-direction: column; }
+        .sessions-list { width: 260px; border-right: 1px solid var(--border-color); overflow-y: auto; background: transparent; display: flex; flex-direction: column; }
         
         .session-item { padding: 15px; border-bottom: 1px solid var(--border-color); transition: 0.2s; cursor: default !important; border-left: 3px solid transparent; position: relative; }
         .session-item:hover { background: var(--hover-background); }
-        .session-item.selected { background: var(--bg-tertiary); border-left-color: #a142f4; }
+        .session-item.selected { background: rgba(255, 255, 255, 0.05); border-left-color: #a142f4; } /* 🐛 FIX: Flat overlay */
         
         .session-title-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
         .session-title { font-weight: bold; font-size: 13px; color: var(--text-color); flex: 1; text-align: left; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -33,12 +33,12 @@ export class HistoryView extends LitElement {
         .session-count { font-size: 10px; color: #666; font-family: monospace; }
 
         /* 🟢 Right Pane Layout */
-        .main-pane { flex: 1; display: flex; flex-direction: column; background: var(--bg-primary); overflow: hidden; }
-        .pane-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: var(--bg-secondary); }
+        .main-pane { flex: 1; display: flex; flex-direction: column; background: transparent; overflow: hidden; }
+        .pane-header { display: flex; justify-content: space-between; align-items: center; padding: 15px 20px; border-bottom: 1px solid var(--border-color); background: transparent; }
         .header-title { font-size: 14px; font-weight: bold; color: var(--text-color); margin: 0; }
 
         /* 🟢 Markdown Chat Feed & Images */
-        .conversation-view { flex: 1; overflow-y: auto; background: var(--bg-primary); }
+        .conversation-view { flex: 1; overflow-y: auto; background: transparent; }
         .markdown-body { width: 100%; padding: 20px 25px; font-size: var(--response-font-size, 13px); line-height: 1.6; color: var(--text-color); overflow-x: hidden; word-wrap: break-word; font-family: 'Inter', sans-serif; }
         
         /* 🐛 FIX: Bulletproof Gap Removal */
