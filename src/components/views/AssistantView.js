@@ -424,10 +424,6 @@ export class AssistantView extends LitElement {
                         this.helperStatus = 'handshake';
                         this.requestUpdate();
                         
-                        // 🟢 FIXED: Tell Electron to pop open the Companion Chat Window immediately!
-                        if (window.require) {
-                            window.require('electron').ipcRenderer.send('open-companion-window', { name: this.handshakeName });
-                        }
                     } else if (parsed.type === 'push_profile') {
                         // 🟢 NEW: Copiable Chat Block (Once per session)
                         if (!this.hasReceivedCompanionProfile) {
@@ -450,9 +446,12 @@ export class AssistantView extends LitElement {
                         console.warn("Companion initiated disconnect.");
                         this.cleanupHelperConnection();
                     } else if (parsed.type === 'companion_chat') {
-                        if (window.require) {
-                            window.require('electron').ipcRenderer.send('relay-companion-chat', { name: this.handshakeName, message: parsed.message });
-                        }
+                        // 🟢 FIX: Unified Feed - Push Candidate's whisper directly into the main chat log!
+                        const whisperHtml = `<div style="background: rgba(245, 158, 11, 0.1); padding: 12px; border-left: 3px solid #f59e0b; border-radius: 6px; margin-bottom: 10px; margin-top: 10px;"><strong style="color: #f59e0b; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">🤫 ${this.handshakeName} Whispered:</strong><br/><span style="color: #e5e5e5; font-size: 13px;">${parsed.message}</span></div>`;
+                        this.localChatHistory = [...this.localChatHistory, whisperHtml];
+                        this.localChatIndex = this.localChatHistory.length - 1;
+                        this.requestUpdate();
+                        this.saveCurrentSession();
                     }
                 } catch(e) {}
             });
@@ -519,7 +518,7 @@ export class AssistantView extends LitElement {
         this.cleanupHelperConnection();
     }
 
-    transmitCleanPayload(rawContent) {
+    transmitCleanPayload(rawContent, isManualPush = false) {
         if (!this.helperConn || !this.helperConn.open) return;
 
         let cleanText = rawContent;
@@ -538,6 +537,16 @@ export class AssistantView extends LitElement {
             total: this.localChatHistory.length
         };
         this.helperConn.send(JSON.stringify(payload));
+
+        // 🟢 VISUAL CONFIRMATION: Stamp the local chat log with a glowing badge!
+        if (isManualPush && this.localChatHistory[this.localChatIndex] && !this.localChatHistory[this.localChatIndex].includes('✓ Beamed to Candidate')) {
+            const badgeHtml = `<div style="display: block; margin-top: 15px;"><span style="background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid rgba(0, 204, 102, 0.4); padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; letter-spacing: 0.5px; user-select: none;">✓ Beamed to Candidate</span></div>`;
+            const newHistory = [...this.localChatHistory];
+            newHistory[this.localChatIndex] = newHistory[this.localChatIndex] + badgeHtml;
+            this.localChatHistory = newHistory;
+            this.requestUpdate();
+            this.saveCurrentSession();
+        }
     }
 
     async syncWidgetState() {
@@ -797,10 +806,13 @@ export class AssistantView extends LitElement {
             // Beam to Companion
             this.helperConn.send(JSON.stringify({ type: 'whisper', message: msg }));
             
-            // Show in your own floating Chat window so you know it sent
-            if (window.require) {
-                 window.require('electron').ipcRenderer.send('relay-companion-chat', { name: "You (Whisper)", message: msg });
-            }
+            // 🟢 FIX: Unified Feed - Push your own whisper into the main chat log!
+            const whisperHtml = `<div style="background: rgba(66, 133, 244, 0.1); padding: 12px; border-left: 3px solid #4285f4; border-radius: 6px; margin-bottom: 10px; margin-top: 10px;"><strong style="color: #4285f4; text-transform: uppercase; font-size: 11px; letter-spacing: 0.5px;">💬 Whisper Sent:</strong><br/><span style="color: #e5e5e5; font-size: 13px;">${msg}</span></div>`;
+            this.localChatHistory = [...this.localChatHistory, whisperHtml];
+            this.localChatIndex = this.localChatHistory.length - 1;
+            this.requestUpdate();
+            this.saveCurrentSession();
+            
             input.value = '';
         }
     }
@@ -1206,7 +1218,7 @@ export class AssistantView extends LitElement {
                                     <button class="action-btn ${this.autoSyncMode ? 'success' : 'danger'}" style="height: 32px; box-sizing: border-box;" @click=${() => { this.autoSyncMode = !this.autoSyncMode; this.requestUpdate(); }}>
                                         ${this.autoSyncMode ? '📡 Auto-Sync: ON' : '🛡️ Draft Mode'}
                                     </button>
-                                    <button class="action-btn" style="background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; height: 32px; box-sizing: border-box;" @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex])}>
+                                    <button class="action-btn" style="background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; height: 32px; box-sizing: border-box;" @click=${() => this.transmitCleanPayload(this.localChatHistory[this.localChatIndex], true)}>
                                         🚀 PUSH TO SCREEN
                                     </button>
                                 ` : html`
