@@ -541,10 +541,16 @@ export class CheatingDaddyApp extends LitElement {
     }
 
     async handleHubNavigation(destination) {
+        const { ipcRenderer } = window.require('electron');
+        
         if (destination === 'quit') {
-            const { ipcRenderer } = window.require('electron');
             await ipcRenderer.invoke('quit-application');
             return;
+        }
+
+        // 🟢 FIX: Turn off mouse sensors if we leave Proctored OA!
+        if (destination !== 'proctored_oa') {
+            ipcRenderer.send('stop-hot-corners');
         }
 
         if (destination === 'main') {
@@ -554,24 +560,27 @@ export class CheatingDaddyApp extends LitElement {
             return;
         }
 
-        if (destination === 'oa' || destination === 'interview' || destination === 'companion') {
-            this.sessionMode = destination === 'oa' ? 'oa' : 'interview';
+        if (destination === 'oa' || destination === 'interview' || destination === 'companion' || destination === 'proctored_oa') {
+            this.sessionMode = destination === 'interview' ? 'interview' : destination;
 
-            const targetEngine = destination === 'oa' ? 1 : 0;
-            const { ipcRenderer } = window.require('electron');
+            const targetEngine = (destination === 'oa' || destination === 'proctored_oa') ? 1 : 0;
             await ipcRenderer.invoke('set-ai-provider', targetEngine);
+
+            // 🟢 FIX: Activate the Ghost Mouse Sensors!
+            if (destination === 'proctored_oa') {
+                ipcRenderer.send('start-hot-corners');
+            }
 
             this.currentView = 'assistant';
             this.requestUpdate();
 
-            // 🟢 Safely toggle Companion UI *after* rendering AssistantView
             if (destination === 'companion') {
                 setTimeout(() => window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: true })), 100);
             } else {
                 setTimeout(() => window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false })), 100);
             }
         } else {
-            this.currentView = destination; // 'customize', 'history', etc.
+            this.currentView = destination; 
         }
         this.requestUpdate();
     }

@@ -46,7 +46,7 @@ export class MainView extends LitElement {
         /* 🟢 Primary Action Cards */
         .primary-grid {
             display: grid;
-            grid-template-columns: repeat(3, minmax(220px, 1fr));
+            grid-template-columns: repeat(2, minmax(220px, 1fr)); /* 🐛 FIX: 2x2 Grid */
             gap: 20px;
             width: 100%;
             margin-bottom: 35px;
@@ -129,6 +129,12 @@ export class MainView extends LitElement {
                         <div class="icon-wrapper">⚡</div>
                         <div class="card-title">Online Assessment</div>
                         <div class="card-desc">Capture your screen directly to instantly generate high-speed code solutions and algorithms.</div>
+                    </div>
+
+                    <div class="mode-card card-oa" @click=${() => this.onNavigate('proctored_oa')} style="border-top-color: #f14c4c;">
+                        <div class="icon-wrapper" style="color: #f14c4c; background: rgba(241, 76, 76, 0.15); border-color: rgba(241, 76, 76, 0.3);">🎯</div>
+                        <div class="card-title">Proctored OA</div>
+                        <div class="card-desc">Zero-touch execution. Triggers AI captures and navigation via invisible mouse edge-dwells.</div>
                     </div>
 
                     <div class="mode-card card-interview" @click=${() => this.onNavigate('interview')}>

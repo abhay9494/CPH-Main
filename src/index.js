@@ -1668,4 +1668,76 @@ expected output`;
             });
         }
     });
+
+    // ==========================================================
+    // 🎯 GHOST NINJA: HARDWARE MOUSE TELEMETRY (For Proctored OA)
+    // ==========================================================
+    let hotCornerInterval = null;
+    let currentDwellZone = null;
+    let dwellStartTime = 0;
+    let hasTriggeredZone = false;
+
+    ipcMain.on('start-hot-corners', () => {
+        if (hotCornerInterval) return;
+        const { screen } = require('electron');
+        // console.log("🎯 Ghost Sensors ACTIVATED");
+        
+        hotCornerInterval = setInterval(() => {
+            const point = screen.getCursorScreenPoint();
+            const display = screen.getDisplayNearestPoint(point);
+            const bounds = display.bounds;
+            
+            const x = point.x - bounds.x;
+            const y = point.y - bounds.y;
+            const w = bounds.width;
+            const h = bounds.height;
+            
+            const edge = 15; // Pixel threshold for corners/edges
+            let activeZone = null;
+
+            if (x <= edge && y <= edge) activeZone = 'top_left';
+            else if (x >= w - edge && y <= edge) activeZone = 'top_right';
+            else if (x <= edge && y >= h - edge) activeZone = 'bottom_left';
+            else if (x >= w - edge && y >= h - edge) activeZone = 'bottom_right';
+            else if (y <= edge && Math.abs(x - w/2) < 150) activeZone = 'top_center';
+            else if (y >= h - edge && Math.abs(x - w/2) < 150) activeZone = 'bottom_center';
+            else if (x <= edge && Math.abs(y - h/2) < 150) activeZone = 'middle_left';
+            else if (x >= w - edge && Math.abs(y - h/2) < 150) activeZone = 'middle_right';
+
+            if (activeZone !== currentDwellZone) {
+                currentDwellZone = activeZone;
+                dwellStartTime = Date.now();
+                hasTriggeredZone = false;
+            } else if (currentDwellZone && !hasTriggeredZone) {
+                // Trigger exactly after 800ms of resting on the pixel
+                if (Date.now() - dwellStartTime >= 800) {
+                    hasTriggeredZone = true;
+                    // console.log(`🎯 Hot Corner Triggered: ${currentDwellZone}`);
+                    if (mainWindow && !mainWindow.isDestroyed()) {
+                        mainWindow.webContents.send('hot-corner-triggered', currentDwellZone);
+                    }
+                }
+            }
+        }, 100);
+    });
+
+    ipcMain.on('stop-hot-corners', () => {
+        if (hotCornerInterval) {
+            clearInterval(hotCornerInterval);
+            hotCornerInterval = null;
+            // console.log("⏸️ Ghost Sensors DEACTIVATED");
+        }
+    });
+
+    // 🟢 SAFE HIDE: Allows the frontend to trigger the stealth hide safely!
+    ipcMain.handle('trigger-ghost-hide', () => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            if (mainWindow.isVisible()) {
+                mainWindow.hide();
+                if (aiWebWindow && !aiWebWindow.isDestroyed()) aiWebWindow.hide();
+            } else {
+                mainWindow.showInactive();
+            }
+        }
+    });
 }

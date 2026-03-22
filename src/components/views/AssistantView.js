@@ -157,6 +157,7 @@ export class AssistantView extends LitElement {
         hasReceivedCompanionProfile: { type: Boolean },
         currentSessionId: { type: String },
         modalImage: { type: String },
+        hotCornersMap: { type: Object },
     };
 
     constructor() {
@@ -241,6 +242,13 @@ export class AssistantView extends LitElement {
                 this.currentProfileId = prefs.lastProfileId || (this.aiProfiles.length > 0 ? this.aiProfiles[0].id : null);
                 this.hasResumeContext = !!(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
                 
+                // 🟢 NEW: Load the Hot Corners map into state for the UI Legend
+                this.hotCornersMap = prefs.hotCorners || {
+                    top_left: 'capture', bottom_left: 'send_ai', middle_left: 'scroll_up',
+                    top_right: 'hide_unhide', middle_right: 'scroll_down', bottom_right: 'change_profile',
+                    top_center: 'change_ai', bottom_center: 'fast_think'
+                };
+
                 if (this.currentProfileId) await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
                 if (prefs.tacThinkMode !== undefined) {
                     this.tacThinkMode = prefs.tacThinkMode;
@@ -380,7 +388,59 @@ export class AssistantView extends LitElement {
                     }
                 }
             });
-        }
+
+            // 🎯 NEW: HOT CORNER ROUTER
+            ipcRenderer.on('hot-corner-triggered', async (event, zone) => {
+                if (this.currentMode !== 'proctored_oa') return;
+                
+                // Fetch fresh settings in case they were updated
+                const raw = await window.cheatingDaddy.storage.getPreferences();
+                const prefs = raw?.data || raw || {};
+                const hotCorners = prefs.hotCorners || {};
+                this.hotCornersMap = hotCorners; // Update UI Legend
+                this.requestUpdate();
+
+                const action = hotCorners[zone];
+                if (!action || action === 'none') return;
+
+                switch (action) {
+                    case 'capture': this.handleCaptureScreenshot(); break;
+                    case 'send_ai': this.handleSendToAI(); break;
+                    case 'hide_unhide': window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
+                    case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -150, behavior: 'smooth'}); break;
+                    case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 150, behavior: 'smooth'}); break;
+                    case 'prev_resp': this.navigateToPreviousResponse(); break;
+                    case 'next_resp': this.navigateToNextResponse(); break;
+                    case 'reset': this.handleNewChat(); break;
+                    case 'refactor': this.handleRefactor(); break;
+                    case 'fast_think': 
+                        this.tacThinkMode = !this.tacThinkMode; this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+                        ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
+                        window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate();
+                        break;
+                    case 'change_ai': 
+                        let nextAiIdx = (this.currentProviderName === 'ChatGPT' ? 1 : (this.currentProviderName === 'Gemini' ? 2 : 0));
+                        this.handleSetEngine(nextAiIdx); break;
+                    case 'change_profile':
+                        if (this.aiProfiles.length > 0) {
+                            const cIdx = this.aiProfiles.findIndex(p => p.id === this.currentProfileId);
+                            const nIdx = (cIdx + 1) % this.aiProfiles.length;
+                            this.handleProfileChange({target: {value: this.aiProfiles[nIdx].id}});
+                        }
+                        break;
+                    case 'text_inc': this.changeFontSize(2); break;
+                    case 'text_dec': this.changeFontSize(-2); break;
+                    case 'bg_inc':
+                        const newBgInc = Math.min(1, (prefs.backgroundTransparency || 0.8) + 0.1);
+                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgInc } })); break;
+                    case 'bg_dec':
+                        const newBgDec = Math.max(0, (prefs.backgroundTransparency || 0.8) - 0.1);
+                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgDec } })); break;
+                    case 'toggle_ai_vis': this.handleToggleAiVisibility(); break;
+                }
+            });
+        } // <-- End of if (window.require)
+
         if (window.cheatingDaddy) {
             window.cheatingDaddy.handleShortcut = (key) => {
                 if (key === 'ctrl+enter' || key === 'cmd+enter') this.handleCaptureScreenshot();
@@ -1071,6 +1131,50 @@ export class AssistantView extends LitElement {
         `;
     }
 
+    getHotCornerLabel(action) {
+        const labels = {
+            'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
+            'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
+            'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
+            'change_profile': '👤 Profile', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
+            'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
+            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI'
+        };
+        return labels[action] || action || '—';
+    }
+
+    renderProctoredOAMode() {
+        const map = this.hotCornersMap || {};
+        
+        return html`
+            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent;">
+                <div class="response-container">
+                    ${this.localChatHistory.length > 0 
+                        ? html`<div class="markdown-body">${this.renderMarkdown(this.localChatHistory[this.localChatIndex])}</div>` 
+                        : html`<div style="color: var(--text-muted); font-style: italic; text-align: center; margin-top: 20px;">Ghost Sensors Active. Move mouse to screen edges to trigger actions.</div>`
+                    }
+                </div>
+
+                <div class="bottom-controls" style="padding: 6px; border-top: 1px dashed var(--border-color); background: rgba(0,0,0,0.15);">
+                    <div style="font-size: 9px; color: var(--text-muted); text-align: center; margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase;">Mouse Edge Dwell Mapping (0.8s)</div>
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; text-align: center; font-size: 9px; color: var(--text-secondary);">
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Top-L: ${this.getHotCornerLabel(map.top_left)}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Top-C: ${this.getHotCornerLabel(map.top_center)}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Top-R: ${this.getHotCornerLabel(map.top_right)}</div>
+                        
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Mid-L: ${this.getHotCornerLabel(map.middle_left)}</div>
+                        <div style="display: flex; align-items: center; justify-content: center; font-size: 11px; opacity: 0.3;">🎯</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Mid-R: ${this.getHotCornerLabel(map.middle_right)}</div>
+                        
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Bot-L: ${this.getHotCornerLabel(map.bottom_left)}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Bot-C: ${this.getHotCornerLabel(map.bottom_center)}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Bot-R: ${this.getHotCornerLabel(map.bottom_right)}</div>
+                    </div>
+                </div>
+            </div>
+        `;
+    }
+
     renderHelpingMode() {
         // 🟢 SHOW NAME APPROVAL SCREEN
         if (this.helperStatus === 'handshake') {
@@ -1132,6 +1236,7 @@ export class AssistantView extends LitElement {
 
     render() {
         if (this.viewMode === 'typer') return this.renderTyperMode();
+        if (this.currentMode === 'proctored_oa') return this.renderProctoredOAMode();
         if (this.isHelpingMode && this.helperStatus !== 'connected') return this.renderHelpingMode();
 
         let m = "🟢 **System Online. Awaiting inputs...**";
@@ -1181,7 +1286,7 @@ export class AssistantView extends LitElement {
                         </button>
                     </div>
 
-                    ${this.currentMode === 'interview' ? html`
+                    ${(this.currentMode === 'interview' || this.currentMode === 'companion') ? html`
                         <div class="control-row">
                             <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
                             <button class="action-btn" @click=${async () => {

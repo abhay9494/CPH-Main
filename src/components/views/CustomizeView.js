@@ -235,7 +235,17 @@ export class CustomizeView extends LitElement {
             selectedImageQuality: 'medium',
             googleSearchEnabled: false, 
             interviewRole: 'Software Development Engineer',
-            hardwareSetup: 'headphones'
+            hardwareSetup: 'headphones',
+            hotCorners: {
+                top_left: 'capture',
+                bottom_left: 'send_ai',
+                middle_left: 'scroll_up',
+                top_right: 'hide_unhide',
+                middle_right: 'scroll_down',
+                bottom_right: 'change_profile',
+                top_center: 'change_ai',
+                bottom_center: 'fast_think'
+            }
         };
         this.keybinds = {};
         this.showToast = false;
@@ -250,8 +260,10 @@ export class CustomizeView extends LitElement {
             { id: 'language', icon: '🌍', label: 'Language' },
             { id: 'capture', icon: '📸', label: 'Capture' },
             { id: 'shortcuts', icon: '⌨️', label: 'Shortcuts' },
+            { id: 'hotcorners', icon: '🖱️', label: 'Hot Corners' },
             { id: 'search', icon: '🔍', label: 'Search' },
-            { id: 'advanced', icon: '⚠️', label: 'Advanced' }
+            { id: 'advanced', icon: '⚠️', label: 'Advanced' },
+            
         ];
 
         this.shortcutLabels = {
@@ -626,6 +638,55 @@ export class CustomizeView extends LitElement {
                                 <button class="shortcut-btn ${this.listeningKey === key ? 'listening' : ''}" @click=${() => this.startListening(key)}>
                                     ${this.listeningKey === key ? 'Press keys...' : this.keybinds[key] || 'Unbound'}
                                 </button>
+                            </div>
+                        `)}
+                    </div>
+                    </div>
+                `;
+            case 'hotcorners':
+                const cornerActions = [
+                    {value: 'none', label: 'None (Disabled)'},
+                    {value: 'capture', label: '📸 Capture Screen'},
+                    {value: 'send_ai', label: '🚀 Send to AI'},
+                    {value: 'hide_unhide', label: '👻 Hide / Unhide App'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'},
+                    {value: 'scroll_down', label: '⬇️ Scroll Down'},
+                    {value: 'prev_resp', label: '◀ Previous Response'},
+                    {value: 'next_resp', label: '▶ Next Response'},
+                    {value: 'change_ai', label: '🤖 Change AI Model'},
+                    {value: 'change_profile', label: '👤 Change Profile'},
+                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
+                    {value: 'refactor', label: '🛠️ Refactor Code'},
+                    {value: 'reset', label: '✨ Reset Session'},
+                    {value: 'text_inc', label: 'A+ Increase Text Size'},
+                    {value: 'text_dec', label: 'A- Decrease Text Size'},
+                    {value: 'bg_inc', label: '⬛ Increase Transparency'},
+                    {value: 'bg_dec', label: '⬜ Decrease Transparency'},
+                    {value: 'toggle_ai_vis', label: '👁️ Show/Hide AI Web View'}
+                ];
+                
+                const zones = [
+                    { id: 'top_left', label: 'Top-Left Corner' }, { id: 'top_center', label: 'Top-Center Edge' }, { id: 'top_right', label: 'Top-Right Corner' },
+                    { id: 'middle_left', label: 'Middle-Left Edge' }, { id: 'middle_right', label: 'Middle-Right Edge' },
+                    { id: 'bottom_left', label: 'Bottom-Left Corner' }, { id: 'bottom_center', label: 'Bottom-Center Edge' }, { id: 'bottom_right', label: 'Bottom-Right Corner' }
+                ];
+
+                const currentCorners = this.prefs.hotCorners || {};
+
+                return html`
+                    <div class="scrollable-tab">
+                    <h2>Hot Corners & Edges (Proctored OA)</h2>
+                    <p style="font-size: 12px; color: var(--text-muted); margin-top: -10px; margin-bottom: 20px;">
+                        Move your mouse to these edges and <strong>dwell for 0.8 seconds</strong> to trigger silent actions.
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        ${zones.map(zone => html`
+                            <div class="form-group" style="margin-bottom: 5px;">
+                                <label>${zone.label}</label>
+                                ${this.renderCustomDropdown(`zone_${zone.id}`, cornerActions, currentCorners[zone.id] || 'none', (val) => {
+                                    const newCorners = { ...currentCorners, [zone.id]: val };
+                                    this.savePref('hotCorners', newCorners);
+                                })}
                             </div>
                         `)}
                     </div>
