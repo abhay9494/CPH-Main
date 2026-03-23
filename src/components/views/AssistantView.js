@@ -206,6 +206,7 @@ export class AssistantView extends LitElement {
         hoverZone: { type: String },
         hoverProgress: { type: Number },
         hotCornerBounds: { type: Object },
+        bgTransparency: { type: Number },
     };
 
     constructor() {
@@ -272,6 +273,14 @@ export class AssistantView extends LitElement {
             this.hotCornerBounds = e.detail.value;
             this.requestUpdate();
         }
+        // 🟢 FIX: Keep local memory perfectly in sync with the side-sliders!
+        if (e.detail && e.detail.key === 'fontSize') {
+            this.fontSize = e.detail.value;
+            this.style.setProperty('--response-font-size', `${this.fontSize}px`);
+        }
+        if (e.detail && e.detail.key === 'backgroundTransparency') {
+            this.bgTransparency = e.detail.value;
+        }
     }
 
     navigateToPreviousResponse() {
@@ -281,8 +290,13 @@ export class AssistantView extends LitElement {
         if (this.localChatIndex < this.localChatHistory.length - 1) { this.localChatIndex++; this.requestUpdate(); }
     }
     changeFontSize(delta) {
-        this.fontSize = Math.max(12, Math.min(28, this.fontSize + delta));
+        this.fontSize = Math.max(12, Math.min(32, this.fontSize + delta));
         this.style.setProperty('--response-font-size', `${this.fontSize}px`);
+        // 🟢 FIX: Ensure manual button clicks also update the universal sliders!
+        if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+            window.cheatingDaddy.storage.updatePreference('fontSize', this.fontSize);
+            window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'fontSize', value: this.fontSize } }));
+        }
     }
 
     connectedCallback() {
@@ -317,6 +331,11 @@ export class AssistantView extends LitElement {
                 this.currentProfileId = prefs.lastProfileId || (this.aiProfiles.length > 0 ? this.aiProfiles[0].id : null);
                 this.hasResumeContext = !!(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
                 this.hotCornerBounds = prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40, dwellTime: 3, hideTime: 0 };
+                
+                // 🟢 FIX: Safely load starting values into fast local memory!
+                this.fontSize = prefs.fontSize ?? 13;
+                this.bgTransparency = prefs.backgroundTransparency ?? 0.8;
+                this.style.setProperty('--response-font-size', `${this.fontSize}px`);
                 
                 // 🟢 FIX: Restoring the Scroll Edges so you can scroll in Ghost Mode!
                 this.hotCornersMap = prefs.hotCorners || {
@@ -573,22 +592,21 @@ export class AssistantView extends LitElement {
             // 🟢 GLOBALLY SYNCED UI ACTIONS
             case 'text_inc': 
             case 'text_dec':
-                const rawF = await window.cheatingDaddy.storage.getPreferences();
-                let cF = rawF?.data?.fontSize ?? 13;
-                cF = Math.max(12, Math.min(32, cF + (action === 'text_inc' ? 1 : -1)));
+                this.fontSize = Math.max(12, Math.min(32, this.fontSize + (action === 'text_inc' ? 1 : -1)));
                 this.showToast(action === 'text_inc' ? 'A+ Text Size' : 'A- Text Size');
-                // 🐛 FIX: Actively write the new value back to the database!
-                await window.cheatingDaddy.storage.updatePreference('fontSize', cF);
-                window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'fontSize', value: cF } })); break;
+                await window.cheatingDaddy.storage.updatePreference('fontSize', this.fontSize);
+                window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'fontSize', value: this.fontSize } })); 
+                break;
+            
             case 'bg_inc':
             case 'bg_dec':
-                const rawB = await window.cheatingDaddy.storage.getPreferences();
-                let cB = rawB?.data?.backgroundTransparency ?? 0.8;
-                cB = Math.max(0, Math.min(1, cB + (action === 'bg_inc' ? 0.05 : -0.05)));
+                // 🐛 FIX: Math.round obliterates JavaScript floating-point errors (e.g. preventing 0.8 - 0.05 = 0.750000001)
+                let newTrans = this.bgTransparency + (action === 'bg_inc' ? 0.05 : -0.05);
+                this.bgTransparency = Math.max(0, Math.min(1, Math.round(newTrans * 100) / 100));
                 this.showToast(action === 'bg_inc' ? '⬛ Opacity Increased' : '⬜ Opacity Decreased');
-                // 🐛 FIX: Actively write the new value back to the database!
-                await window.cheatingDaddy.storage.updatePreference('backgroundTransparency', cB);
-                window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: cB } })); break;
+                await window.cheatingDaddy.storage.updatePreference('backgroundTransparency', this.bgTransparency);
+                window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: this.bgTransparency } })); 
+                break;
             
             case 'toggle_ai_vis': this.showToast('👁️ Toggled AI Background Window'); this.handleToggleAiVisibility(); break;
         }
