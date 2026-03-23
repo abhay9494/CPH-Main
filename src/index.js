@@ -1670,62 +1670,74 @@ expected output`;
     });
 
     // ==========================================================
-    // 🎯 GHOST NINJA: HARDWARE MOUSE TELEMETRY (For Proctored OA)
+    // 🎯 GHOST NINJA V2: 16-ZONE TELEMETRY (Hover Streaming)
     // ==========================================================
     let hotCornerInterval = null;
     let currentDwellZone = null;
-    let dwellStartTime = 0;
-    let hasTriggeredZone = false;
 
-    ipcMain.on('start-hot-corners', () => {
+    ipcMain.on('start-hot-corners', (event, bounds) => {
         if (hotCornerInterval) return;
         const { screen } = require('electron');
-        // console.log("🎯 Ghost Sensors ACTIVATED");
         
+        // Default Boundaries if none set in settings
+        const b = bounds || { cornerSize: 15, centerX: 40, centerY: 40 };
+
         hotCornerInterval = setInterval(() => {
             const point = screen.getCursorScreenPoint();
             const display = screen.getDisplayNearestPoint(point);
-            const bounds = display.bounds;
+            const { x: dx, y: dy, width: w, height: h } = display.bounds;
+            const x = point.x - dx;
+            const y = point.y - dy;
             
-            const x = point.x - bounds.x;
-            const y = point.y - bounds.y;
-            const w = bounds.width;
-            const h = bounds.height;
-            
-            const edge = 15; // Pixel threshold for corners/edges
+            const edge = 15; // Physical pixel tolerance
+            let isTop = y <= edge;
+            let isBottom = y >= h - edge;
+            let isLeft = x <= edge;
+            let isRight = x >= w - edge;
+
+            const xPct = (x / w) * 100;
+            const yPct = (y / h) * 100;
+
+            // Math to slice edges into 5 segments based on custom sliders
+            const getSeg = (pct, centerSize, cornerSize) => {
+                if (pct <= cornerSize) return '1'; // Corner 1
+                if (pct >= 100 - cornerSize) return '5'; // Corner 2
+                const midStart = 50 - (centerSize / 2);
+                const midEnd = 50 + (centerSize / 2);
+                if (pct >= midStart && pct <= midEnd) return '3'; // Center
+                if (pct > cornerSize && pct < midStart) return '2'; // Mid 1
+                return '4'; // Mid 2
+            };
+
             let activeZone = null;
+            if (isTop) {
+                const s = getSeg(xPct, b.centerX, b.cornerSize);
+                activeZone = s === '1' ? 'top_left' : s === '2' ? 'top_mid_left' : s === '3' ? 'top_center' : s === '4' ? 'top_mid_right' : 'top_right';
+            } else if (isBottom) {
+                const s = getSeg(xPct, b.centerX, b.cornerSize);
+                activeZone = s === '1' ? 'bottom_left' : s === '2' ? 'bottom_mid_left' : s === '3' ? 'bottom_center' : s === '4' ? 'bottom_mid_right' : 'bottom_right';
+            } else if (isLeft) {
+                const s = getSeg(yPct, b.centerY, b.cornerSize);
+                activeZone = s === '1' ? 'top_left' : s === '2' ? 'left_mid_top' : s === '3' ? 'middle_left' : s === '4' ? 'left_mid_bottom' : 'bottom_left';
+            } else if (isRight) {
+                const s = getSeg(yPct, b.centerY, b.cornerSize);
+                activeZone = s === '1' ? 'top_right' : s === '2' ? 'right_mid_top' : s === '3' ? 'middle_right' : s === '4' ? 'right_mid_bottom' : 'bottom_right';
+            }
 
-            if (x <= edge && y <= edge) activeZone = 'top_left';
-            else if (x >= w - edge && y <= edge) activeZone = 'top_right';
-            else if (x <= edge && y >= h - edge) activeZone = 'bottom_left';
-            else if (x >= w - edge && y >= h - edge) activeZone = 'bottom_right';
-            else if (y <= edge && Math.abs(x - w/2) < 150) activeZone = 'top_center';
-            else if (y >= h - edge && Math.abs(x - w/2) < 150) activeZone = 'bottom_center';
-            else if (x <= edge && Math.abs(y - h/2) < 150) activeZone = 'middle_left';
-            else if (x >= w - edge && Math.abs(y - h/2) < 150) activeZone = 'middle_right';
-
+            // Stream the exact zone to the frontend every 50ms for smooth UI drawing
             if (activeZone !== currentDwellZone) {
                 currentDwellZone = activeZone;
-                dwellStartTime = Date.now();
-                hasTriggeredZone = false;
-            } else if (currentDwellZone && !hasTriggeredZone) {
-                // Trigger exactly after 800ms of resting on the pixel
-                if (Date.now() - dwellStartTime >= 800) {
-                    hasTriggeredZone = true;
-                    // console.log(`🎯 Hot Corner Triggered: ${currentDwellZone}`);
-                    if (mainWindow && !mainWindow.isDestroyed()) {
-                        mainWindow.webContents.send('hot-corner-triggered', currentDwellZone);
-                    }
+                if (mainWindow && !mainWindow.isDestroyed()) {
+                    mainWindow.webContents.send('hot-corner-hover', currentDwellZone);
                 }
             }
-        }, 100);
+        }, 50); 
     });
 
     ipcMain.on('stop-hot-corners', () => {
         if (hotCornerInterval) {
             clearInterval(hotCornerInterval);
             hotCornerInterval = null;
-            // console.log("⏸️ Ghost Sensors DEACTIVATED");
         }
     });
 

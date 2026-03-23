@@ -566,9 +566,12 @@ export class CheatingDaddyApp extends LitElement {
             const targetEngine = (destination === 'oa' || destination === 'proctored_oa') ? 1 : 0;
             await ipcRenderer.invoke('set-ai-provider', targetEngine);
 
-            // 🟢 FIX: The Auto-Ghost & Widget Killer!
+            // 🟢 FIX: Send custom boundary sliders to the C++ Telemetry Engine!
             if (destination === 'proctored_oa') {
-                ipcRenderer.send('start-hot-corners');
+                const raw = await window.cheatingDaddy.storage.getPreferences();
+                const bounds = (raw?.data || raw || {}).hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
+                ipcRenderer.send('start-hot-corners', bounds);
+                
                 ipcRenderer.invoke('hide-widget'); // Kill the widget
                 ipcRenderer.send('set-ignore-mouse-events', true); // Instantly turn on Click-Through
             } else {

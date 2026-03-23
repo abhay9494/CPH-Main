@@ -22,18 +22,18 @@ export class CustomizeView extends LitElement {
         }
         .sidebar {
             width: 180px;
-            background: transparent; /* 🐛 FIX: Eradicate double-alpha stacking */
+            background: transparent; 
             border-right: 1px solid var(--border-color);
             display: flex;
             flex-direction: column;
-            padding: 10px 0;
+            padding: 0; /* 🐛 FIX: Removed the 10px top gap */
             overflow-y: auto;
         }
         .tab-btn {
             background: transparent;
             border: none;
             color: var(--text-secondary);
-            padding: 12px 15px;
+            padding: 10px 15px; /* 🐛 FIX: Squished from 12px to 10px */
             text-align: left;
             font-size: 13px;
             transition: 0.2s;
@@ -53,7 +53,7 @@ export class CustomizeView extends LitElement {
         }
         .content {
             flex: 1;
-            padding: 25px 40px;
+            padding: 15px 40px; /* 🐛 FIX: Reduced top/bottom padding from 25px to 15px */
             overflow: hidden;
             display: flex;
             flex-direction: column;
@@ -210,6 +210,69 @@ export class CustomizeView extends LitElement {
             opacity: 1;
             transform: translateY(0);
         }
+        
+        /* 🎯 NEW: 16-Zone Monitor Matrix CSS */
+        .monitor-matrix {
+            display: grid;
+            width: 100%;
+            height: 310px; /* 🐛 FIX: Aggressively shrunk from 380px to 310px */
+            background: #0a0a0a;
+            border: 6px solid #222; /* 🐛 Thinner outer bezel */
+            border-radius: 10px;
+            gap: 4px;
+            padding: 4px;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.8);
+            position: relative;
+            transition: all 0.2s ease-out;
+            overflow: hidden;
+        }
+        .matrix-cell {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 4px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            cursor: pointer !important;
+            overflow: hidden;
+        }
+        .matrix-cell:hover {
+            background: rgba(161, 66, 244, 0.2);
+            border-color: #a142f4;
+            transform: scale(0.96);
+        }
+        .matrix-center {
+            grid-area: 2 / 2 / 5 / 5; 
+            background: rgba(0,0,0,0.6);
+            border-radius: 8px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 10px; /* 🐛 FIX: Reduced padding inside the hollow center */
+            border: 1px dashed rgba(255,255,255,0.15);
+        }
+        .zone-editor-modal {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            background: var(--bg-primary); border: 1px solid var(--border-color);
+            padding: 20px; border-radius: 8px; z-index: 1001; width: 420px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.9);
+        }
+        .zone-action-grid {
+            display: grid; grid-template-columns: 1fr 1fr; gap: 8px;
+            margin-top: 15px; max-height: 300px; overflow-y: auto; padding-right: 5px;
+        }
+        .action-select-btn {
+            background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color);
+            padding: 8px 12px; border-radius: 4px; text-align: left; font-size: 12px; transition: 0.2s;
+        }
+        .action-select-btn:hover { background: var(--hover-background); border-color: #888; }
+        .action-select-btn.selected { background: rgba(66, 133, 244, 0.2); border-color: #4285f4; color: #4285f4; font-weight: bold; }
+        
+        .slider-row { width: 100%; margin-bottom: 4px; } /* 🐛 FIX: Reduced spacing between sliders */
+        .slider-row label { display: flex; justify-content: space-between; font-size: 10px; color: #ccc; margin-bottom: 2px; font-weight: bold; } /* 🐛 Thinner text */
     `;
 
     static properties = {
@@ -218,7 +281,8 @@ export class CustomizeView extends LitElement {
         keybinds: { type: Object },
         showToast: { type: Boolean },
         listeningKey: { type: String },
-        activeDropdown: { type: String }
+        activeDropdown: { type: String },
+        editingZone: { type: String }
     };
 
     constructor() {
@@ -236,15 +300,11 @@ export class CustomizeView extends LitElement {
             googleSearchEnabled: false, 
             interviewRole: 'Software Development Engineer',
             hardwareSetup: 'headphones',
+            hotCornerBounds: { cornerSize: 15, centerX: 40, centerY: 40 },
             hotCorners: {
-                top_left: 'capture',
-                bottom_left: 'send_ai',
-                middle_left: 'scroll_up',
-                top_right: 'hide_unhide',
-                middle_right: 'scroll_down',
-                bottom_right: 'change_profile',
-                top_center: 'change_ai',
-                bottom_center: 'fast_think'
+                top_left: 'capture', top_center: 'change_ai', top_right: 'hide_unhide',
+                middle_left: 'scroll_up', middle_right: 'scroll_down',
+                bottom_left: 'send_ai', bottom_center: 'fast_think', bottom_right: 'change_profile'
             }
         };
         this.keybinds = {};
@@ -273,6 +333,7 @@ export class CustomizeView extends LitElement {
         };
         this.newProfileName = '';
         this.newProfileAI = '0'; 
+        this.editingZone = null;
     }
 
     async connectedCallback() {
@@ -467,6 +528,27 @@ export class CustomizeView extends LitElement {
         this.requestUpdate();
     }
 
+    getShortLabel(action) {
+        const labels = {
+            'none': '—', 'capture': '📸', 'send_ai': '🚀', 'hide_unhide': '👻',
+            'scroll_up': '⬆️', 'scroll_down': '⬇️', 'prev_resp': '◀', 'next_resp': '▶',
+            'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
+            'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜'
+        };
+        return labels[action] || '—';
+    }
+
+    renderMatrixCell(id, row, col, label) {
+        const currentCorners = this.prefs.hotCorners || {};
+        const action = currentCorners[id] || 'none';
+        const shortLabel = this.getShortLabel(action);
+        
+        return html`
+            <div class="matrix-cell" style="grid-area: ${row} / ${col};" @click=${() => this.editingZone = id}>
+                <div style="font-size: 16px; margin-bottom: 2px;">${shortLabel}</div> <div style="font-size: 8px; opacity: 0.4; text-align: center; line-height: 1.1; padding: 0 2px;">${label}</div> </div>
+        `;
+    }
+
     renderContent() {
         switch(this.activeTab) {
             case 'accounts':
@@ -645,52 +727,98 @@ export class CustomizeView extends LitElement {
                 `;
             case 'hotcorners':
                 const cornerActions = [
-                    {value: 'none', label: 'None (Disabled)'},
-                    {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'},
-                    {value: 'hide_unhide', label: '👻 Hide / Unhide App'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'},
-                    {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'prev_resp', label: '◀ Previous Response'},
-                    {value: 'next_resp', label: '▶ Next Response'},
-                    {value: 'change_ai', label: '🤖 Change AI Model'},
-                    {value: 'change_profile', label: '👤 Change Profile'},
-                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
-                    {value: 'refactor', label: '🛠️ Refactor Code'},
-                    {value: 'reset', label: '✨ Reset Session'},
-                    {value: 'text_inc', label: 'A+ Increase Text Size'},
-                    {value: 'text_dec', label: 'A- Decrease Text Size'},
-                    {value: 'bg_inc', label: '⬛ Increase Transparency'},
-                    {value: 'bg_dec', label: '⬜ Decrease Transparency'},
-                    {value: 'toggle_ai_vis', label: '👁️ Show/Hide AI Web View'}
+                    {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
+                    {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
+                    {value: 'change_ai', label: '🤖 Change AI Model'}, {value: 'change_profile', label: '👤 Change Profile'},
+                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'refactor', label: '🛠️ Refactor Code'},
+                    {value: 'reset', label: '✨ Reset Session'}, {value: 'text_inc', label: 'A+ Text Size'},
+                    {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'}
                 ];
                 
-                const zones = [
-                    { id: 'top_left', label: 'Top-Left Corner' }, { id: 'top_center', label: 'Top-Center Edge' }, { id: 'top_right', label: 'Top-Right Corner' },
-                    { id: 'middle_left', label: 'Middle-Left Edge' }, { id: 'middle_right', label: 'Middle-Right Edge' },
-                    { id: 'bottom_left', label: 'Bottom-Left Corner' }, { id: 'bottom_center', label: 'Bottom-Center Edge' }, { id: 'bottom_right', label: 'Bottom-Right Corner' }
-                ];
-
+                const b = this.prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
                 const currentCorners = this.prefs.hotCorners || {};
+
+                // 🟢 MATH FIX: Use Fractions (fr) instead of Percentages (%) to eliminate Grid Overflow!
+                let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
+                let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
+
+                const gridCols = `${b.cornerSize}fr ${midX}fr ${b.centerX}fr ${midX}fr ${b.cornerSize}fr`;
+                const gridRows = `${b.cornerSize}fr ${midY}fr ${b.centerY}fr ${midY}fr ${b.cornerSize}fr`;
 
                 return html`
                     <div class="scrollable-tab">
-                    <h2>Hot Corners & Edges (Proctored OA)</h2>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: -10px; margin-bottom: 20px;">
-                        Move your mouse to these edges and <strong>dwell for 0.8 seconds</strong> to trigger silent actions.
-                    </p>
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
-                        ${zones.map(zone => html`
-                            <div class="form-group" style="margin-bottom: 5px;">
-                                <label>${zone.label}</label>
-                                ${this.renderCustomDropdown(`zone_${zone.id}`, cornerActions, currentCorners[zone.id] || 'none', (val) => {
-                                    const newCorners = { ...currentCorners, [zone.id]: val };
-                                    this.savePref('hotCorners', newCorners);
-                                })}
+                        <h2 style="margin-bottom: 5px;">Interactive Monitor Map</h2>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
+                            Click any zone on the screen to assign an action. Drag the sliders in the center to physically adjust your hitboxes in real-time.
+                        </p>
+                        
+                        <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
+                            
+                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner')}
+                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L')}
+                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center')}
+                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R')}
+                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner')}
+
+                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T')}
+                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T')}
+
+                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center')}
+                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center')}
+
+                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B')}
+                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B')}
+
+                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner')}
+                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L')}
+                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center')}
+                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R')}
+                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner')}
+
+                            <div class="matrix-center">
+                                <h3 style="margin-top: 0; margin-bottom: 8px; color: #fff; font-size: 13px; letter-spacing: 1px;">ZONE BOUNDARIES</h3>
+                                
+                                <div class="slider-row">
+                                    <label><span>Corner Size</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
+                                    <input type="range" min="5" max="30" step="1" .value=${b.cornerSize} 
+                                        @input=${(e) => { const nB = {...b, cornerSize: parseInt(e.target.value)}; this.savePref('hotCornerBounds', nB); }}>
+                                </div>
+                                <div class="slider-row">
+                                    <label><span>Top/Bottom Center Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
+                                    <input type="range" min="10" max="70" step="5" .value=${b.centerX} 
+                                        @input=${(e) => { const nB = {...b, centerX: parseInt(e.target.value)}; this.savePref('hotCornerBounds', nB); }}>
+                                </div>
+                                <div class="slider-row" style="margin-bottom: 0;">
+                                    <label><span>Left/Right Center Height</span> <span style="color: #a142f4;">${b.centerY}%</span></label>
+                                    <input type="range" min="10" max="70" step="5" .value=${b.centerY} 
+                                        @input=${(e) => { const nB = {...b, centerY: parseInt(e.target.value)}; this.savePref('hotCornerBounds', nB); }}>
+                                </div>
                             </div>
-                        `)}
+                        </div>
                     </div>
-                    </div>
+
+                    ${this.editingZone ? html`
+                        <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
+                        <div class="zone-editor-modal">
+                            <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Action</h3>
+                            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Select what happens when you hover over the <strong>${this.editingZone.replace(/_/g, ' ').toUpperCase()}</strong> zone.</p>
+                            
+                            <div class="zone-action-grid">
+                                ${cornerActions.map(act => html`
+                                    <button class="action-select-btn ${currentCorners[this.editingZone] === act.value ? 'selected' : ''}"
+                                        @click=${() => {
+                                            const newCorners = { ...currentCorners, [this.editingZone]: act.value };
+                                            this.savePref('hotCorners', newCorners);
+                                            this.editingZone = null;
+                                        }}>
+                                        ${act.label}
+                                    </button>
+                                `)}
+                            </div>
+                        </div>
+                    ` : ''}
                 `;
             case 'search':
                 return html`

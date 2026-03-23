@@ -203,6 +203,8 @@ export class AssistantView extends LitElement {
         modalImage: { type: String },
         hotCornersMap: { type: Object },
         ghostToastMessage: { type: String },
+        hoverZone: { type: String },
+        hoverProgress: { type: Number },
     };
 
     constructor() {
@@ -246,6 +248,8 @@ export class AssistantView extends LitElement {
         this.hasReceivedCompanionProfile = false;
         this.currentSessionId = Date.now().toString();
         this.modalImage = null;
+        this.hoverZone = null;
+        this.hoverProgress = 0;
     }
 
     showToast(msg) {
@@ -453,93 +457,39 @@ export class AssistantView extends LitElement {
                 }
             });
 
-            // 🎯 NEW: HOT CORNER ROUTER (Race-Condition Free + Visual Feedback)
-            ipcRenderer.on('hot-corner-triggered', async (event, zone) => {
+            // 🎯 V2: 3-SECOND VISUAL HOVER ROUTER
+            ipcRenderer.on('hot-corner-hover', async (event, zone) => {
                 if (this.currentMode !== 'proctored_oa') return;
                 
-                // 🟢 We use LOCAL state now! No more database crashing!
+                // Clear any existing timer
+                if (this.hoverTimer) { clearInterval(this.hoverTimer); this.hoverTimer = null; }
+                this.hoverZone = zone;
+                this.hoverProgress = 0;
+                this.requestUpdate();
+
+                if (!zone) return; // Mouse left the edges
+
                 const action = this.hotCornersMap[zone];
                 if (!action || action === 'none') return;
 
-                switch (action) {
-                    case 'capture': 
-                        this.showToast('📸 Screenshot Captured');
-                        this.handleCaptureScreenshot(); 
-                        break;
-                    case 'send_ai': 
-                        this.showToast('🚀 Firing to AI');
-                        this.handleSendToAI(); 
-                        break;
-                    case 'hide_unhide': 
-                        this.showToast('👻 Toggled Stealth');
-                        window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); 
-                        break;
-                    case 'scroll_up': 
-                        this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); 
-                        break;
-                    case 'scroll_down': 
-                        this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); 
-                        break;
-                    case 'prev_resp': 
-                        this.showToast('◀ Previous Response');
-                        this.navigateToPreviousResponse(); 
-                        break;
-                    case 'next_resp': 
-                        this.showToast('▶ Next Response');
-                        this.navigateToNextResponse(); 
-                        break;
-                    case 'reset': 
-                        this.showToast('✨ Session Reset');
-                        this.handleNewChat(); 
-                        break;
-                    case 'refactor': 
-                        this.showToast('🛠️ Refactoring Triggered');
-                        this.handleRefactor(); 
-                        break;
-                    case 'fast_think': 
-                        this.tacThinkMode = !this.tacThinkMode; 
-                        this.showToast(this.tacThinkMode ? '🧠 THINK Mode ON' : '⚡ FAST Mode ON');
-                        this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
-                        ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
-                        window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); 
-                        this.requestUpdate();
-                        break;
-                    case 'change_ai': 
-                        let nextAiIdx = (this.currentProviderName === 'ChatGPT' ? 1 : (this.currentProviderName === 'Gemini' ? 2 : 0));
-                        this.showToast('🤖 Switched AI Engine');
-                        this.handleSetEngine(nextAiIdx); 
-                        break;
-                    case 'change_profile':
-                        if (this.aiProfiles.length > 0) {
-                            const cIdx = this.aiProfiles.findIndex(p => p.id === this.currentProfileId);
-                            const nIdx = (cIdx + 1) % this.aiProfiles.length;
-                            this.showToast('👤 Profile Switched');
-                            this.handleProfileChange({target: {value: this.aiProfiles[nIdx].id}});
-                        }
-                        break;
-                    case 'text_inc': 
-                        this.showToast('A+ Text Increased');
-                        this.changeFontSize(2); 
-                        break;
-                    case 'text_dec': 
-                        this.showToast('A- Text Decreased');
-                        this.changeFontSize(-2); 
-                        break;
-                    case 'bg_inc':
-                        this.showToast('⬛ Opacity Increased');
-                        const newBgInc = Math.min(1, (this.bgTransparency || 0.8) + 0.1);
-                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgInc } })); 
-                        break;
-                    case 'bg_dec':
-                        this.showToast('⬜ Opacity Decreased');
-                        const newBgDec = Math.max(0, (this.bgTransparency || 0.8) - 0.1);
-                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgDec } })); 
-                        break;
-                    case 'toggle_ai_vis': 
-                        this.showToast('👁️ Toggled AI Background Window');
-                        this.handleToggleAiVisibility(); 
-                        break;
+                // 🚨 INSTANT PANIC EXEMPTION: Hiding the window bypasses the timer
+                if (action === 'hide_unhide') {
+                    this.hoverProgress = 100;
+                    this.executeHotCorner(action);
+                    return;
                 }
+
+                // ⏳ 3-SECOND VISUAL FILL LOOP
+                this.hoverTimer = setInterval(() => {
+                    this.hoverProgress += (50 / 3000) * 100; // 50ms tick over 3000ms
+                    this.requestUpdate();
+                    
+                    if (this.hoverProgress >= 100) {
+                        clearInterval(this.hoverTimer);
+                        this.hoverTimer = null;
+                        this.executeHotCorner(action);
+                    }
+                }, 50);
             });
         } // <-- End of if (window.require)
 
@@ -566,6 +516,40 @@ export class AssistantView extends LitElement {
             ipcRenderer.removeAllListeners('typing-status');
             ipcRenderer.removeAllListeners('typing-progress');
             ipcRenderer.removeListener('execute-widget-action', this.widgetListener);
+        }
+    }
+
+    executeHotCorner(action) {
+        switch (action) {
+            case 'capture': this.showToast('📸 Screenshot Captured'); this.handleCaptureScreenshot(); break;
+            case 'send_ai': this.showToast('🚀 Firing to AI'); this.handleSendToAI(); break;
+            case 'hide_unhide': this.showToast('👻 Toggled Stealth'); window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
+            case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); break;
+            case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
+            case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
+            case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
+            case 'reset': this.showToast('✨ Session Reset'); this.handleNewChat(); break;
+            case 'refactor': this.showToast('🛠️ Refactoring Triggered'); this.handleRefactor(); break;
+            case 'fast_think': 
+                this.tacThinkMode = !this.tacThinkMode; this.showToast(this.tacThinkMode ? '🧠 THINK Mode ON' : '⚡ FAST Mode ON');
+                this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+                window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
+                window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate(); break;
+            case 'change_ai': 
+                let nextAiIdx = (this.currentProviderName === 'ChatGPT' ? 1 : (this.currentProviderName === 'Gemini' ? 2 : 0));
+                this.showToast('🤖 Switched AI Engine'); this.handleSetEngine(nextAiIdx); break;
+            case 'change_profile':
+                if (this.aiProfiles.length > 0) {
+                    const cIdx = this.aiProfiles.findIndex(p => p.id === this.currentProfileId);
+                    const nIdx = (cIdx + 1) % this.aiProfiles.length;
+                    this.showToast('👤 Profile Switched');
+                    this.handleProfileChange({target: {value: this.aiProfiles[nIdx].id}});
+                } break;
+            case 'text_inc': this.showToast('A+ Text Increased'); this.changeFontSize(2); break;
+            case 'text_dec': this.showToast('A- Text Decreased'); this.changeFontSize(-2); break;
+            case 'bg_inc': this.showToast('⬛ Opacity Increased'); const nI = Math.min(1, (this.bgTransparency || 0.8) + 0.1); window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: nI } })); break;
+            case 'bg_dec': this.showToast('⬜ Opacity Decreased'); const nD = Math.max(0, (this.bgTransparency || 0.8) - 0.1); window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: nD } })); break;
+            case 'toggle_ai_vis': this.showToast('👁️ Toggled AI Background Window'); this.handleToggleAiVisibility(); break;
         }
     }
 
@@ -1266,41 +1250,35 @@ export class AssistantView extends LitElement {
     renderProctoredOAMode() {
         const map = this.hotCornersMap || {};
         
-        const currentProfile = (this.aiProfiles || []).find(p => p.id === this.currentProfileId);
-        const profileName = currentProfile ? currentProfile.name : 'None';
-        const aiName = this.currentProviderName || 'ChatGPT';
-        const modeName = this.tacThinkMode ? 'Think' : 'Fast';
+        // Helper to render a specific zone box with progress bar
+        const renderZone = (id, label) => {
+            const isHover = this.hoverZone === id;
+            const action = map[id];
+            if (!action || action === 'none') return html`<div style="opacity: 0.1;"></div>`;
+            
+            return html`
+                <div style="position: relative; border: 1px solid ${isHover ? '#f59e0b' : 'var(--border-subtle)'}; border-radius: 4px; padding: 4px; overflow: hidden; background: rgba(0,0,0,0.3); transition: 0.2s;">
+                    ${isHover ? html`<div style="position: absolute; top: 0; left: 0; bottom: 0; width: ${this.hoverProgress}%; background: rgba(245, 158, 11, 0.4); z-index: 1;"></div>` : ''}
+                    <div style="position: relative; z-index: 2; color: ${isHover ? '#fff' : 'var(--text-secondary)'};">${this.getHotCornerLabel(action)}</div>
+                </div>
+            `;
+        };
 
-        let m = "🟢 **Ghost Sensors Active.** Move mouse to screen corners to trigger actions.";
+        let m = "🟢 **Ghost Sensors Active.** Move mouse to screen edges/corners and hold for 3s to trigger actions.";
         const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
 
         return html`
             <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent; position: relative;">
-                
-                <div class="ghost-toast ${this.ghostToastMessage ? 'visible' : ''}">
-                    ${this.ghostToastMessage}
-                </div>
+                <div class="ghost-toast ${this.ghostToastMessage ? 'visible' : ''}">${this.ghostToastMessage}</div>
+                <div class="markdown-body" style="height: calc(100% - 105px); flex: none;" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>
 
-                <div class="markdown-body" 
-                     style="height: calc(100% - 75px); flex: none;"
-                     @click=${this.handleMarkdownClick} 
-                     .innerHTML=${this.renderMarkdown(c)}>
-                </div>
-
-                <div class="bottom-controls" style="padding: 0; background: rgba(0,0,0,0.15); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
-                    
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; text-align: center; font-size: 10px; color: var(--text-secondary); font-weight: bold;">
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Top-L: Capture</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: #4285f4;">Top-C: ${aiName}</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Top-R: Hide/Show</div>
-                        
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.8; color: #a142f4;">Mid-L: Scroll Up</div>
-                        <div style="display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0.3;">🎯</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.8; color: #a142f4;">Mid-R: Scroll Dn</div>
-                        
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Bot-L: Send AI</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: ${this.tacThinkMode ? '#00cc66' : '#f59e0b'};">Bot-C: ${modeName}</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: #a142f4;">Bot-R: ${profileName}</div>
+                <div class="bottom-controls" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; text-align: center; font-size: 8.5px; font-weight: bold; width: 100%;">
+                        ${renderZone('top_left')} ${renderZone('top_mid_left')} ${renderZone('top_center')} ${renderZone('top_mid_right')} ${renderZone('top_right')}
+                        ${renderZone('left_mid_top')} <div style="grid-column: span 3; opacity:0.2; display:flex; align-items:center; justify-content:center; font-size:12px;">🎯 HOLD 3s TO TRIGGER</div> ${renderZone('right_mid_top')}
+                        ${renderZone('middle_left')} <div style="grid-column: span 3;"></div> ${renderZone('middle_right')}
+                        ${renderZone('left_mid_bottom')} <div style="grid-column: span 3;"></div> ${renderZone('right_mid_bottom')}
+                        ${renderZone('bottom_left')} ${renderZone('bottom_mid_left')} ${renderZone('bottom_center')} ${renderZone('bottom_mid_right')} ${renderZone('bottom_right')}
                     </div>
                 </div>
             </div>
