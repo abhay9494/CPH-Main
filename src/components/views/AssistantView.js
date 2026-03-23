@@ -28,19 +28,14 @@ export class AssistantView extends LitElement {
         .markdown-body { flex: 1; width: 100%; padding: 20px; padding-top: 15px; font-size: var(--response-font-size, 15px); line-height: 1.6; color: #d4d4d4; overflow-y: auto; overflow-x: hidden; word-wrap: break-word; font-family: 'Inter', sans-serif; }
         
         /* 🐛 FIX: The image layout fix (Grid view) */
-        
         /* The CSS markdown parser often injects <br> tags. We must hide them so they don't become empty grid items. */
-        .markdown-body br { display: none; } 
-        
-        /* Target the exact message content div generated for the User prompt */
-        .markdown-body strong + br + p img,
-        .markdown-body strong + br + img,
+        .markdown-body br { display: none; }
+
+        /* 🟢 Target the PARAGRAPH containing the images, NOT the images themselves! */
         .markdown-body p:has(img) {
             display: grid;
-            /* Creates exactly 5 columns of equal width automatically */
-            grid-template-columns: repeat(5, minmax(0, 1fr)); 
-            /* Vertical and horizontal gapping between images */
-            gap: 12px; 
+            grid-template-columns: repeat(5, 1fr); /* 🐛 Forces exactly 5 columns per row */
+            gap: 12px;
             margin-top: 15px;
             margin-bottom: 15px;
             padding: 10px;
@@ -48,25 +43,49 @@ export class AssistantView extends LitElement {
             border-radius: 6px;
         }
 
-        /* Update image styles so they fit perfectly into the new grid cells */
-        .markdown-body img { 
-            width: 100%; /* Force image to fill cell width */
-            height: auto; /* Retain proportional aspect ratio */
-            border-radius: 6px; 
-            border: 1px solid var(--border-color, #444); 
-            cursor: default !important; 
-            margin: 0; /* Clear previous margins, handled by grid gap now */
-            transition: 0.2s ease-in-out; 
-            box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
-            object-fit: contain; /* Prevents weird stretching */
+        /* Update image styles so they become perfect thumbnails */
+        .markdown-body img {
+            width: 100%;
+            height: auto;
+            border-radius: 6px;
+            border: 1px solid var(--border-color, #444);
+            cursor: pointer !important; /* Indicate they can be clicked to zoom */
+            margin: 0;
+            transition: 0.2s ease-in-out;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.3);
+            object-fit: cover;
+            aspect-ratio: 16/9; /* 🐛 Forces uniform thumbnail rectangles so the grid looks clean */
         }
-        
-        .markdown-body img:hover { opacity: 0.8; transform: scale(1.02); }
-        
+
+        .markdown-body img:hover {
+            opacity: 0.8;
+            transform: scale(1.05);
+        }
+
         /* 🟢 Image Expansion Modal */
-        .image-modal { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.85); z-index: 9999; display: flex; align-items: center; justify-content: center; padding: 40px; cursor: default !important; backdrop-filter: blur(5px); }
-        .image-modal img { max-width: 100%; max-height: 100%; border-radius: 8px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); object-fit: contain; }
-        
+        .image-modal {
+            position: fixed;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85);
+            z-index: 9999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            cursor: default !important;
+            backdrop-filter: blur(5px);
+        }
+
+        .image-modal img {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 8px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+            object-fit: contain;
+            aspect-ratio: auto !important; /* 🐛 Overrides the 16/9 ratio so you can see the full image uncropped when zoomed */
+            cursor: default !important;
+        }
+              
         .code-block-wrapper { background: var(--bg-secondary); border: 1px solid var(--border-color, #333); border-radius: 6px; margin-bottom: 15px; overflow: hidden; position: relative; }
         .code-header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 5px 10px; border-bottom: 1px solid var(--border-color, #333); }
         .lang-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
@@ -286,10 +305,12 @@ export class AssistantView extends LitElement {
                 this.currentProfileId = prefs.lastProfileId || (this.aiProfiles.length > 0 ? this.aiProfiles[0].id : null);
                 this.hasResumeContext = !!(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
                 
+                // 🟢 FIX: Restoring the Scroll Edges so you can scroll in Ghost Mode!
                 this.hotCornersMap = prefs.hotCorners || {
                     top_left: 'capture', bottom_left: 'send_ai', 
                     top_right: 'hide_unhide', bottom_right: 'change_profile',
-                    top_center: 'change_ai', bottom_center: 'fast_think'
+                    top_center: 'change_ai', bottom_center: 'fast_think',
+                    middle_left: 'scroll_up', middle_right: 'scroll_down' 
                 };
 
                 if (this.currentProfileId) await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
@@ -742,11 +763,11 @@ export class AssistantView extends LitElement {
                 
                 // If this is the first screenshot of a sequence, create a new chat block
                 if (this.localChatHistory.length === 0 || this.localChatHistory[this.localChatIndex].includes('🤖 AI:')) {
-                    this.localChatHistory = [...this.localChatHistory, `📸 **Captured Screenshot**\n\n${mdImage}`];
+                    this.localChatHistory = [...this.localChatHistory, `📸 **Captured Screenshot(s)**\n\n${mdImage}`];
                     this.localChatIndex = this.localChatHistory.length - 1;
                 } else {
-                    // If hitting capture multiple times, append images to the same block
-                    this.localChatHistory[this.localChatIndex] += `\n\n${mdImage}`;
+                    // 🐛 FIX: Append WITHOUT newlines (using a space) so Markdown groups them into the exact same paragraph grid!
+                    this.localChatHistory[this.localChatIndex] += ` ${mdImage}`;
                 }
                 
                 // Auto-scroll down so you see the image
@@ -1243,11 +1264,15 @@ export class AssistantView extends LitElement {
     }
 
     renderProctoredOAMode() {
-        // 🟢 Calculate the active names for the HUD
+        const map = this.hotCornersMap || {};
+        
         const currentProfile = (this.aiProfiles || []).find(p => p.id === this.currentProfileId);
         const profileName = currentProfile ? currentProfile.name : 'None';
         const aiName = this.currentProviderName || 'ChatGPT';
         const modeName = this.tacThinkMode ? 'Think' : 'Fast';
+
+        let m = "🟢 **Ghost Sensors Active.** Move mouse to screen corners to trigger actions.";
+        const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
 
         return html`
             <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent; position: relative;">
@@ -1256,29 +1281,26 @@ export class AssistantView extends LitElement {
                     ${this.ghostToastMessage}
                 </div>
 
-                <div class="response-container" style="height: calc(100% - 75px);">
-                    ${this.localChatHistory.length > 0 
-                        ? html`<div class="markdown-body">${this.renderMarkdown(this.localChatHistory[this.localChatIndex])}</div>` 
-                        : html`<div style="color: var(--text-muted); font-style: italic; text-align: center; margin-top: 20px;">Ghost Sensors Active. Move mouse to screen corners to trigger actions.</div>`
-                    }
+                <div class="markdown-body" 
+                     style="height: calc(100% - 75px); flex: none;"
+                     @click=${this.handleMarkdownClick} 
+                     .innerHTML=${this.renderMarkdown(c)}>
                 </div>
 
                 <div class="bottom-controls" style="padding: 0; background: rgba(0,0,0,0.15); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
                     
                     <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; text-align: center; font-size: 10px; color: var(--text-secondary); font-weight: bold;">
-                        
                         <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Top-L: Capture</div>
                         <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: #4285f4;">Top-C: ${aiName}</div>
                         <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Top-R: Hide/Show</div>
                         
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.3;">Mid-L: N/A</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.8; color: #a142f4;">Mid-L: Scroll Up</div>
                         <div style="display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0.3;">🎯</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.3;">Mid-R: N/A</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.8; color: #a142f4;">Mid-R: Scroll Dn</div>
                         
                         <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Bot-L: Send AI</div>
                         <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: ${this.tacThinkMode ? '#00cc66' : '#f59e0b'};">Bot-C: ${modeName}</div>
                         <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: #a142f4;">Bot-R: ${profileName}</div>
-                        
                     </div>
                 </div>
             </div>
