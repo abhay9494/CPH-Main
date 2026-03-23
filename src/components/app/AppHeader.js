@@ -336,7 +336,9 @@ export class AppHeader extends LitElement {
                       `
                     : ''}
 
-                <div class="header-actions">
+                <div class="header-actions" 
+                     @mouseenter=${() => { if (window.require) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', false); }} 
+                     @mouseleave=${() => { if (window.require && this.title.includes('Proctored')) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', true); }}>
                     <button @click=${this.handleHardClose} class="icon-button danger">
                         <svg
                             xmlns="http://www.w3.org/2000/svg"

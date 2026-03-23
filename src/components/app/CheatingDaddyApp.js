@@ -566,9 +566,13 @@ export class CheatingDaddyApp extends LitElement {
             const targetEngine = (destination === 'oa' || destination === 'proctored_oa') ? 1 : 0;
             await ipcRenderer.invoke('set-ai-provider', targetEngine);
 
-            // 🟢 FIX: Activate the Ghost Mouse Sensors!
+            // 🟢 FIX: The Auto-Ghost & Widget Killer!
             if (destination === 'proctored_oa') {
                 ipcRenderer.send('start-hot-corners');
+                ipcRenderer.invoke('hide-widget'); // Kill the widget
+                ipcRenderer.send('set-ignore-mouse-events', true); // Instantly turn on Click-Through
+            } else {
+                ipcRenderer.send('set-ignore-mouse-events', false); // Restore clicks for other modes
             }
 
             this.currentView = 'assistant';
@@ -580,6 +584,7 @@ export class CheatingDaddyApp extends LitElement {
                 setTimeout(() => window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false })), 100);
             }
         } else {
+            ipcRenderer.send('set-ignore-mouse-events', false); // Always restore clicks if returning to Hub
             this.currentView = destination; 
         }
         this.requestUpdate();
@@ -649,7 +654,9 @@ export class CheatingDaddyApp extends LitElement {
             case 'main':
                 return 'CP Helper 20';
             case 'assistant':
-                return this.sessionMode === 'oa' ? 'CP Helper 20 - Online Assessment' : 'CP Helper 20 - Live Interview';
+                if (this.sessionMode === 'oa') return 'CP Helper 20 - Online Assessment';
+                if (this.sessionMode === 'proctored_oa') return 'CP Helper 20 - Proctored OA';
+                return 'CP Helper 20 - Live Interview';
             case 'customize':
                 return 'CP Helper 20 - Settings';
             case 'history':

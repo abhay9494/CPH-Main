@@ -110,6 +110,31 @@ export class AssistantView extends LitElement {
         .format-toggles label { font-size: 10px; color: var(--text-color); display: flex; align-items: center; gap: 4px; cursor: default !important; white-space: nowrap; font-weight: bold; }
         .format-toggles input[type="checkbox"] { width: 12px; height: 12px; margin: 0; cursor: default !important; accent-color: #a142f4; }
 
+        /* 🟢 GHOST TOAST NOTIFICATION */
+        .ghost-toast {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-20px);
+            background: rgba(0, 204, 102, 0.15);
+            color: #00cc66;
+            border: 1px solid #00cc66;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: bold;
+            pointer-events: none;
+            opacity: 0;
+            transition: all 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            z-index: 1000;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .ghost-toast.visible {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
 
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
@@ -158,6 +183,7 @@ export class AssistantView extends LitElement {
         currentSessionId: { type: String },
         modalImage: { type: String },
         hotCornersMap: { type: Object },
+        ghostToastMessage: { type: String },
     };
 
     constructor() {
@@ -203,6 +229,24 @@ export class AssistantView extends LitElement {
         this.modalImage = null;
     }
 
+    showToast(msg) {
+        this.ghostToastMessage = msg;
+        this.requestUpdate();
+        if (this.toastTimeout) clearTimeout(this.toastTimeout);
+        this.toastTimeout = setTimeout(() => {
+            this.ghostToastMessage = '';
+            this.requestUpdate();
+        }, 2000);
+    }
+
+    // 🟢 Keeps the UI Legend updated WITHOUT spamming the database
+    syncPreferences(e) {
+        if (e.detail && e.detail.key === 'hotCorners') {
+            this.hotCornersMap = e.detail.value;
+            this.requestUpdate();
+        }
+    }
+
     navigateToPreviousResponse() {
         if (this.localChatIndex > 0) { this.localChatIndex--; this.requestUpdate(); }
     }
@@ -224,7 +268,7 @@ export class AssistantView extends LitElement {
             }
         };
         window.addEventListener('app-quitting', this.appQuittingHandler);
-
+        window.addEventListener('sync-preference', (e) => this.syncPreferences(e));
         window.addEventListener('focus', () => this.requestUpdate());
 
         if (window.require) {
@@ -242,10 +286,9 @@ export class AssistantView extends LitElement {
                 this.currentProfileId = prefs.lastProfileId || (this.aiProfiles.length > 0 ? this.aiProfiles[0].id : null);
                 this.hasResumeContext = !!(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
                 
-                // 🟢 NEW: Load the Hot Corners map into state for the UI Legend
                 this.hotCornersMap = prefs.hotCorners || {
-                    top_left: 'capture', bottom_left: 'send_ai', middle_left: 'scroll_up',
-                    top_right: 'hide_unhide', middle_right: 'scroll_down', bottom_right: 'change_profile',
+                    top_left: 'capture', bottom_left: 'send_ai', 
+                    top_right: 'hide_unhide', bottom_right: 'change_profile',
                     top_center: 'change_ai', bottom_center: 'fast_think'
                 };
 
@@ -389,54 +432,92 @@ export class AssistantView extends LitElement {
                 }
             });
 
-            // 🎯 NEW: HOT CORNER ROUTER
+            // 🎯 NEW: HOT CORNER ROUTER (Race-Condition Free + Visual Feedback)
             ipcRenderer.on('hot-corner-triggered', async (event, zone) => {
                 if (this.currentMode !== 'proctored_oa') return;
                 
-                // Fetch fresh settings in case they were updated
-                const raw = await window.cheatingDaddy.storage.getPreferences();
-                const prefs = raw?.data || raw || {};
-                const hotCorners = prefs.hotCorners || {};
-                this.hotCornersMap = hotCorners; // Update UI Legend
-                this.requestUpdate();
-
-                const action = hotCorners[zone];
+                // 🟢 We use LOCAL state now! No more database crashing!
+                const action = this.hotCornersMap[zone];
                 if (!action || action === 'none') return;
 
                 switch (action) {
-                    case 'capture': this.handleCaptureScreenshot(); break;
-                    case 'send_ai': this.handleSendToAI(); break;
-                    case 'hide_unhide': window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
-                    case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -150, behavior: 'smooth'}); break;
-                    case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 150, behavior: 'smooth'}); break;
-                    case 'prev_resp': this.navigateToPreviousResponse(); break;
-                    case 'next_resp': this.navigateToNextResponse(); break;
-                    case 'reset': this.handleNewChat(); break;
-                    case 'refactor': this.handleRefactor(); break;
+                    case 'capture': 
+                        this.showToast('📸 Screenshot Captured');
+                        this.handleCaptureScreenshot(); 
+                        break;
+                    case 'send_ai': 
+                        this.showToast('🚀 Firing to AI');
+                        this.handleSendToAI(); 
+                        break;
+                    case 'hide_unhide': 
+                        this.showToast('👻 Toggled Stealth');
+                        window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); 
+                        break;
+                    case 'scroll_up': 
+                        this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); 
+                        break;
+                    case 'scroll_down': 
+                        this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); 
+                        break;
+                    case 'prev_resp': 
+                        this.showToast('◀ Previous Response');
+                        this.navigateToPreviousResponse(); 
+                        break;
+                    case 'next_resp': 
+                        this.showToast('▶ Next Response');
+                        this.navigateToNextResponse(); 
+                        break;
+                    case 'reset': 
+                        this.showToast('✨ Session Reset');
+                        this.handleNewChat(); 
+                        break;
+                    case 'refactor': 
+                        this.showToast('🛠️ Refactoring Triggered');
+                        this.handleRefactor(); 
+                        break;
                     case 'fast_think': 
-                        this.tacThinkMode = !this.tacThinkMode; this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
+                        this.tacThinkMode = !this.tacThinkMode; 
+                        this.showToast(this.tacThinkMode ? '🧠 THINK Mode ON' : '⚡ FAST Mode ON');
+                        this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
                         ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
-                        window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate();
+                        window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); 
+                        this.requestUpdate();
                         break;
                     case 'change_ai': 
                         let nextAiIdx = (this.currentProviderName === 'ChatGPT' ? 1 : (this.currentProviderName === 'Gemini' ? 2 : 0));
-                        this.handleSetEngine(nextAiIdx); break;
+                        this.showToast('🤖 Switched AI Engine');
+                        this.handleSetEngine(nextAiIdx); 
+                        break;
                     case 'change_profile':
                         if (this.aiProfiles.length > 0) {
                             const cIdx = this.aiProfiles.findIndex(p => p.id === this.currentProfileId);
                             const nIdx = (cIdx + 1) % this.aiProfiles.length;
+                            this.showToast('👤 Profile Switched');
                             this.handleProfileChange({target: {value: this.aiProfiles[nIdx].id}});
                         }
                         break;
-                    case 'text_inc': this.changeFontSize(2); break;
-                    case 'text_dec': this.changeFontSize(-2); break;
+                    case 'text_inc': 
+                        this.showToast('A+ Text Increased');
+                        this.changeFontSize(2); 
+                        break;
+                    case 'text_dec': 
+                        this.showToast('A- Text Decreased');
+                        this.changeFontSize(-2); 
+                        break;
                     case 'bg_inc':
-                        const newBgInc = Math.min(1, (prefs.backgroundTransparency || 0.8) + 0.1);
-                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgInc } })); break;
+                        this.showToast('⬛ Opacity Increased');
+                        const newBgInc = Math.min(1, (this.bgTransparency || 0.8) + 0.1);
+                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgInc } })); 
+                        break;
                     case 'bg_dec':
-                        const newBgDec = Math.max(0, (prefs.backgroundTransparency || 0.8) - 0.1);
-                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgDec } })); break;
-                    case 'toggle_ai_vis': this.handleToggleAiVisibility(); break;
+                        this.showToast('⬜ Opacity Decreased');
+                        const newBgDec = Math.max(0, (this.bgTransparency || 0.8) - 0.1);
+                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newBgDec } })); 
+                        break;
+                    case 'toggle_ai_vis': 
+                        this.showToast('👁️ Toggled AI Background Window');
+                        this.handleToggleAiVisibility(); 
+                        break;
                 }
             });
         } // <-- End of if (window.require)
@@ -456,6 +537,7 @@ export class AssistantView extends LitElement {
         window.removeEventListener('typing-state-changed', this.syncTypingState);
         window.removeEventListener('help-mode-toggled', this.helpModeHandler);
         window.removeEventListener('app-quitting', this.appQuittingHandler);
+        window.removeEventListener('sync-preference', (e) => this.syncPreferences(e));
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeAllListeners('ai-new-message');
@@ -651,6 +733,29 @@ export class AssistantView extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             this.capturedCount = await ipcRenderer.invoke('capture-screenshot');
+            
+            // 🟢 INSTANT RENDER: Fetch the image immediately and push it via Markdown!
+            const imagesB64 = await ipcRenderer.invoke('get-screenshots');
+            if (imagesB64 && imagesB64.length > 0) {
+                const latestImg = imagesB64[imagesB64.length - 1];
+                const mdImage = `![Screenshot](${latestImg})`;
+                
+                // If this is the first screenshot of a sequence, create a new chat block
+                if (this.localChatHistory.length === 0 || this.localChatHistory[this.localChatIndex].includes('🤖 AI:')) {
+                    this.localChatHistory = [...this.localChatHistory, `📸 **Captured Screenshot**\n\n${mdImage}`];
+                    this.localChatIndex = this.localChatHistory.length - 1;
+                } else {
+                    // If hitting capture multiple times, append images to the same block
+                    this.localChatHistory[this.localChatIndex] += `\n\n${mdImage}`;
+                }
+                
+                // Auto-scroll down so you see the image
+                setTimeout(() => {
+                    const container = this.shadowRoot.querySelector('.response-container');
+                    if (container) container.scrollTop = container.scrollHeight;
+                }, 50);
+            }
+            
             this.syncWidgetState();
             this.requestUpdate();
         }
@@ -907,18 +1012,12 @@ export class AssistantView extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             this.isSolving = true;
-            const imgCount = this.capturedCount;
             
-            // 🐛 FIX: Fetch the actual Base64 images from the backend before clearing!
-            const imagesB64 = await ipcRenderer.invoke('get-screenshots');
+            // 🟢 Append the sending status directly under the images that are already on screen!
+            this.lastUserPrompt = this.localChatHistory[this.localChatIndex];
+            this.localChatHistory[this.localChatIndex] = `${this.lastUserPrompt}\n\n🚀 **Sent to AI...**\n\n🤖 AI: (Solving...)`;
+            
             this.capturedCount = 0;
-            
-            // 🐛 FIX: Embed them as markdown HTML so the markdown parser renders them perfectly!
-            const imgHtml = imagesB64.map(src => `<img src="${src}" />`).join('');
-            
-            this.lastUserPrompt = `📸 Uploaded ${imgCount} Screenshot(s) & Triggered AI\n\n${imgHtml}`;
-            this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Solving...)`];
-            this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
             this.saveCurrentSession();
 
@@ -1144,31 +1243,42 @@ export class AssistantView extends LitElement {
     }
 
     renderProctoredOAMode() {
-        const map = this.hotCornersMap || {};
-        
+        // 🟢 Calculate the active names for the HUD
+        const currentProfile = (this.aiProfiles || []).find(p => p.id === this.currentProfileId);
+        const profileName = currentProfile ? currentProfile.name : 'None';
+        const aiName = this.currentProviderName || 'ChatGPT';
+        const modeName = this.tacThinkMode ? 'Think' : 'Fast';
+
         return html`
-            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent;">
-                <div class="response-container">
+            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent; position: relative;">
+                
+                <div class="ghost-toast ${this.ghostToastMessage ? 'visible' : ''}">
+                    ${this.ghostToastMessage}
+                </div>
+
+                <div class="response-container" style="height: calc(100% - 75px);">
                     ${this.localChatHistory.length > 0 
                         ? html`<div class="markdown-body">${this.renderMarkdown(this.localChatHistory[this.localChatIndex])}</div>` 
-                        : html`<div style="color: var(--text-muted); font-style: italic; text-align: center; margin-top: 20px;">Ghost Sensors Active. Move mouse to screen edges to trigger actions.</div>`
+                        : html`<div style="color: var(--text-muted); font-style: italic; text-align: center; margin-top: 20px;">Ghost Sensors Active. Move mouse to screen corners to trigger actions.</div>`
                     }
                 </div>
 
-                <div class="bottom-controls" style="padding: 6px; border-top: 1px dashed var(--border-color); background: rgba(0,0,0,0.15);">
-                    <div style="font-size: 9px; color: var(--text-muted); text-align: center; margin-bottom: 6px; letter-spacing: 1px; text-transform: uppercase;">Mouse Edge Dwell Mapping (0.8s)</div>
-                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; text-align: center; font-size: 9px; color: var(--text-secondary);">
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Top-L: ${this.getHotCornerLabel(map.top_left)}</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Top-C: ${this.getHotCornerLabel(map.top_center)}</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Top-R: ${this.getHotCornerLabel(map.top_right)}</div>
+                <div class="bottom-controls" style="padding: 0; background: rgba(0,0,0,0.15); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
+                    
+                    <div style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 4px; padding: 6px; text-align: center; font-size: 10px; color: var(--text-secondary); font-weight: bold;">
                         
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Mid-L: ${this.getHotCornerLabel(map.middle_left)}</div>
-                        <div style="display: flex; align-items: center; justify-content: center; font-size: 11px; opacity: 0.3;">🎯</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Mid-R: ${this.getHotCornerLabel(map.middle_right)}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Top-L: Capture</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: #4285f4;">Top-C: ${aiName}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Top-R: Hide/Show</div>
                         
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Bot-L: ${this.getHotCornerLabel(map.bottom_left)}</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Bot-C: ${this.getHotCornerLabel(map.bottom_center)}</div>
-                        <div style="border: 1px solid var(--border-subtle); padding: 4px; border-radius: 3px;">Bot-R: ${this.getHotCornerLabel(map.bottom_right)}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.3;">Mid-L: N/A</div>
+                        <div style="display: flex; align-items: center; justify-content: center; font-size: 14px; opacity: 0.3;">🎯</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; opacity: 0.3;">Mid-R: N/A</div>
+                        
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2);">Bot-L: Send AI</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: ${this.tacThinkMode ? '#00cc66' : '#f59e0b'};">Bot-C: ${modeName}</div>
+                        <div style="border: 1px solid var(--border-subtle); padding: 6px; border-radius: 4px; background: rgba(0,0,0,0.2); color: #a142f4;">Bot-R: ${profileName}</div>
+                        
                     </div>
                 </div>
             </div>
