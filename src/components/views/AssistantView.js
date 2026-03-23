@@ -302,6 +302,19 @@ export class AssistantView extends LitElement {
         }
     }
 
+    // 🟢 FIX: 4-Second Silence Tracker. Keeps UI locked until generation is truly finished!
+    markAiActive() {
+        this.isSolving = true;
+        if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
+        
+        this.solvingTimeout = setTimeout(() => {
+            this.isSolving = false;
+            this.requestUpdate();
+        }, 4000); // 4 seconds of silence means generation is done
+        
+        this.requestUpdate();
+    }
+
     connectedCallback() {
         super.connectedCallback();
 
@@ -451,6 +464,7 @@ export class AssistantView extends LitElement {
             window.addEventListener('typing-state-changed', this.syncTypingState);
 
             ipcRenderer.on('ai-new-message', (event, text) => {
+                this.markAiActive(); // 🟢 FIX: Keep the lockout alive while streaming!
                 if (this.localChatHistory.length > 0) {
                     const currentContent = this.localChatHistory[this.localChatHistory.length - 1];
                     if (currentContent.includes('🤖 AI: (Thinking...)') || currentContent.includes('🤖 AI: (Solving...)')) {
@@ -475,6 +489,7 @@ export class AssistantView extends LitElement {
             });
 
             ipcRenderer.on('ai-update-message', (event, text) => {
+                this.markAiActive(); // 🟢 FIX: Keep the lockout alive while streaming!
                 if (this.localChatHistory.length > 0) {
                     const a = [...this.localChatHistory];
                     a[a.length - 1] = `${this.lastUserPrompt}\n\n🤖 AI:\n${text}`;
@@ -584,7 +599,6 @@ export class AssistantView extends LitElement {
             case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
             case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
             
-            // 🎯 V2 RESET: The 5-Second "Arm & Execute" Double Trigger
             case 'reset': 
                 if (!this.resetArmed) {
                     this.resetArmed = true;
@@ -597,8 +611,9 @@ export class AssistantView extends LitElement {
                     this.requestUpdate();
                 } else {
                     if (this.resetArmTimer) clearTimeout(this.resetArmTimer);
+                    if (this.solvingTimeout) clearTimeout(this.solvingTimeout); // 🟢 Kill stream tracker
                     this.resetArmed = false;
-                    this.isSolving = false; // ⚡ Emergency Circuit Breaker (Kills the scraping block)
+                    this.isSolving = false; // ⚡ Emergency Circuit Breaker
                     this.capturedCount = 0;
                     this.showToast('🛑 Session Reset');
                     this.handleNewChat(); 
@@ -1052,9 +1067,8 @@ export class AssistantView extends LitElement {
     async handleSendManualText() {
         const input = this.shadowRoot.querySelector('#manualPromptInput');
         if (input && input.value.trim() && window.require) {
-            // 🐛 FIX: Added isSolving lockout check here
             if (!this.validateSetup() || this.isSolving) return;
-            this.isSolving = true; 
+            this.isSolving = true; // 🟢 Hard Lock Start
 
             const rawText = input.value.trim();
             const { ipcRenderer } = window.require('electron');
@@ -1073,10 +1087,7 @@ export class AssistantView extends LitElement {
             this.saveCurrentSession();
             
             await ipcRenderer.invoke('send-manual-text', payload);
-            
-            // 🐛 FIX: Release the lockout
-            this.isSolving = false;
-            this.requestUpdate();
+            this.markAiActive(); // 🟢 Bridge gap to the stream
         }
     }
 
@@ -1111,9 +1122,8 @@ export class AssistantView extends LitElement {
         
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
-            this.isSolving = true;
+            this.isSolving = true; // 🟢 Hard Lock Start
             
-            // 🟢 Append the sending status directly under the images that are already on screen!
             this.lastUserPrompt = this.localChatHistory[this.localChatIndex];
             this.localChatHistory[this.localChatIndex] = `${this.lastUserPrompt}\n\n🚀 **Sent to AI...**\n\n🤖 AI: (Solving...)`;
             
@@ -1123,17 +1133,15 @@ export class AssistantView extends LitElement {
 
             await ipcRenderer.invoke('send-oa-automation', this.getFinalLanguage());
 
-            this.isSolving = false;
-            this.syncWidgetState(); this.requestUpdate();
+            this.markAiActive(); // 🟢 Bridge gap to the stream
+            this.syncWidgetState(); 
         }
     }
 
     async handleRefactor() {
-        // 🐛 FIX: Added isSolving lockout check here
         if (!this.validateSetup() || this.isSolving) return;
-        
         if (window.require) {
-            this.isSolving = true; // 🐛 FIX: Set the lockout flag
+            this.isSolving = true; // 🟢 Hard Lock Start
             
             this.lastUserPrompt = "🛠️ Triggered Code Refactoring";
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Refactoring...)`];
@@ -1142,21 +1150,23 @@ export class AssistantView extends LitElement {
             this.saveCurrentSession();
             
             await window.require('electron').ipcRenderer.invoke('send-oa-refactor');
-            
-            // 🐛 FIX: Release the lockout
-            this.isSolving = false; 
-            this.syncWidgetState(); 
-            this.requestUpdate();
+            this.markAiActive(); // 🟢 Bridge gap to the stream
         }
     }
 
     async handleSendProfileContext() {
         if (window.require) {
+            if (this.isSolving) return;
+            this.isSolving = true; // 🟢 Hard Lock Start
+            
             const { ipcRenderer } = window.require('electron');
             const raw = await window.cheatingDaddy.storage.getPreferences();
             const prefs = raw?.data || raw || {};
             
-            if (!prefs.customPrompt || prefs.customPrompt.trim().length === 0) return;
+            if (!prefs.customPrompt || prefs.customPrompt.trim().length === 0) {
+                this.isSolving = false;
+                return;
+            }
             
             let payload = `[SYSTEM DIRECTIVE: Act as an expert candidate interviewing for the role of "${prefs.interviewRole || 'Candidate'}".]\n`;
             payload += `[CRITICAL RULE 1: You are the candidate. ALWAYS use FIRST-PERSON pronouns ("I", "my", "we"). NEVER refer to the candidate in the third person.]\n`;
@@ -1170,6 +1180,7 @@ export class AssistantView extends LitElement {
             this.saveCurrentSession();
 
             await ipcRenderer.invoke('send-manual-text', payload);
+            this.markAiActive(); // 🟢 Bridge gap to the stream
         }
     }
 
@@ -1186,13 +1197,15 @@ export class AssistantView extends LitElement {
     async handleNewChat() {
         if (window.require) {
             this.isMicOn = false;
-            this.currentSessionId = Date.now().toString(); // 🐛 FIX: Generate a new ID for History
+            this.isSolving = false; // 🟢 Release Lockout
+            if (this.solvingTimeout) clearTimeout(this.solvingTimeout); // 🟢 Kill stream tracker
+            
+            this.currentSessionId = Date.now().toString(); 
             this.lastUserPrompt = "✨ Fresh Chat Context Started";
-            // 🐛 FIX: Wipe the array clean instead of appending!
             this.localChatHistory = [`${this.lastUserPrompt}\n\n🤖 AI: (Ready for new input...)`];
             this.localChatIndex = 0;
             this.requestUpdate();
-            this.saveCurrentSession(); // Save the initial state of the new session
+            this.saveCurrentSession(); 
             await window.require('electron').ipcRenderer.invoke('new-chat');
         }
     }
