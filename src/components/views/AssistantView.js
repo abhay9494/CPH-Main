@@ -305,9 +305,10 @@ export class AssistantView extends LitElement {
                 if (this.isMicOn !== isListening) { this.isMicOn = isListening; this.requestUpdate(); }
             });
 
-            // 🟢 FIX: Only boot the widget if we are NOT in Proctored OA
             if (this.currentMode !== 'proctored_oa') {
                 ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
+            } else {
+                ipcRenderer.invoke('hide-widget');
             }
 
             window.cheatingDaddy.storage.getPreferences().then(async raw => {
@@ -509,6 +510,21 @@ export class AssistantView extends LitElement {
         this.brainSyncInterval = setInterval(() => { this.syncBrainModeWithBrowser(); }, 3000);
     }
 
+    // 🟢 FIX: Strictly enforce Widget visibility after the component properties finish loading
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('currentMode')) {
+            if (window.require) {
+                const { ipcRenderer } = window.require('electron');
+                if (this.currentMode === 'proctored_oa') {
+                    ipcRenderer.invoke('hide-widget');
+                } else {
+                    ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
+                }
+            }
+        }
+    }
+
     disconnectedCallback() {
         super.disconnectedCallback();
         if (this.brainSyncInterval) clearInterval(this.brainSyncInterval);
@@ -561,6 +577,8 @@ export class AssistantView extends LitElement {
                 let cF = rawF?.data?.fontSize ?? 13;
                 cF = Math.max(12, Math.min(32, cF + (action === 'text_inc' ? 1 : -1)));
                 this.showToast(action === 'text_inc' ? 'A+ Text Size' : 'A- Text Size');
+                // 🐛 FIX: Actively write the new value back to the database!
+                await window.cheatingDaddy.storage.updatePreference('fontSize', cF);
                 window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'fontSize', value: cF } })); break;
             case 'bg_inc':
             case 'bg_dec':
@@ -568,6 +586,8 @@ export class AssistantView extends LitElement {
                 let cB = rawB?.data?.backgroundTransparency ?? 0.8;
                 cB = Math.max(0, Math.min(1, cB + (action === 'bg_inc' ? 0.05 : -0.05)));
                 this.showToast(action === 'bg_inc' ? '⬛ Opacity Increased' : '⬜ Opacity Decreased');
+                // 🐛 FIX: Actively write the new value back to the database!
+                await window.cheatingDaddy.storage.updatePreference('backgroundTransparency', cB);
                 window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: cB } })); break;
             
             case 'toggle_ai_vis': this.showToast('👁️ Toggled AI Background Window'); this.handleToggleAiVisibility(); break;
