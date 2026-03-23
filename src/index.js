@@ -151,7 +151,7 @@ function launchAIWindow() {
         }
     });
 
-    aiWebWindow.setContentProtection(false);
+    aiWebWindow.setContentProtection(true);
     aiWebWindow.webContents.setAudioMuted(true);
     aiWebWindow.loadURL(provider.url);
 
@@ -1609,7 +1609,7 @@ expected output`;
             if (process.platform === 'darwin') {
                 widgetWindow.setHiddenInMissionControl(true);
             }
-            widgetWindow.setContentProtection(false);
+            widgetWindow.setContentProtection(true);
             // if (process.platform === 'win32') widgetWindow.setDisplayAffinity('exclude_from_capture');
             widgetWindow.loadFile('src/widget.html');
         } else {
