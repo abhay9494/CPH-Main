@@ -207,6 +207,7 @@ export class AssistantView extends LitElement {
         hoverProgress: { type: Number },
         hotCornerBounds: { type: Object },
         bgTransparency: { type: Number },
+        resetArmed: { type: Boolean },
     };
 
     constructor() {
@@ -252,6 +253,8 @@ export class AssistantView extends LitElement {
         this.modalImage = null;
         this.hoverZone = null;
         this.hoverProgress = 0;
+        this.resetArmed = false;
+        this.resetArmTimer = null;
     }
 
     showToast(msg) {
@@ -563,6 +566,15 @@ export class AssistantView extends LitElement {
     }
 
     async executeHotCorner(action) {
+        // 🚨 LOCKOUT LOGIC: Prevent state corruption while AI is scraping/solving
+        if (this.isSolving) {
+            if (['change_ai', 'change_profile', 'refactor', 'send_ai'].includes(action)) {
+                this.showToast('⏳ AI is currently busy...');
+                return;
+            }
+            // Note: 'reset' is intentionally allowed to bypass this to act as an Emergency Circuit Breaker
+        }
+
         switch (action) {
             case 'capture': this.showToast('📸 Screenshot Captured'); this.handleCaptureScreenshot(); break;
             case 'send_ai': this.showToast('🚀 Firing to AI'); this.handleSendToAI(); break;
@@ -571,7 +583,28 @@ export class AssistantView extends LitElement {
             case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
             case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
             case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
-            case 'reset': this.showToast('✨ Session Reset'); this.handleNewChat(); break;
+            
+            // 🎯 V2 RESET: The 5-Second "Arm & Execute" Double Trigger
+            case 'reset': 
+                if (!this.resetArmed) {
+                    this.resetArmed = true;
+                    this.showToast('⚠️ RESET ARMED (5s)');
+                    if (this.resetArmTimer) clearTimeout(this.resetArmTimer);
+                    this.resetArmTimer = setTimeout(() => {
+                        this.resetArmed = false;
+                        this.requestUpdate();
+                    }, 5000);
+                    this.requestUpdate();
+                } else {
+                    if (this.resetArmTimer) clearTimeout(this.resetArmTimer);
+                    this.resetArmed = false;
+                    this.isSolving = false; // ⚡ Emergency Circuit Breaker (Kills the scraping block)
+                    this.capturedCount = 0;
+                    this.showToast('🛑 Session Reset');
+                    this.handleNewChat(); 
+                }
+                break;
+
             case 'refactor': this.showToast('🛠️ Refactoring Triggered'); this.handleRefactor(); break;
             case 'fast_think': 
                 this.tacThinkMode = !this.tacThinkMode; this.showToast(this.tacThinkMode ? '🧠 THINK Mode ON' : '⚡ FAST Mode ON');
@@ -600,7 +633,6 @@ export class AssistantView extends LitElement {
             
             case 'bg_inc':
             case 'bg_dec':
-                // 🐛 FIX: Math.round obliterates JavaScript floating-point errors (e.g. preventing 0.8 - 0.05 = 0.750000001)
                 let newTrans = this.bgTransparency + (action === 'bg_inc' ? 0.05 : -0.05);
                 this.bgTransparency = Math.max(0, Math.min(1, Math.round(newTrans * 100) / 100));
                 this.showToast(action === 'bg_inc' ? '⬛ Opacity Increased' : '⬜ Opacity Decreased');
@@ -1020,18 +1052,19 @@ export class AssistantView extends LitElement {
     async handleSendManualText() {
         const input = this.shadowRoot.querySelector('#manualPromptInput');
         if (input && input.value.trim() && window.require) {
-            if (!this.validateSetup()) return;
+            // 🐛 FIX: Added isSolving lockout check here
+            if (!this.validateSetup() || this.isSolving) return;
+            this.isSolving = true; 
+
             const rawText = input.value.trim();
             const { ipcRenderer } = window.require('electron');
             
-            // 🟢 FIX: Skip forcing code constraints on Conversational prompts
             const lang = this.getFinalLanguage();
             let payload = rawText;
             if (lang !== 'Auto / Text') {
                 payload += `\n\n[Format solution in ${lang}]`;
             }
             
-            // Update UI instantly to show responsiveness
             this.lastUserPrompt = `👤 You: ${rawText}`;
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Thinking...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
@@ -1039,8 +1072,11 @@ export class AssistantView extends LitElement {
             this.requestUpdate();
             this.saveCurrentSession();
             
-            // Then let the backend do the heavy lifting
             await ipcRenderer.invoke('send-manual-text', payload);
+            
+            // 🐛 FIX: Release the lockout
+            this.isSolving = false;
+            this.requestUpdate();
         }
     }
 
@@ -1093,14 +1129,24 @@ export class AssistantView extends LitElement {
     }
 
     async handleRefactor() {
-        if (!this.validateSetup()) return;
+        // 🐛 FIX: Added isSolving lockout check here
+        if (!this.validateSetup() || this.isSolving) return;
+        
         if (window.require) {
+            this.isSolving = true; // 🐛 FIX: Set the lockout flag
+            
             this.lastUserPrompt = "🛠️ Triggered Code Refactoring";
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Refactoring...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
             this.saveCurrentSession();
+            
             await window.require('electron').ipcRenderer.invoke('send-oa-refactor');
+            
+            // 🐛 FIX: Release the lockout
+            this.isSolving = false; 
+            this.syncWidgetState(); 
+            this.requestUpdate();
         }
     }
 
@@ -1315,29 +1361,45 @@ export class AssistantView extends LitElement {
         const aiName = this.currentProviderName || 'ChatGPT';
         const modeName = this.tacThinkMode ? 'Think' : 'Fast';
         
-        // 🟢 Helper to render a specific zone box with dynamic text overrides
+        // 🟢 FIX: Perfect vertical and horizontal centering using Flexbox and line-height: 1
         const renderZone = (id) => {
             const isHover = this.hoverZone === id;
             const action = map[id];
             if (!action || action === 'none') return html`<div style="opacity: 0.1;"></div>`;
             
             let displayLabel = this.getHotCornerLabel(action);
+            let borderOverride = isHover ? '#f59e0b' : 'var(--border-subtle)';
+            let textOverride = isHover ? '#fff' : 'var(--text-secondary)';
+            let bgOverride = 'rgba(0,0,0,0.3)';
+
             if (action === 'change_profile') displayLabel = `👤 ${profileName}`;
             if (action === 'fast_think') displayLabel = `🧠 ${modeName}`;
             if (action === 'change_ai') displayLabel = `🤖 ${aiName}`;
             
+            if (action === 'reset' && this.resetArmed) {
+                displayLabel = `⚠️ CONFIRM RESET`;
+                borderOverride = '#f14c4c';
+                textOverride = '#f14c4c';
+                bgOverride = 'rgba(241, 76, 76, 0.15)';
+            }
+
             return html`
-                <div style="position: relative; border: 1px solid ${isHover ? '#f59e0b' : 'var(--border-subtle)'}; border-radius: 4px; padding: 4px; overflow: hidden; background: rgba(0,0,0,0.3); transition: 0.2s;">
-                    ${isHover ? html`<div style="position: absolute; top: 0; left: 0; bottom: 0; width: ${this.hoverProgress}%; background: rgba(245, 158, 11, 0.4); z-index: 1;"></div>` : ''}
-                    <div style="position: relative; z-index: 2; color: ${isHover ? '#fff' : 'var(--text-secondary)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 8px;">${displayLabel}</div>
+                <div style="position: relative; border: 1px solid ${borderOverride}; border-radius: 4px; overflow: hidden; background: ${bgOverride}; transition: 0.2s; display: flex; align-items: center; justify-content: center; height: 100%; box-sizing: border-box; padding: 0 4px;">
+                    ${isHover ? html`<div style="position: absolute; top: 0; left: 0; bottom: 0; height: 100%; width: ${this.hoverProgress}%; background: rgba(245, 158, 11, 0.4); z-index: 1;"></div>` : ''}
+                    <div style="position: relative; z-index: 2; color: ${textOverride}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; font-size: 9px; line-height: 1; display: flex; align-items: center; justify-content: center; width: 100%; height: 100%; margin: 0; padding: 0;">${displayLabel}</div>
                 </div>
             `;
         };
 
-        // 🟢 The Center Bullseye Notification
+        let toastColor = '#00cc66'; 
+        if (this.ghostToastMessage) {
+            if (this.ghostToastMessage.includes('⚠️') || this.ghostToastMessage.includes('⏳')) toastColor = '#f59e0b'; 
+            if (this.ghostToastMessage.includes('🛑')) toastColor = '#f14c4c'; 
+        }
+
         const centerMsg = this.ghostToastMessage 
-            ? html`<div style="color: #00cc66; font-size: 12px; font-weight: bold; text-transform: uppercase; animation: fadeIn 0.2s;">${this.ghostToastMessage}</div>`
-            : html`<div style="font-size: 11px; opacity: 0.3; letter-spacing: 1px;">🎯 HOLD ${b.dwellTime}s TO TRIGGER</div>`;
+            ? html`<div style="color: ${toastColor}; font-size: 11px; font-weight: bold; text-transform: uppercase; animation: fadeIn 0.2s; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">${this.ghostToastMessage}</div>`
+            : html`<div style="font-size: 9.5px; opacity: 0.4; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">🎯 HOLD ${b.dwellTime}s TO TRIGGER</div>`;
 
         let m = "🟢 **Ghost Sensors Active.** Move mouse to screen edges/corners and hold to trigger actions.";
         const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
@@ -1353,17 +1415,18 @@ export class AssistantView extends LitElement {
 
                 <div class="bottom-controls" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
                     
-                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; text-align: center; font-size: 8.5px; font-weight: bold; width: 100%;">
+                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 24px); gap: 4px; text-align: center; font-size: 8.5px; font-weight: bold; width: 100%;">
+                        
                         ${renderZone('top_left')} ${renderZone('top_mid_left')} ${renderZone('top_center')} ${renderZone('top_mid_right')} ${renderZone('top_right')}
                         
                         ${renderZone('left_mid_top')} 
-                        <div style="grid-column: span 3; display: flex; align-items: center; justify-content: center;">
+                        <div style="grid-column: span 3; grid-row: span 3; display: flex; align-items: center; justify-content: center; height: 100%;">
                             ${centerMsg}
                         </div> 
                         ${renderZone('right_mid_top')}
                         
-                        ${renderZone('middle_left')} <div style="grid-column: span 3;"></div> ${renderZone('middle_right')}
-                        ${renderZone('left_mid_bottom')} <div style="grid-column: span 3;"></div> ${renderZone('right_mid_bottom')}
+                        ${renderZone('middle_left')} ${renderZone('middle_right')}
+                        ${renderZone('left_mid_bottom')} ${renderZone('right_mid_bottom')}
                         
                         ${renderZone('bottom_left')} ${renderZone('bottom_mid_left')} ${renderZone('bottom_center')} ${renderZone('bottom_mid_right')} ${renderZone('bottom_right')}
                     </div>
