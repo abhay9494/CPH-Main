@@ -1337,6 +1337,64 @@ expected output`;
         return true;
     });
 
+    ipcMain.handle('send-oa-fix-error', async () => {
+        if (accumulatedScreenshots.length === 0 || !aiWebWindow) return false;
+
+        if (!aiWebWindow || aiWebWindow.isDestroyed()) {
+            launchAIWindow();
+            await new Promise(r => setTimeout(r, 4000)); 
+            await applyDropdownBrainMode();
+        }
+
+        for (let i = 0; i < accumulatedScreenshots.length; i++) {
+            const img = nativeImage.createFromDataURL(accumulatedScreenshots[i]);
+            clipboard.writeImage(img);
+            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
+            aiWebWindow.webContents.paste();
+            await new Promise(r => setTimeout(r, 800)); 
+        }
+        
+        const dynamicPrompt = `Look at the code written by me in the screenshot attached and see the error of the compiler and fix it. Give the fully corrected code or pin-point the line of the code and the errors i made`;
+
+        clipboard.writeText(dynamicPrompt);
+        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
+        aiWebWindow.webContents.paste();
+        
+        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
+
+        let isReady = false; let attempts = 0;
+        while (!isReady && attempts < 120) {
+            if (aiWebWindow.webContents.isLoading()) {
+                await new Promise(r => setTimeout(r, 500)); 
+                continue; 
+            }
+            isReady = await aiWebWindow.webContents.executeJavaScript(`
+                (() => {
+                    const btn = document.querySelector('${sendBtnSelector}');
+                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
+                    return false;
+                })()
+            `);
+            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
+        }
+        await new Promise(r => setTimeout(r, 500));
+        await aiWebWindow.webContents.executeJavaScript(`
+            try {
+                const btn = document.querySelector('${sendBtnSelector}');
+                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
+            } catch(e) {}
+        `);
+        setTimeout(() => {
+            if(!aiWebWindow.isDestroyed()){
+                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+            }
+        }, 200);
+
+        accumulatedScreenshots = [];
+        return true;
+    });
+
     ipcMain.handle('send-manual-text', async (event, text) => {
         if (!aiWebWindow || !text) return;
 
@@ -1639,12 +1697,15 @@ expected output`;
     // ==========================================================
     ipcMain.handle('hide-all-overlays', () => {
         BrowserWindow.getAllWindows().forEach(w => {
-            if (!w.isDestroyed() && w !== aiWebWindow) w.hide();
+            if (!w.isDestroyed() && w !== aiWebWindow) {
+                w.setOpacity(0);
+                w.setIgnoreMouseEvents(true, { forward: true });
+            }
         });
         
-        // 🐛 FIX 3: Make Ctrl+\ explicitly hide the AI window as well!
         if (aiWebWindow && !aiWebWindow.isDestroyed() && aiWebWindow.isVisible()) {
-            aiWebWindow.hide();
+            aiWebWindow.setOpacity(0);
+            aiWebWindow.setIgnoreMouseEvents(true, { forward: true });
         }
     });
 
@@ -1741,14 +1802,25 @@ expected output`;
         }
     });
 
-    // 🟢 SAFE HIDE: Allows the frontend to trigger the stealth hide safely!
+    // 🟢 SAFE HIDE: Flawless OS-Level Stealth using Opacity to prevent Focus Stealing
+    let isGhostHidden = false;
     ipcMain.handle('trigger-ghost-hide', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            if (mainWindow.isVisible()) {
-                mainWindow.hide();
-                if (aiWebWindow && !aiWebWindow.isDestroyed()) aiWebWindow.hide();
+            isGhostHidden = !isGhostHidden;
+            if (isGhostHidden) {
+                mainWindow.setOpacity(0);
+                mainWindow.setIgnoreMouseEvents(true, { forward: true });
+                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
+                    aiWebWindow.setOpacity(0);
+                    aiWebWindow.setIgnoreMouseEvents(true, { forward: true });
+                }
             } else {
-                mainWindow.showInactive();
+                mainWindow.setOpacity(1);
+                mainWindow.setIgnoreMouseEvents(false);
+                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
+                    aiWebWindow.setOpacity(1);
+                    aiWebWindow.setIgnoreMouseEvents(false);
+                }
             }
         }
     });

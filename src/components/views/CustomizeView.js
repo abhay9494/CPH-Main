@@ -533,7 +533,8 @@ export class CustomizeView extends LitElement {
             'none': '—', 'capture': '📸', 'send_ai': '🚀', 'hide_unhide': '👻',
             'scroll_up': '⬆️', 'scroll_down': '⬇️', 'prev_resp': '◀', 'next_resp': '▶',
             'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
-            'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜'
+            'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜',
+            'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️'
         };
         return labels[action] || '—';
     }
@@ -728,11 +729,13 @@ export class CustomizeView extends LitElement {
             case 'hotcorners':
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
                     {value: 'change_ai', label: '🤖 Change AI Model'}, {value: 'change_profile', label: '👤 Change Profile'},
-                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'refactor', label: '🛠️ Refactor Code'},
+                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'language', label: '💻 Change Language'},
+                    {value: 'refactor', label: '🛠️ Refactor Code'}, {value: 'mic', label: '🎙️ Toggle Mic'},
                     {value: 'reset', label: '✨ Reset Session'}, {value: 'text_inc', label: 'A+ Text Size'},
                     {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'}
                 ];

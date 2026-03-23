@@ -176,48 +176,32 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
         }
     });
 
-    let hiddenWindowsStates = new Map();
+    let isStealthHidden = false;
     register('toggleVisibility', keybinds.toggleVisibility, () => {
-        // console.log("[DEBUG-VISIBILITY] Ctrl+\\ pressed.");
         if (mainWindow && !mainWindow.isDestroyed()) {
-            if (mainWindow.isVisible()) {
-                // console.log("[DEBUG-VISIBILITY] Hiding all windows.");
-                hiddenWindowsStates.clear();
+            isStealthHidden = !isStealthHidden;
+            if (isStealthHidden) {
+                // 🟢 FIX: Opacity 0 + ClickThrough ensures ZERO OS-level focus steal!
+                mainWindow.setOpacity(0);
+                mainWindow.setIgnoreMouseEvents(true, { forward: true });
+                
                 BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed()) {
-                        hiddenWindowsStates.set(w, w.isVisible());
-                        if (w.isVisible()) w.hide();
+                    if (!w.isDestroyed() && w !== mainWindow && w.isVisible()) {
+                        w.setOpacity(0);
+                        w.setIgnoreMouseEvents(true, { forward: true });
                     }
                 });
             } else {
-                // console.log("[DEBUG-VISIBILITY] Restoring previously visible windows.");
-                let restoredAnything = false;
-                
+                mainWindow.setOpacity(1);
+                mainWindow.setIgnoreMouseEvents(false);
+                mainWindow.webContents.send('app-made-visible');
+
                 BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed()) {
-                        const wasVisible = hiddenWindowsStates.get(w);
-                        if (wasVisible) {
-                            restoredAnything = true;
-                            if (w === mainWindow) {
-                                w.show();
-                                w.restore();
-                                w.focus();
-                            } else {
-                                w.showInactive();
-                            }
-                        }
+                    if (!w.isDestroyed() && w !== mainWindow && !w.webContents.getURL().includes('chatgpt') && !w.webContents.getURL().includes('gemini') && !w.webContents.getURL().includes('grok')) {
+                        w.setOpacity(1);
+                        w.setIgnoreMouseEvents(false);
                     }
                 });
-
-                // 🐛 FIX: If the memory map was empty (because the app was hidden via a UI button),
-                // forcefully show the main window anyway so the user is never permanently locked out!
-                if (!restoredAnything && !mainWindow.isDestroyed()) {
-                    mainWindow.show();
-                    mainWindow.restore();
-                    mainWindow.focus();
-                }
-
-                mainWindow.webContents.send('app-made-visible');
             }
         }
     });

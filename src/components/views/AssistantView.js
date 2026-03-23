@@ -517,6 +517,13 @@ export class AssistantView extends LitElement {
                 const action = this.hotCornersMap[zone];
                 if (!action || action === 'none') return;
 
+                // 🚨 INSTANT VISUAL LOCKOUT: Stop the bar from filling and drop warning instantly!
+                const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic'];
+                if (this.isSolving && lockedActions.includes(action)) {
+                    this.showToast('⏳ AI is busy...');
+                    return; 
+                }
+
                 const bounds = this.hotCornerBounds || { dwellTime: 3, hideTime: 0 };
                 const targetTimeMs = (action === 'hide_unhide') ? ((bounds.hideTime || 0) * 1000) : ((bounds.dwellTime || 3) * 1000);
 
@@ -582,22 +589,35 @@ export class AssistantView extends LitElement {
 
     async executeHotCorner(action) {
         // 🚨 LOCKOUT LOGIC: Prevent state corruption while AI is scraping/solving
-        if (this.isSolving) {
-            if (['change_ai', 'change_profile', 'refactor', 'send_ai'].includes(action)) {
-                this.showToast('⏳ AI is currently busy...');
-                return;
-            }
-            // Note: 'reset' is intentionally allowed to bypass this to act as an Emergency Circuit Breaker
+        const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'fix_error', 'language', 'mic'];
+        if (this.isSolving && lockedActions.includes(action)) {
+            this.showToast('⏳ AI is busy...');
+            return;
         }
 
         switch (action) {
             case 'capture': this.showToast('📸 Screenshot Captured'); this.handleCaptureScreenshot(); break;
             case 'send_ai': this.showToast('🚀 Firing to AI'); this.handleSendToAI(); break;
+            case 'fix_error': this.showToast('🔧 Fixing Error...'); this.handleFixError(); break;
             case 'hide_unhide': this.showToast('👻 Toggled Stealth'); window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
             case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); break;
             case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
             case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
             case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
+
+            case 'mic': 
+                this.handleToggleMic(); 
+                this.showToast(`🎙️ Mic: ${!this.isMicOn ? 'ON' : 'OFF'}`); 
+                break;
+
+            case 'language':
+                const langs = ['Auto / Text', 'C++', 'Python', 'Java', 'JavaScript'];
+                let currIdx = langs.indexOf(this.programmingLanguage);
+                if(currIdx === -1) currIdx = 0;
+                let nextIdx = (currIdx + 1) % langs.length;
+                this.handleLanguageChange({target: {value: langs[nextIdx]}});
+                this.showToast(`💻 ${langs[nextIdx]}`);
+                break;
             
             case 'reset': 
                 if (!this.resetArmed) {
@@ -873,6 +893,7 @@ export class AssistantView extends LitElement {
     }
 
     async handleProfileChange(e) {
+        if (this.isSolving) return this.showToast('⏳ AI is busy...');
         const targetId = e.target.value;
         if (!targetId || targetId === "none") return;
         this.currentProfileId = targetId;
@@ -885,6 +906,7 @@ export class AssistantView extends LitElement {
     }
 
     async handleLanguageChange(e) {
+        if (this.isSolving) return this.showToast('⏳ AI is busy...');
         this.programmingLanguage = e.target.value;
         if (this.programmingLanguage !== 'Custom') {
             await window.cheatingDaddy.storage.updatePreference('programmingLanguage', this.programmingLanguage);
@@ -1069,6 +1091,7 @@ export class AssistantView extends LitElement {
         if (input && input.value.trim() && window.require) {
             if (!this.validateSetup() || this.isSolving) return;
             this.isSolving = true; // 🟢 Hard Lock Start
+            if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
 
             const rawText = input.value.trim();
             const { ipcRenderer } = window.require('electron');
@@ -1087,7 +1110,6 @@ export class AssistantView extends LitElement {
             this.saveCurrentSession();
             
             await ipcRenderer.invoke('send-manual-text', payload);
-            this.markAiActive(); // 🟢 Bridge gap to the stream
         }
     }
 
@@ -1123,6 +1145,7 @@ export class AssistantView extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             this.isSolving = true; // 🟢 Hard Lock Start
+            if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
             
             this.lastUserPrompt = this.localChatHistory[this.localChatIndex];
             this.localChatHistory[this.localChatIndex] = `${this.lastUserPrompt}\n\n🚀 **Sent to AI...**\n\n🤖 AI: (Solving...)`;
@@ -1133,7 +1156,28 @@ export class AssistantView extends LitElement {
 
             await ipcRenderer.invoke('send-oa-automation', this.getFinalLanguage());
 
-            this.markAiActive(); // 🟢 Bridge gap to the stream
+            this.syncWidgetState(); 
+        }
+    }
+
+    async handleFixError() {
+        if (this.capturedCount === 0 || this.isSolving) return;
+        if (!this.validateSetup()) return;
+        
+        if (window.require) {
+            const { ipcRenderer } = window.require('electron');
+            this.isSolving = true; 
+            if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
+            
+            this.lastUserPrompt = this.localChatHistory[this.localChatIndex];
+            this.localChatHistory[this.localChatIndex] = `${this.lastUserPrompt}\n\n🔧 **Fixing Error...**\n\n🤖 AI: (Analyzing code...)`;
+            
+            this.capturedCount = 0;
+            this.requestUpdate();
+            this.saveCurrentSession();
+
+            await ipcRenderer.invoke('send-oa-fix-error');
+
             this.syncWidgetState(); 
         }
     }
@@ -1142,6 +1186,7 @@ export class AssistantView extends LitElement {
         if (!this.validateSetup() || this.isSolving) return;
         if (window.require) {
             this.isSolving = true; // 🟢 Hard Lock Start
+            if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
             
             this.lastUserPrompt = "🛠️ Triggered Code Refactoring";
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Refactoring...)`];
@@ -1150,7 +1195,6 @@ export class AssistantView extends LitElement {
             this.saveCurrentSession();
             
             await window.require('electron').ipcRenderer.invoke('send-oa-refactor');
-            this.markAiActive(); // 🟢 Bridge gap to the stream
         }
     }
 
@@ -1158,6 +1202,7 @@ export class AssistantView extends LitElement {
         if (window.require) {
             if (this.isSolving) return;
             this.isSolving = true; // 🟢 Hard Lock Start
+            if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
             
             const { ipcRenderer } = window.require('electron');
             const raw = await window.cheatingDaddy.storage.getPreferences();
@@ -1180,11 +1225,11 @@ export class AssistantView extends LitElement {
             this.saveCurrentSession();
 
             await ipcRenderer.invoke('send-manual-text', payload);
-            this.markAiActive(); // 🟢 Bridge gap to the stream
         }
     }
 
     async handleSetEngine(index, isBoot = false) {
+        if (!isBoot && this.isSolving) return this.showToast('⏳ AI is busy...');
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             this.currentProviderName = await ipcRenderer.invoke('set-ai-provider', index);
@@ -1211,6 +1256,7 @@ export class AssistantView extends LitElement {
     }
 
     async handleToggleMic() {
+        if (this.isSolving) return this.showToast('⏳ AI is busy...');
         if (!this.validateSetup()) return;
         this.isMicOn = !this.isMicOn;
         if (window.require) await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', this.isMicOn);
@@ -1360,7 +1406,8 @@ export class AssistantView extends LitElement {
             'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
             'change_profile': '👤 Profile', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
-            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI'
+            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
+            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic'
         };
         return labels[action] || action || '—';
     }
@@ -1388,6 +1435,9 @@ export class AssistantView extends LitElement {
             if (action === 'change_profile') displayLabel = `👤 ${profileName}`;
             if (action === 'fast_think') displayLabel = `🧠 ${modeName}`;
             if (action === 'change_ai') displayLabel = `🤖 ${aiName}`;
+            if (action === 'language') displayLabel = `💻 ${this.programmingLanguage}`;
+            if (action === 'mic') displayLabel = `🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}`;
+            if (action === 'toggle_ai_vis') displayLabel = this.isAiVisible ? '👻 Hide AI' : '👁️ Show AI';
             
             if (action === 'reset' && this.resetArmed) {
                 displayLabel = `⚠️ CONFIRM RESET`;
