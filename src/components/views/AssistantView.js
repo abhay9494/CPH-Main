@@ -481,7 +481,7 @@ export class AssistantView extends LitElement {
 
                 // ⏳ 3-SECOND VISUAL FILL LOOP
                 this.hoverTimer = setInterval(() => {
-                    this.hoverProgress += (50 / 3000) * 100; // 50ms tick over 3000ms
+                    this.hoverProgress += (50 / 1000) * 100; // 50ms tick over 3000ms
                     this.requestUpdate();
                     
                     if (this.hoverProgress >= 100) {
@@ -1250,8 +1250,8 @@ export class AssistantView extends LitElement {
     renderProctoredOAMode() {
         const map = this.hotCornersMap || {};
         
-        // Helper to render a specific zone box with progress bar
-        const renderZone = (id, label) => {
+        // 🟢 Helper to render a specific zone box with the 3-second yellow progress bar
+        const renderZone = (id) => {
             const isHover = this.hoverZone === id;
             const action = map[id];
             if (!action || action === 'none') return html`<div style="opacity: 0.1;"></div>`;
@@ -1259,7 +1259,7 @@ export class AssistantView extends LitElement {
             return html`
                 <div style="position: relative; border: 1px solid ${isHover ? '#f59e0b' : 'var(--border-subtle)'}; border-radius: 4px; padding: 4px; overflow: hidden; background: rgba(0,0,0,0.3); transition: 0.2s;">
                     ${isHover ? html`<div style="position: absolute; top: 0; left: 0; bottom: 0; width: ${this.hoverProgress}%; background: rgba(245, 158, 11, 0.4); z-index: 1;"></div>` : ''}
-                    <div style="position: relative; z-index: 2; color: ${isHover ? '#fff' : 'var(--text-secondary)'};">${this.getHotCornerLabel(action)}</div>
+                    <div style="position: relative; z-index: 2; color: ${isHover ? '#fff' : 'var(--text-secondary)'}; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${this.getHotCornerLabel(action)}</div>
                 </div>
             `;
         };
@@ -1269,17 +1269,32 @@ export class AssistantView extends LitElement {
 
         return html`
             <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent; position: relative;">
-                <div class="ghost-toast ${this.ghostToastMessage ? 'visible' : ''}">${this.ghostToastMessage}</div>
-                <div class="markdown-body" style="height: calc(100% - 105px); flex: none;" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>
+                
+                <div class="ghost-toast ${this.ghostToastMessage ? 'visible' : ''}">
+                    ${this.ghostToastMessage}
+                </div>
+
+                <div class="markdown-body" 
+                     style="height: calc(100% - 110px); flex: none;"
+                     @click=${this.handleMarkdownClick} 
+                     .innerHTML=${this.renderMarkdown(c)}>
+                </div>
 
                 <div class="bottom-controls" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
+                    
                     <div style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 4px; text-align: center; font-size: 8.5px; font-weight: bold; width: 100%;">
                         ${renderZone('top_left')} ${renderZone('top_mid_left')} ${renderZone('top_center')} ${renderZone('top_mid_right')} ${renderZone('top_right')}
-                        ${renderZone('left_mid_top')} <div style="grid-column: span 3; opacity:0.2; display:flex; align-items:center; justify-content:center; font-size:12px;">🎯 HOLD 3s TO TRIGGER</div> ${renderZone('right_mid_top')}
+                        
+                        ${renderZone('left_mid_top')} 
+                        <div style="grid-column: span 3; opacity: 0.2; display: flex; align-items: center; justify-content: center; font-size: 12px; letter-spacing: 1px;">🎯 HOLD 3s TO TRIGGER</div> 
+                        ${renderZone('right_mid_top')}
+                        
                         ${renderZone('middle_left')} <div style="grid-column: span 3;"></div> ${renderZone('middle_right')}
                         ${renderZone('left_mid_bottom')} <div style="grid-column: span 3;"></div> ${renderZone('right_mid_bottom')}
+                        
                         ${renderZone('bottom_left')} ${renderZone('bottom_mid_left')} ${renderZone('bottom_center')} ${renderZone('bottom_mid_right')} ${renderZone('bottom_right')}
                     </div>
+
                 </div>
             </div>
         `;
