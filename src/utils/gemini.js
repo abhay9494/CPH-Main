@@ -2,7 +2,7 @@ const { GoogleGenAI, Modality } = require('@google/genai');
 const { BrowserWindow, ipcMain } = require('electron');
 const { spawn } = require('child_process');
 const { saveDebugAudio } = require('../audioUtils');
-const { getSystemPrompt } = require('./prompts');
+const { getSystemPrompt } = require('./prompts_old');
 const { getAvailableModel, incrementLimitCount, getApiKey, getGroqApiKey, incrementCharUsage, getModelForToday } = require('../storage');
 
 // Groq conversation history for context

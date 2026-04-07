@@ -159,6 +159,9 @@ export class AssistantView extends LitElement {
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: var(--scrollbar-thumb, #333); border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: var(--scrollbar-thumb-hover, #444); }
+
+        .action-btn:disabled { opacity: 0.3; pointer-events: none; filter: grayscale(100%); }
+        .dropdown-trigger.disabled { opacity: 0.3; pointer-events: none; filter: grayscale(100%); }
     `;
 
     static properties = {
@@ -302,15 +305,19 @@ export class AssistantView extends LitElement {
         }
     }
 
-    // 🟢 FIX: 4-Second Silence Tracker. Keeps UI locked until generation is truly finished!
+    // 🟢 FIX: 4-Second Silence Tracker + Hardware Ping!
     markAiActive() {
         this.isSolving = true;
         if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
         
         this.solvingTimeout = setTimeout(() => {
             this.isSolving = false;
+            // 🎯 The AI has been silent for 4 seconds. The payload is ready. FIRE THE PING!
+            if (window.require) {
+                window.require('electron').ipcRenderer.send('ai-generation-complete');
+            }
             this.requestUpdate();
-        }, 4000); // 4 seconds of silence means generation is done
+        }, 4000); 
         
         this.requestUpdate();
     }
@@ -518,7 +525,7 @@ export class AssistantView extends LitElement {
                 if (!action || action === 'none') return;
 
                 // 🚨 INSTANT VISUAL LOCKOUT: Stop the bar from filling and drop warning instantly!
-                const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic'];
+                const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic', 'auto_type'];
                 if (this.isSolving && lockedActions.includes(action)) {
                     this.showToast('⏳ AI is busy...');
                     return; 
@@ -604,6 +611,31 @@ export class AssistantView extends LitElement {
             case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
             case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
             case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
+
+            // Add this inside the switch(action) block:
+            case 'auto_type':
+                this.showToast('⌨️ Auto-Type Triggered');
+                // Blind payload extraction: grab the absolute latest message
+                const lastMsg = this.localChatHistory[this.localChatHistory.length - 1] || '';
+                const parts = lastMsg.split('🤖 AI:\n');
+                if (parts.length > 1) {
+                    let codeText = parts[1].trim();
+                    // Strip the language tag if markdown slipped through
+                    codeText = codeText.replace(/```(c\+\+|python|java|javascript|js|cpp)?/gi, '').replace(/```/g, '').trim();
+                    this.typerCodeLines = codeText.split('\n');
+                    this.typerStartLine = 0;
+                    this.typerEndLine = this.typerCodeLines.length - 1;
+                    
+                    // Force the UI into Typer mode and instantly start the 5-second physical countdown!
+                    this.viewMode = 'typer';
+                    window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: true }));
+                    this.requestUpdate();
+                    
+                    setTimeout(() => this.startTyperCountdown(), 100);
+                } else {
+                    this.showToast('⚠️ No payload ready');
+                }
+                break;
 
             case 'mic': 
                 this.handleToggleMic(); 
@@ -1277,7 +1309,7 @@ export class AssistantView extends LitElement {
         const currentEngineIdx = this.currentProviderName === 'Gemini' ? 1 : (this.currentProviderName === 'Grok' ? 2 : 0);
         return html`
             <div class="custom-dropdown">
-                <div class="dropdown-trigger" @click=${() => this.toggleDropdown('engine')}>${engines[currentEngineIdx]}</div>
+                <div class="dropdown-trigger ${this.isSolving ? 'disabled' : ''}" @click=${() => this.toggleDropdown('engine')}>${engines[currentEngineIdx]}</div>
                 ${this.activeDropdown === 'engine' ? html`
                     <div class="dropdown-menu">
                         ${Object.entries(engines).map(([id, label]) => html`
@@ -1295,7 +1327,7 @@ export class AssistantView extends LitElement {
         return html`
             <div style="display: flex; gap: 4px; align-items: center;">
                 <div class="custom-dropdown">
-                    <div class="dropdown-trigger" @click=${() => this.toggleDropdown('language')}>💻 ${this.programmingLanguage === 'Custom' ? 'Custom...' : this.programmingLanguage}</div>
+                    <div class="dropdown-trigger ${this.isSolving ? 'disabled' : ''}" @click=${() => this.toggleDropdown('language')}>💻 ${this.programmingLanguage === 'Custom' ? 'Custom...' : this.programmingLanguage}</div>
                     ${this.activeDropdown === 'language' ? html`
                         <div class="dropdown-menu">
                             ${languages.map(lang => html`
@@ -1319,7 +1351,7 @@ export class AssistantView extends LitElement {
         const currentProfile = availableProfiles.find(p => p.id === this.currentProfileId) || availableProfiles[0];
         return html`
             <div class="custom-dropdown">
-                <div class="dropdown-trigger" @click=${() => this.toggleDropdown('profile')}>👤 ${currentProfile ? currentProfile.name : 'Select'}</div>
+                <div class="dropdown-trigger ${this.isSolving ? 'disabled' : ''}" @click=${() => this.toggleDropdown('profile')}>👤 ${currentProfile ? currentProfile.name : 'Select'}</div>
                 ${this.activeDropdown === 'profile' ? html`
                     <div class="dropdown-menu">
                         ${availableProfiles.map(p => html`
@@ -1612,8 +1644,8 @@ export class AssistantView extends LitElement {
 
                     ${(this.currentMode === 'interview' || this.currentMode === 'companion') ? html`
                         <div class="control-row">
-                            <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
-                            <button class="action-btn" @click=${async () => {
+                            <button class="action-btn" ?disabled=${this.isSolving} @click=${this.handleNewChat}>✨ Reset</button>
+                            <button class="action-btn" ?disabled=${this.isSolving} @click=${async () => {
                                 this.tacThinkMode = !this.tacThinkMode; this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
                                 if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
                                 await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate();
@@ -1622,8 +1654,8 @@ export class AssistantView extends LitElement {
                             </button>
                             ${this.renderEngineSelector()}
                             ${this.renderLanguageSelector()}
-                            <button class="action-btn primary" @click=${this.handleSendProfileContext}>📄 Send Profile</button>
-                            <button class="action-btn ${this.isMicOn ? 'success' : ''}" @click=${this.handleToggleMic}>
+                            <button class="action-btn primary" ?disabled=${this.isSolving} @click=${this.handleSendProfileContext}>📄 Send Profile</button>
+                            <button class="action-btn ${this.isMicOn ? 'success' : ''}" ?disabled=${this.isSolving} @click=${this.handleToggleMic}>
                                 🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
                             </button>
                         </div>
@@ -1676,8 +1708,8 @@ export class AssistantView extends LitElement {
                         </div>
                     ` : html`
                         <div class="control-row">
-                            <button class="action-btn" @click=${this.handleNewChat}>✨ Reset</button>
-                            <button class="action-btn" @click=${async () => {
+                            <button class="action-btn" ?disabled=${this.isSolving} @click=${this.handleNewChat}>✨ Reset</button>
+                            <button class="action-btn" ?disabled=${this.isSolving} @click=${async () => {
                                 this.tacThinkMode = !this.tacThinkMode; this.isSwitchingMode = true; setTimeout(() => { this.isSwitchingMode = false; }, 3000);
                                 if(window.require) window.require('electron').ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', true);
                                 await window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode); this.requestUpdate();
@@ -1686,8 +1718,8 @@ export class AssistantView extends LitElement {
                             </button>
                             ${this.renderEngineSelector()}
                             ${this.renderLanguageSelector()}
-                            <button class="action-btn highlight" @click=${this.handleRefactor}>🛠️ Refactor</button>
-                            <button class="action-btn ${this.isMicOn ? 'success' : ''}" @click=${this.handleToggleMic}>
+                            <button class="action-btn highlight" ?disabled=${this.isSolving} @click=${this.handleRefactor}>🛠️ Refactor</button>
+                            <button class="action-btn ${this.isMicOn ? 'success' : ''}" ?disabled=${this.isSolving} @click=${this.handleToggleMic}>
                                 🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}
                             </button>
                         </div>

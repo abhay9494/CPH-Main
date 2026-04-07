@@ -30,6 +30,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os'); // 🐛 NEW: Needed for temp directory
 const { spawn } = require('child_process'); // 🐛 NEW: Needed for the ghost typist
+const PROMPTS = require('./utils/prompts');
 const geminiSessionRef = { current: null };
 let mainWindow = null;
 let widgetWindow = null;
@@ -42,18 +43,6 @@ let isAppQuitting = false;
 // ==========================================================
 // OA GLOBAL PROMPTS
 // ==========================================================
-
-const OA_PROMPT_2 = `Code Refactoring
-
-- If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.
-- Break large functions into smaller helper functions, or combine small snippet functions into a class.
-- If specific independent tasks happen in a sequence (e.g., initializing variables A, B, and C), change the order of initialization if it doesn't affect the output.
-- Most code uses nested if statements to check for valid conditions. You can structurally invert this by checking for invalid conditions and returning early. This "flattens" the code, removing deep indentation.
-- You can often replace a long switch statement or if-else chain with a Map (Dictionary) or an Array lookup. This removes the conditional logic entirely from the code structure.
-- Algorithms often iterate forward (0 to N). Changing this to backward iteration (N to 0) or using recursion changes the code signature significantly.
-- If the original code has a complex condition inside an if statement, extract those conditions into variables with semantic names. This changes the line-by-line structure.
-- If the original code uses a loop to solve a problem (like calculating a sum or searching a tree), rewriting it as a recursive function (a function that calls itself) completely changes the syntax tree.
-- Don't use classes for now`;
 
 // NEW: Universal AI Configurations
 const AI_CONFIGS = [
@@ -1231,26 +1220,8 @@ function setupGeneralIpcHandlers() {
             await new Promise(r => setTimeout(r, 800)); 
         }
         
-        // 🐛 FIX: Dynamically injects the selected language!
-        const dynamicPrompt = `code in ${language || 'c++'}
-
-no comments
-single letter variable names
-give me code with main function so that i can run locally
-don't change the function signature given in image
-see function signature from image
-see test cases from image 
-Give me test cases to be put in cph extension of vs code (only those test cases which are visible in the image)
-like this:
-test case1
-input
-
-expected output
-
-test case2
-input
-
-expected output`;
+        // 🟢 FIX: Use Centralized Prompt
+        const dynamicPrompt = PROMPTS.OA_AUTOMATION(language);
 
         clipboard.writeText(dynamicPrompt);
         await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
@@ -1296,7 +1267,7 @@ expected output`;
         
         // 🐛 FIX: Removed the /thinking injection from here!
 
-        clipboard.writeText(OA_PROMPT_2);
+        clipboard.writeText(PROMPTS.REFACTOR);
         await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         aiWebWindow.webContents.paste();
 
@@ -1354,8 +1325,7 @@ expected output`;
             await new Promise(r => setTimeout(r, 800)); 
         }
         
-        const dynamicPrompt = `Look at the code written by me in the screenshot attached and see the error of the compiler and fix it. Give the fully corrected code or pin-point the line of the code and the errors i made`;
-
+        const dynamicPrompt = PROMPTS.FIX_ERROR;
         clipboard.writeText(dynamicPrompt);
         await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         aiWebWindow.webContents.paste();
@@ -1800,6 +1770,21 @@ expected output`;
             clearInterval(hotCornerInterval);
             hotCornerInterval = null;
         }
+    });
+
+    // 🟢 NEW: SILENT PING (Hardware Caps Lock Flasher)
+    ipcMain.on('ai-generation-complete', () => {
+        console.log("🔔 AI Generation Complete - Firing Caps Lock Ping!");
+        const flashCapsScript = `
+            $wsh = New-Object -ComObject WScript.Shell
+            for ($i=0; $i -lt 3; $i++) {
+                $wsh.SendKeys('{CAPSLOCK}')
+                Start-Sleep -Milliseconds 200
+                $wsh.SendKeys('{CAPSLOCK}')
+                Start-Sleep -Milliseconds 200
+            }
+        `;
+        spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', flashCapsScript]);
     });
 
     // 🟢 SAFE HIDE: Flawless OS-Level Stealth using Opacity to prevent Focus Stealing

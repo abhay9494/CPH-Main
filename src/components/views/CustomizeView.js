@@ -534,7 +534,8 @@ export class CustomizeView extends LitElement {
             'scroll_up': '⬆️', 'scroll_down': '⬇️', 'prev_resp': '◀', 'next_resp': '▶',
             'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
             'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜',
-            'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️'
+            'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️',
+            'auto_type': '⌨️' // 🟢 NEW
         };
         return labels[action] || '—';
     }
@@ -730,6 +731,7 @@ export class CustomizeView extends LitElement {
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, // 🟢 NEW
                     {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
