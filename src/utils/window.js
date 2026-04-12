@@ -108,6 +108,9 @@ function createWindow(sendToRenderer, geminiSessionRef) {
 
     setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef);
 
+    // 🟢 X-RAY MODE: Force open the console to see what is killing the UI!
+    // mainWindow.webContents.openDevTools({ mode: 'detach' });
+
     return mainWindow;
 }
 

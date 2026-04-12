@@ -1,5 +1,5 @@
 import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
-import { resizeLayout } from '../../utils/windowResize.js';
+// import { resizeLayout } from '../../utils/windowResize.js';
 
 export class HelpView extends LitElement {
     static styles = css`
@@ -239,7 +239,6 @@ export class HelpView extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        resizeLayout();
     }
 
     getDefaultKeybinds() {

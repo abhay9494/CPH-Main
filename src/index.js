@@ -4,7 +4,6 @@ if (require('electron-squirrel-startup')) {
 
 // const { app, BrowserWindow, shell, ipcMain, globalShortcut, session, desktopCapturer } = require('electron');
 const { app, BrowserWindow, shell, ipcMain, globalShortcut, session, desktopCapturer, clipboard, nativeImage, dialog } = require('electron');
-const http = require('http');
 
 // 🛑 RED FLAG PREVENTION: Permanently mute all native OS error popups
 dialog.showErrorBox = function(title, content) {
@@ -23,15 +22,12 @@ process.on('unhandledRejection', (reason, promise) => {
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 const { createWindow, updateGlobalShortcuts } = require('./utils/window');
-const { setupGeminiIpcHandlers, stopMacOSAudioCapture, sendToRenderer } = require('./utils/gemini');
 const storage = require('./storage');
-// const { exec } = require('child_process');
 const fs = require('fs');
 const path = require('path');
 const os = require('os'); // 🐛 NEW: Needed for temp directory
 const { spawn } = require('child_process'); // 🐛 NEW: Needed for the ghost typist
 const PROMPTS = require('./utils/prompts');
-const geminiSessionRef = { current: null };
 let mainWindow = null;
 let widgetWindow = null;
 let aiWebWindow = null; 
@@ -144,8 +140,64 @@ function launchAIWindow() {
     aiWebWindow.webContents.setAudioMuted(true);
     aiWebWindow.loadURL(provider.url);
 
-    aiWebWindow.webContents.on('dom-ready', () => {
+    aiWebWindow.webContents.on('dom-ready', async () => {
         aiWebWindow.webContents.insertCSS('* { cursor: default !important; }');
+        
+        try {
+            // Grab the native OS Screen ID from the backend
+            const { desktopCapturer } = require('electron');
+            const sources = await desktopCapturer.getSources({ types: ['screen'] });
+            if (!sources || sources.length === 0) return;
+            const screenSourceId = sources[0].id;
+
+            // 🟢 THE WEBRTC HIJACK V3: Native Electron Loopback Bypass
+            const hijackScript = `
+                if (!window.__micHijacked) {
+                    window.__micHijacked = true;
+                    
+                    const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+                    navigator.mediaDevices.getUserMedia = async (constraints) => {
+                        if (constraints && constraints.audio) {
+                            try {
+                                console.log("🕵️‍♂️ Hardware Mic Blocked. Routing System Audio directly...");
+                                
+                                // Use Electron's native desktop source to bypass the "User Gesture" block!
+                                const stream = await originalGetUserMedia({
+                                    audio: {
+                                        mandatory: { chromeMediaSource: 'desktop' }
+                                    },
+                                    video: {
+                                        mandatory: { 
+                                            chromeMediaSource: 'desktop',
+                                            chromeMediaSourceId: '${screenSourceId}'
+                                        }
+                                    }
+                                });
+                                
+                                const audioTrack = stream.getAudioTracks()[0];
+                                const videoTrack = stream.getVideoTracks()[0];
+                                if (videoTrack) videoTrack.stop(); // Destroy the video feed
+                                
+                                return new MediaStream([audioTrack]);
+                            } catch (e) {
+                                console.error('🔥 Loopback Hijack Failed:', e);
+                                // 🛑 ABSOLUTE SECURITY OVERRIDE: 
+                                // Return DEAD AIR. Mathematically guarantee the physical mic is never leaked!
+                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                const dest = ctx.createMediaStreamDestination();
+                                return dest.stream; 
+                            }
+                        }
+                        return originalGetUserMedia(constraints);
+                    };
+                }
+                true;
+            `;
+            
+            await aiWebWindow.webContents.executeJavaScript(hijackScript);
+        } catch (err) {
+            console.error('Failed to inject WebRTC Hijack:', err);
+        }
     });
 
     // 🐛 FIX: Only prevent closing if the app isn't actually trying to quit!
@@ -562,7 +614,7 @@ async function applyDropdownBrainMode() {
 }
 
 function createMainWindow() {
-    mainWindow = createWindow(sendToRenderer, geminiSessionRef);
+    mainWindow = createWindow(null, null);
     mainWindow.on('hide', () => {
         if (aiWebWindow && !aiWebWindow.isDestroyed() && aiWebWindow.isVisible()) {
             aiWebWindow.hide();
@@ -686,19 +738,37 @@ ipcMain.on('stop-auto-type', (event) => {
 });
 
 app.whenReady().then(async () => {
-    const { session } = require('electron');
+    const { session, desktopCapturer } = require('electron');
     
     // ==========================================================
-    // 1. AUTO-GRANT ALL PERMISSIONS (DOUBLE BYPASS)
+    // 1. AUTO-GRANT PERMISSIONS ACROSS ALL AI PROFILES
     // ==========================================================
-    // Guard 1: Approves the popup requests silently
-    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => {
-        callback(true);
+    
+    // 🟢 FIX: Ensure partitioned profiles (Profile 1-20) inherit the Stealth Audio Rules!
+    app.on('session-created', (sess) => {
+        sess.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
+        sess.setPermissionCheckHandler(() => true);
+        sess.setDisplayMediaRequestHandler(
+            (request, callback) => {
+                desktopCapturer.getSources({ types: ['screen'] }).then(sources => {
+                    callback({ video: sources[0], audio: 'loopback' });
+                });
+            },
+            { useSystemPicker: false } // 🟢 CRITICAL FIX: Must be FALSE for silent background capture!
+        );
     });
-    // Guard 2: Approves Chromium's internal security checks
-    session.defaultSession.setPermissionCheckHandler((webContents, permission) => {
-        return true;
-    });
+
+    // Failsafe for the default session
+    session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
+    session.defaultSession.setPermissionCheckHandler(() => true);
+    session.defaultSession.setDisplayMediaRequestHandler(
+        (request, callback) => {
+            desktopCapturer.getSources({ types: ['screen'] }).then(sources => {
+                callback({ video: sources[0], audio: 'loopback' });
+            });
+        },
+        { useSystemPicker: false } // 🟢 CRITICAL FIX: Must be FALSE for silent background capture!
+    );
 
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0';
@@ -708,7 +778,6 @@ app.whenReady().then(async () => {
     storage.initializeStorage();
 
     createMainWindow();
-    setupGeminiIpcHandlers(geminiSessionRef);
     setupStorageIpcHandlers();
     setupGeneralIpcHandlers();
 
@@ -717,48 +786,9 @@ app.whenReady().then(async () => {
 
     // START THE BACKGROUND RADIO
     // startStealthRadio();
-
-    // ==========================================================
-    // 🎙️ STEALTH AUDIO BRIDGE: Listens for text from normal Google Chrome
-    // ==========================================================
-    http.createServer((req, res) => {
-        // Allow the Chrome tab to talk to Electron securely
-        res.setHeader('Access-Control-Allow-Origin', '*');
-        res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-        res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-        
-        if (req.method === 'OPTIONS') {
-            res.writeHead(204);
-            res.end();
-            return;
-        }
-
-        if (req.method === 'POST' && req.url === '/transcript') {
-            let body = '';
-            req.on('data', chunk => body += chunk.toString());
-            req.on('end', () => {
-                try {
-                    const data = JSON.parse(body);
-                    // Beam the text directly to your overlay window!
-                    if (mainWindow) { // Make sure we use your global/stored mainWindow reference
-                        mainWindow.webContents.send('live-transcript', data);
-                    }
-                    res.writeHead(200);
-                    res.end('OK');
-                } catch (e) {
-                    res.writeHead(400);
-                    res.end('Bad Data');
-                }
-            });
-        } else {
-            res.writeHead(404);
-            res.end();
-        }
-    }).listen(3742, () => console.log('🎙️ Stealth Audio Bridge listening on port 3742'));
 });
 
 app.on('window-all-closed', () => {
-    stopMacOSAudioCapture();
     if (process.platform !== 'darwin') {
         app.quit();
     }
@@ -766,7 +796,6 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
     isAppQuitting = true; // 🐛 FIX: Tell all windows they are allowed to die now
-    stopMacOSAudioCapture();
 });
 
 app.on('activate', () => {
@@ -992,7 +1021,6 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.handle('quit-application', async event => {
         try {
-            stopMacOSAudioCapture();
             app.quit();
             return { success: true };
         } catch (error) {
@@ -1014,7 +1042,7 @@ function setupGeneralIpcHandlers() {
     ipcMain.on('update-keybinds', (event, newKeybinds) => {
         if (mainWindow) {
             storage.setKeybinds(newKeybinds);
-            updateGlobalShortcuts(newKeybinds, mainWindow, sendToRenderer, geminiSessionRef);
+            updateGlobalShortcuts(newKeybinds, mainWindow, null, null);
         }
     });
 

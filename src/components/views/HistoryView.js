@@ -1,11 +1,7 @@
 import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
-import { resizeLayout } from '../../utils/windowResize.js';
 
 export class HistoryView extends LitElement {
     static styles = css`
-        /* 🟢 Import Highlight.js theme directly into the Shadow DOM */
-        @import url('[https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css](https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css)');
-
         * { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; box-sizing: border-box; }
         :host { height: 100%; display: flex; flex-direction: column; width: 100%; color: var(--text-color); }
         
@@ -124,7 +120,6 @@ export class HistoryView extends LitElement {
 
     connectedCallback() {
         super.connectedCallback();
-        resizeLayout();
     }
 
     async loadSessions() {

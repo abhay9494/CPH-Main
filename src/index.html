@@ -137,9 +137,48 @@
         <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/atom-one-dark.min.css">
         <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
 
+        <script>
+        if (typeof require !== 'undefined') {
+            const { ipcRenderer } = require('electron');
+            window.cheatingDaddy = window.cheatingDaddy || {};
+            
+            window.cheatingDaddy.storage = {
+                // Config
+                getConfig: () => ipcRenderer.invoke('storage:get-config'),
+                setConfig: (d) => ipcRenderer.invoke('storage:set-config', d),
+                updateConfig: (k, v) => ipcRenderer.invoke('storage:update-config', k, v),
+                // Credentials
+                getCredentials: () => ipcRenderer.invoke('storage:get-credentials'),
+                setCredentials: (d) => ipcRenderer.invoke('storage:set-credentials', d),
+                // Preferences
+                getPreferences: () => ipcRenderer.invoke('storage:get-preferences'),
+                setPreferences: (d) => ipcRenderer.invoke('storage:set-preferences', d),
+                updatePreference: (k, v) => ipcRenderer.invoke('storage:update-preference', k, v),
+                // Keybinds
+                getKeybinds: () => ipcRenderer.invoke('storage:get-keybinds'),
+                setKeybinds: (d) => ipcRenderer.invoke('storage:set-keybinds', d),
+                // History & Sessions (Fixes the HistoryView crash!)
+                getAllSessions: () => ipcRenderer.invoke('storage:get-all-sessions'),
+                getSession: (id) => ipcRenderer.invoke('storage:get-session', id),
+                saveSession: (id, d) => ipcRenderer.invoke('storage:save-session', id, d),
+                deleteSession: (id) => ipcRenderer.invoke('storage:delete-session', id),
+                deleteAllSessions: () => ipcRenderer.invoke('storage:delete-all-sessions'),
+                // Limits & Wipes
+                getTodayLimits: () => ipcRenderer.invoke('storage:get-today-limits'),
+                clearAllData: () => ipcRenderer.invoke('storage:clear-all'),
+                
+                getApiKey: async () => "bypass-key-123"
+            };
+
+            window.cheatingDaddy.initializeGemini = async () => ({ success: true });
+            window.cheatingDaddy.startCapture = () => {};
+            window.cheatingDaddy.stopCapture = () => {};
+            window.cheatingDaddy.sendTextMessage = async () => ({ success: true });
+        }
+    </script>
+
         <script type="module" src="components/app/CheatingDaddyApp.js"></script>
 
         <cheating-daddy-app id="cheatingDaddy"></cheating-daddy-app>
-        <script src="utils/renderer.js"></script>
     </body>
 </html>

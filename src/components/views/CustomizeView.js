@@ -414,16 +414,10 @@ export class CustomizeView extends LitElement {
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
             await window.cheatingDaddy.storage.updatePreference(key, value);
             
-            if (key === 'theme' || key === 'backgroundTransparency') {
-                window.cheatingDaddy.theme.apply(this.prefs.theme, this.prefs.backgroundTransparency);
-            }
             if (key === 'fontSize') {
                 document.documentElement.style.setProperty('--response-font-size', `${value}px`);
-                if (window.cheatingDaddy.e()) window.cheatingDaddy.e().fontSize = value;
             }
-            if (key === 'backgroundTransparency') {
-                if (window.cheatingDaddy.e()) window.cheatingDaddy.e().bgTransparency = value;
-            }
+            
             this.triggerToast();
             window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key, value } }));
         }
