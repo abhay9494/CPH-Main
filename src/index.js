@@ -1793,25 +1793,58 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    // 🟢 NEW: SILENT PING (Hardware Caps Lock Flasher)
+    // 🟢 SAFE HIDE VARIABLES (Moved UP so the Ping system can read them!)
+    let isGhostHidden = false;
+    let wasAiVisibleBeforeGhost = false;
+
+    // 🟢 NEW: SILENT PING (ASUS Hardware WMI Backlight Flasher V2)
     ipcMain.on('ai-generation-complete', () => {
-        console.log("🔔 AI Generation Complete - Firing Caps Lock Ping!");
-        const flashCapsScript = `
-            $wsh = New-Object -ComObject WScript.Shell
-            for ($i=0; $i -lt 3; $i++) {
-                $wsh.SendKeys('{CAPSLOCK}')
-                Start-Sleep -Milliseconds 200
-                $wsh.SendKeys('{CAPSLOCK}')
-                Start-Sleep -Milliseconds 200
+        // 🚨 STRICT VISIBILITY CHECK: If the overlay is hidden, do absolutely nothing.
+        if (isGhostHidden || !mainWindow || mainWindow.getOpacity() === 0) {
+            console.log("🔕 AI Complete - Overlay is hidden, suppressing backlight ping.");
+            return;
+        }
+
+        console.log("🔔 AI Generation Complete - Firing ASUS Keyboard Backlight Ping!");
+        
+        // 🟢 THE BACKLIGHT PULSE: Taps directly into the ASUS Motherboard WMI (ACPI) Layer!
+        const flashBacklightScript = `
+            $namespace = "root/wmi"
+            
+            # Hunt for BOTH known Asus ACPI chips
+            $wmi = Get-CimInstance -Namespace $namespace -ClassName "AsusAtkWmi_WMNB" -ErrorAction SilentlyContinue
+            if (!$wmi) { $wmi = Get-CimInstance -Namespace $namespace -ClassName "AsusAtkWmi" -ErrorAction SilentlyContinue }
+            
+            $dev = [uint32]327713  # 0x00050021 (ASUS Device ID for Keyboard Backlight)
+            
+            if ($wmi) {
+                for ($i=0; $i -lt 3; $i++) {
+                    # Force OFF (Try both raw 0 and ASUS bitmask 128)
+                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]128} -ErrorAction SilentlyContinue | Out-Null
+                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]0} -ErrorAction SilentlyContinue | Out-Null
+                    Start-Sleep -Milliseconds 200
+                    
+                    # Force ON / High (Try both raw 3 and ASUS bitmask 131)
+                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]131} -ErrorAction SilentlyContinue | Out-Null
+                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]3} -ErrorAction SilentlyContinue | Out-Null
+                    Start-Sleep -Milliseconds 250
+                }
+                # Restore to medium
+                Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]129} -ErrorAction SilentlyContinue | Out-Null
+            } else {
+                # Hardware Fallback: If still blocked by Windows, flash Caps Lock
+                $wsh = New-Object -ComObject WScript.Shell
+                for ($i=0; $i -lt 3; $i++) {
+                    $wsh.SendKeys('{CAPSLOCK}'); Start-Sleep -Milliseconds 200
+                    $wsh.SendKeys('{CAPSLOCK}'); Start-Sleep -Milliseconds 250
+                }
             }
         `;
-        spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-Command', flashCapsScript]);
+        
+        spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', flashBacklightScript]);
     });
 
     // 🟢 SAFE HIDE: Flawless OS-Level Stealth using Opacity to prevent Focus Stealing
-    let isGhostHidden = false;
-    let wasAiVisibleBeforeGhost = false; // 🟢 NEW: Memory Variable
-    
     ipcMain.handle('trigger-ghost-hide', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
