@@ -180,10 +180,24 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     });
 
     let isStealthHidden = false;
+    let wasAiVisibleBeforeShortcut = false; // 🟢 NEW: Memory Variable
+
     register('toggleVisibility', keybinds.toggleVisibility, () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isStealthHidden = !isStealthHidden;
             if (isStealthHidden) {
+                // 🟢 Record AI window state BEFORE hiding everything
+                let aiWin = BrowserWindow.getAllWindows().find(w => 
+                    !w.isDestroyed() && w !== mainWindow && 
+                    (w.webContents.getURL().includes('chatgpt') || w.webContents.getURL().includes('gemini') || w.webContents.getURL().includes('grok'))
+                );
+                
+                if (aiWin) {
+                    wasAiVisibleBeforeShortcut = aiWin.isVisible() && aiWin.getOpacity() !== 0;
+                } else {
+                    wasAiVisibleBeforeShortcut = false;
+                }
+
                 // 🟢 FIX: Opacity 0 + ClickThrough ensures ZERO OS-level focus steal!
                 mainWindow.setOpacity(0);
                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -200,9 +214,21 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 mainWindow.webContents.send('app-made-visible');
 
                 BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed() && w !== mainWindow && !w.webContents.getURL().includes('chatgpt') && !w.webContents.getURL().includes('gemini') && !w.webContents.getURL().includes('grok')) {
-                        w.setOpacity(1);
-                        w.setIgnoreMouseEvents(false);
+                    if (!w.isDestroyed() && w !== mainWindow) {
+                        const url = w.webContents.getURL() || "";
+                        const isAiWindow = url.includes('chatgpt') || url.includes('gemini') || url.includes('grok');
+
+                        if (isAiWindow) {
+                            // 🟢 Only restore the AI window if it was visible before
+                            if (wasAiVisibleBeforeShortcut) {
+                                w.setOpacity(1);
+                                w.setIgnoreMouseEvents(false);
+                            }
+                        } else {
+                            // Always restore other windows (like Companion chat)
+                            w.setOpacity(1);
+                            w.setIgnoreMouseEvents(false);
+                        }
                     }
                 });
             }

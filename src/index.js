@@ -208,13 +208,6 @@ function launchAIWindow() {
         }
     });
 
-    // 🐛 FIX 1: If you click outside the AI window, actively force it into a hidden state for stealth!
-    aiWebWindow.on('blur', () => {
-        if (!aiWebWindow.isDestroyed() && aiWebWindow.isVisible()) {
-            aiWebWindow.hide();
-        }
-    });
-
     // 🐛 FIX 2: Universal Sync! No matter HOW the window hides (X button, clicking outside, or Ctrl+\), update the UI!
     aiWebWindow.on('hide', () => {
         // console.log('👻 AI Window officially HIDDEN');
@@ -1817,10 +1810,19 @@ function setupGeneralIpcHandlers() {
 
     // 🟢 SAFE HIDE: Flawless OS-Level Stealth using Opacity to prevent Focus Stealing
     let isGhostHidden = false;
+    let wasAiVisibleBeforeGhost = false; // 🟢 NEW: Memory Variable
+    
     ipcMain.handle('trigger-ghost-hide', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
             if (isGhostHidden) {
+                // 🟢 Record AI window state BEFORE hiding
+                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
+                    wasAiVisibleBeforeGhost = aiWebWindow.isVisible() && aiWebWindow.getOpacity() !== 0;
+                } else {
+                    wasAiVisibleBeforeGhost = false;
+                }
+
                 mainWindow.setOpacity(0);
                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
@@ -1831,8 +1833,11 @@ function setupGeneralIpcHandlers() {
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(false);
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    aiWebWindow.setOpacity(1);
-                    aiWebWindow.setIgnoreMouseEvents(false);
+                    // 🟢 Only restore if it was explicitly open before
+                    if (wasAiVisibleBeforeGhost) {
+                        aiWebWindow.setOpacity(1);
+                        aiWebWindow.setIgnoreMouseEvents(false);
+                    }
                 }
             }
         }
