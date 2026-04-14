@@ -186,7 +186,7 @@ export class AssistantView extends LitElement {
         hasResumeContext: { type: Boolean },
         activeDropdown: { type: String },
         fontSize: { type: Number },
-        
+        typerDelay: { type: Number },        
         viewMode: { type: String }, 
         wpmSpeed: { type: Number },
         typingState: { type: String }, 
@@ -219,6 +219,7 @@ export class AssistantView extends LitElement {
         this.capturedCount = 0;
         this.currentProviderName = 'ChatGPT'; 
         this.isAiVisible = false;
+        this._isGhostHidden = false;
         this._isCurrentlyGhosting = false;
         this.isSolving = false;
         this.isMicOn = false;
@@ -234,7 +235,7 @@ export class AssistantView extends LitElement {
         this.activeDropdown = null;
         this.aiProfiles = [];
         this.fontSize = 13;
-
+        this.typerDelay = 5;
         this.viewMode = 'chat';
         this.wpmSpeed = 60;
         this.typingState = 'idle';
@@ -286,6 +287,14 @@ export class AssistantView extends LitElement {
         }
         if (e.detail && e.detail.key === 'backgroundTransparency') {
             this.bgTransparency = e.detail.value;
+        }
+        if (e.detail && e.detail.key === 'typerDelay') {
+            this.typerDelay = e.detail.value;
+            this.requestUpdate();
+        }
+        if (e.detail && e.detail.key === 'wpmSpeed') {
+            this.wpmSpeed = e.detail.value;
+            this.requestUpdate();
         }
     }
 
@@ -358,6 +367,8 @@ export class AssistantView extends LitElement {
                 // 🟢 FIX: Safely load starting values into fast local memory!
                 this.fontSize = prefs.fontSize ?? 13;
                 this.bgTransparency = prefs.backgroundTransparency ?? 0.8;
+                this.wpmSpeed = prefs.wpmSpeed || 60;
+                this.typerDelay = prefs.typerDelay ?? 5;
                 this.style.setProperty('--response-font-size', `${this.fontSize}px`);
                 
                 // 🟢 FIX: Restoring the Scroll Edges so you can scroll in Ghost Mode!
@@ -408,7 +419,11 @@ export class AssistantView extends LitElement {
                 this.requestUpdate();
             });
 
+            ipcRenderer.on('app-made-hidden', () => {
+                this._isGhostHidden = true;
+            });
             this.handleAppMadeVisible = () => {
+                this._isGhostHidden = false;
                 if (this.currentMode !== 'proctored_oa') {
                     ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
                 }
@@ -436,9 +451,20 @@ export class AssistantView extends LitElement {
             });
 
             ipcRenderer.on('typing-status', (event, status) => {
-                if (!status) { 
-                    this.typingState = 'idle'; 
-                    this.requestUpdate(); 
+                if (!status) {
+                    // 🟢 AUTO-CLOSE & UNLOCK: If it finished typing all lines!
+                    if (this.typingState === 'typing' && this.typingCurrentLineIndex >= (this.typerEndLine - this.typerStartLine)) {
+                        this.viewMode = 'chat';
+                        window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
+                        this.showToast('✅ Typing Complete');
+                        if (window.require && this.currentMode !== 'proctored_oa') {
+                            window.require('electron').ipcRenderer.invoke('show-widget');
+                        }
+                    } else if (this.typingState === 'typing') {
+                        this.showToast('⏸️ Auto-Typer Paused');
+                    }
+                    this.typingState = 'idle';
+                    this.requestUpdate();
                 }
             });
 
@@ -524,6 +550,11 @@ export class AssistantView extends LitElement {
                 const action = this.hotCornersMap[zone];
                 if (!action || action === 'none') return;
 
+                // 🚨 STRICT STEALTH LOCKOUT: If the overlay is hidden, ignore ALL corners except the unhide trigger!
+                if (this._isGhostHidden && action !== 'hide_unhide') {
+                    return;
+                }
+
                 // 🚨 INSTANT VISUAL LOCKOUT: Stop the bar from filling and drop warning instantly!
                 const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic', 'auto_type'];
                 if (this.isSolving && lockedActions.includes(action)) {
@@ -532,7 +563,14 @@ export class AssistantView extends LitElement {
                 }
 
                 const bounds = this.hotCornerBounds || { dwellTime: 3, hideTime: 0 };
-                const targetTimeMs = (action === 'hide_unhide') ? ((bounds.hideTime || 0) * 1000) : ((bounds.dwellTime || 3) * 1000);
+                
+                // 🟢 SMART TIMERS: Instant Pause, Delayed Unhide, Standard Dwell
+                let targetTimeMs = (bounds.dwellTime || 3) * 1000;
+                if (action === 'hide_unhide') {
+                    targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
+                } else if (action === 'auto_type' && this.typingState !== 'idle') {
+                    targetTimeMs = 0; // 🚨 INSTANT PAUSE: Slam the brakes immediately!
+                }
 
                 if (targetTimeMs === 0) {
                     this.hoverProgress = 100;
@@ -614,26 +652,44 @@ export class AssistantView extends LitElement {
 
             // Add this inside the switch(action) block:
             case 'auto_type':
-                this.showToast('⌨️ Auto-Type Triggered');
-                // Blind payload extraction: grab the absolute latest message
-                const lastMsg = this.localChatHistory[this.localChatHistory.length - 1] || '';
-                const parts = lastMsg.split('🤖 AI:\n');
-                if (parts.length > 1) {
-                    let codeText = parts[1].trim();
-                    // Strip the language tag if markdown slipped through
-                    codeText = codeText.replace(/```(c\+\+|python|java|javascript|js|cpp)?/gi, '').replace(/```/g, '').trim();
-                    this.typerCodeLines = codeText.split('\n');
-                    this.typerStartLine = 0;
-                    this.typerEndLine = this.typerCodeLines.length - 1;
-                    
-                    // Force the UI into Typer mode and instantly start the 5-second physical countdown!
-                    this.viewMode = 'typer';
-                    window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: true }));
-                    this.requestUpdate();
-                    
-                    setTimeout(() => this.startTyperCountdown(), 100);
+                if (this.typingState !== 'idle') {
+                    // 🛑 IT IS RUNNING -> STOP IT
+                    this.showToast('🛑 Auto-Type Paused');
+                    this.handleStopTyping();
                 } else {
-                    this.showToast('⚠️ No payload ready');
+                    // ▶️ IT IS IDLE -> START IT
+                    // Blind payload extraction: grab the absolute latest message
+                    const lastMsg = this.localChatHistory[this.localChatHistory.length - 1] || '';
+                    const parts = lastMsg.split('🤖 AI:\n');
+                    
+                    if (parts.length > 1) {
+                        let codeText = parts[1].trim();
+                        // Strip the language tag if markdown slipped through
+                        codeText = codeText.replace(/```(c\+\+|python|java|javascript|js|cpp)?/gi, '').replace(/```/g, '').trim();
+                        const newLines = codeText.split('\n');
+                        
+                        // 🟢 SMART RESUME: Check if this is the exact same payload we just paused!
+                        const isSamePayload = this.typerCodeLines && this.typerCodeLines.join('\n') === newLines.join('\n');
+                        
+                        // If it's a brand new AI response, reset the start line to 0
+                        if (!isSamePayload) {
+                            this.typerCodeLines = newLines;
+                            this.typerStartLine = 0;
+                            this.typerEndLine = this.typerCodeLines.length - 1;
+                            this.typingCurrentLineIndex = 0;
+                        }
+
+                        this.showToast(isSamePayload ? '⌨️ Resuming Auto-Type' : '⌨️ Auto-Type Started');
+
+                        // Force the UI into Typer mode and instantly start the 5-second physical countdown!
+                        this.viewMode = 'typer';
+                        window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: true }));
+                        this.requestUpdate();
+
+                        setTimeout(() => this.startTyperCountdown(), 100);
+                    } else {
+                        this.showToast('⚠️ No payload ready');
+                    }
                 }
                 break;
 
@@ -1051,18 +1107,34 @@ export class AssistantView extends LitElement {
     startTyperCountdown() {
         if (!window.require || this.typingState !== 'idle') return;
         
-        this.typingState = 'countdown';
-        this.typingCountdown = 5;
+        // 🟢 MEMORY INJECTION: Advance the start line to where we last paused!
+        if (this.typingCurrentLineIndex > 0) {
+            this.typerStartLine += this.typingCurrentLineIndex;
+        }
         this.typingCurrentLineIndex = 0;
-        window.dispatchEvent(new CustomEvent('typing-state-changed', { detail: { state: 'countdown', count: 5 } }));
-        this.requestUpdate();
         
+        this.typingState = 'countdown';
+        this.typingCountdown = this.typerDelay; // 🟢 Uses the new Settings Slider!
+        
+        // ⚡ If delay is 0, start typing immediately without the countdown phase
+        if (this.typingCountdown <= 0) {
+            this.typingState = 'typing';
+            window.dispatchEvent(new CustomEvent('typing-state-changed', { detail: { state: 'typing' } }));
+            this.requestUpdate();
+            const payloadCode = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
+            window.require('electron').ipcRenderer.send('start-auto-type', payloadCode, this.wpmSpeed);
+            return;
+        }
+
+        window.dispatchEvent(new CustomEvent('typing-state-changed', { detail: { state: 'countdown', count: this.typingCountdown } }));
+        this.requestUpdate();
+
         const tick = () => {
-            if (this.typingState !== 'countdown') return; 
+            if (this.typingState !== 'countdown') return;
             this.typingCountdown--;
             window.dispatchEvent(new CustomEvent('typing-state-changed', { detail: { state: 'countdown', count: this.typingCountdown } }));
             this.requestUpdate();
-            
+
             if (this.typingCountdown > 0) {
                 this.typeTimer = setTimeout(tick, 1000);
             } else {
@@ -1413,9 +1485,16 @@ export class AssistantView extends LitElement {
                     <div class="control-row">
                         <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-secondary); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color);">
                             <span style="font-size: 11px; color: var(--text-color); font-weight: bold;">Speed: ${this.wpmSpeed}</span>
-                            <input type="range" min="10" max="180" step="10" .value=${this.wpmSpeed} @input=${(e) => { this.wpmSpeed = parseInt(e.target.value); this.requestUpdate(); }} style="width: 80px; accent-color: #a142f4; background: transparent;">
+                            <input type="range" min="10" max="180" step="10" .value=${this.wpmSpeed} @input=${(e) => {
+                                this.wpmSpeed = parseInt(e.target.value);
+                                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                                    window.cheatingDaddy.storage.updatePreference('wpmSpeed', this.wpmSpeed);
+                                    window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'wpmSpeed', value: this.wpmSpeed } }));
+                                }
+                                this.requestUpdate();
+                            }} style="width: 80px; accent-color: #a142f4; background: transparent;">
                         </div>
-                        
+
                         ${this.typingState === 'idle' ? html`
                             <button class="action-btn success" @click=${this.startTyperCountdown}>
                                 ▶ Start Typing

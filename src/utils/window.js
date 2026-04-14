@@ -200,6 +200,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
                 // 🟢 FIX: Opacity 0 + ClickThrough ensures ZERO OS-level focus steal!
                 mainWindow.setOpacity(0);
+                mainWindow.webContents.send('app-made-hidden');
                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 
                 BrowserWindow.getAllWindows().forEach(w => {
@@ -216,16 +217,16 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 BrowserWindow.getAllWindows().forEach(w => {
                     if (!w.isDestroyed() && w !== mainWindow) {
                         const url = w.webContents.getURL() || "";
-                        const isAiWindow = url.includes('chatgpt') || url.includes('gemini') || url.includes('grok');
+                        // 🟢 FIX: Let the frontend exclusively manage the Widget visibility!
+                        if (url.includes('widget.html')) return; 
 
+                        const isAiWindow = url.includes('chatgpt') || url.includes('gemini') || url.includes('grok');
                         if (isAiWindow) {
-                            // 🟢 Only restore the AI window if it was visible before
                             if (wasAiVisibleBeforeShortcut) {
                                 w.setOpacity(1);
                                 w.setIgnoreMouseEvents(false);
                             }
                         } else {
-                            // Always restore other windows (like Companion chat)
                             w.setOpacity(1);
                             w.setIgnoreMouseEvents(false);
                         }

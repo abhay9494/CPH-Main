@@ -1849,7 +1849,8 @@ function setupGeneralIpcHandlers() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
             if (isGhostHidden) {
-                // 🟢 Record AI window state BEFORE hiding
+                mainWindow.webContents.send('app-made-hidden'); // 🟢 SYNC FRONTEND
+                
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
                     wasAiVisibleBeforeGhost = aiWebWindow.isVisible() && aiWebWindow.getOpacity() !== 0;
                 } else {
@@ -1863,10 +1864,11 @@ function setupGeneralIpcHandlers() {
                     aiWebWindow.setIgnoreMouseEvents(true, { forward: true });
                 }
             } else {
+                mainWindow.webContents.send('app-made-visible'); // 🟢 SYNC FRONTEND
+                
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(false);
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    // 🟢 Only restore if it was explicitly open before
                     if (wasAiVisibleBeforeGhost) {
                         aiWebWindow.setOpacity(1);
                         aiWebWindow.setIgnoreMouseEvents(false);
