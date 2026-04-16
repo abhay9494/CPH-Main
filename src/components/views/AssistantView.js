@@ -373,7 +373,7 @@ export class AssistantView extends LitElement {
                 this.aiProfiles = prefs.aiProfiles || [];
                 this.currentProfileId = prefs.lastProfileId || (this.aiProfiles.length > 0 ? this.aiProfiles[0].id : null);
                 this.hasResumeContext = !!(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
-                this.hotCornerBounds = prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40, dwellTime: 3, hideTime: 0 };
+                this.hotCornerBounds = prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
                 
                 // 🟢 Safely load starting values into fast local memory!
                 this.fontSize = prefs.fontSize ?? 13;
@@ -596,7 +596,12 @@ export class AssistantView extends LitElement {
                 let targetTimeMs = (bounds.dwellTime || 3) * 1000;
 
                 if (action === 'hide_unhide') targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
-                else if (action === 'auto_type' && this.typingState !== 'idle') targetTimeMs = 0;
+                else if (action === 'auto_type') {
+                    // 🟢 FIX: Ignore hover completely if it is counting down so it doesn't instantly cancel!
+                    if (this.typingState === 'countdown') return;
+                    // 🟢 FIX: Only trigger the 0-second instant pause if it is actively typing.
+                    if (this.typingState === 'typing') targetTimeMs = 0; 
+                }
 
                 if (targetTimeMs === 0) {
                     this.hoverProgress = 100;
@@ -609,11 +614,13 @@ export class AssistantView extends LitElement {
                     this.requestUpdate();
 
                     if (this.hoverProgress >= 100) {
-                        // 🟢 EXPANDED CONTINUOUS HOLD LOGIC FOR RECOVERY ACTIONS
-                        if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
+                        // 🟢 EXPANDED CONTINUOUS HOLD LOGIC (Now includes scroll, opacity, and text size)
+                        const continuousActions = ['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom', 'scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'];
+                        
+                        if (continuousActions.includes(action)) {
                             this.hoverProgress = 100; 
                             this.trimTick++;
-                            if (this.trimTick >= 10) { 
+                            if (this.trimTick >= 6) { // 🟢 Fires every 300ms for smooth controlled scrolling/zooming
                                 this.executeHotCorner(action);
                                 this.trimTick = 0;
                             }

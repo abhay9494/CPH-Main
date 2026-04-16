@@ -292,12 +292,12 @@ export class AppHeader extends LitElement {
     }
 
     render() {
+        // 🟢 FIX: Capture the original mode state BEFORE we change the display title!
+        const isOA = (this.title || '').includes('Proctored');
+
         let displayTitle = this.title || 'CP Helper 20';
         if (this.isTyperMode) displayTitle = 'CP Helper 20 - Auto Typer';
         if (this.isHelpingMode) displayTitle = 'CP Helper 20 - Helping Other';
-
-        // 🟢 FIX: Check if we are in Proctored OA mode based on the title
-        const isOA = displayTitle.includes('Proctored');
 
         return html`
             <div class="header">

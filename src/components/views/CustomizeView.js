@@ -544,7 +544,8 @@ export class CustomizeView extends LitElement {
             'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
             'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜',
             'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️', 
-            'auto_type': '⌨️', 'trim_top': '✂️ Top', 'trim_bottom': '✂️ Bot', 'abort_typer': '🛑', 'abort_oa': '🚪'
+            'auto_type': '⌨️', 'trim_top': '✂️ Top', 'trim_bottom': '✂️ Bot', 'abort_typer': '🛑', 'abort_oa': '🚪',
+            'expand_top': '➕ Top', 'expand_bottom': '➕ Bot', 'reset_typer': '🔄 Reset' // 🟢 FIX: Added missing grid labels
         };
         return labels[action] || '—';
     }
@@ -754,7 +755,7 @@ export class CustomizeView extends LitElement {
                     {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'}
                 ];
                 
-                const b = this.prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
+                const b = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
                 const currentCorners = this.prefs.hotCorners || {};
 
                 let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
@@ -794,7 +795,7 @@ export class CustomizeView extends LitElement {
                             ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'hotCorners')}
 
                             <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
-                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">ZONE CONFIG</h3>
+                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
                                     <div class="slider-row">
                                         <label><span>Corner %</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
@@ -812,21 +813,9 @@ export class CustomizeView extends LitElement {
                                         <label><span>L/R Height</span> <span style="color: #00cc66;">${b.centerY}%</span></label>
                                         <input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerY: parseInt(e.target.value)})}>
                                     </div>
-                                    <div class="slider-row">
+                                    <div class="slider-row" style="grid-column: span 2;">
                                         <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label>
                                         <input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...b, hideTime: parseFloat(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label>
-                                        <input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => this.savePref('typerDelay', parseInt(e.target.value))}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60}</span></label>
-                                        <input type="range" min="10" max="180" step="10" .value=${this.prefs.wpmSpeed || 60} @input=${(e) => this.savePref('wpmSpeed', parseInt(e.target.value))}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Mistakes</span> <span style="color: #f14c4c;">${this.prefs.typerMistakes ?? 2}%</span></label>
-                                        <input type="range" min="0" max="15" step="1" .value=${this.prefs.typerMistakes ?? 2} @input=${(e) => this.savePref('typerMistakes', parseInt(e.target.value))}>
                                     </div>
                                 </div>
                             </div>
@@ -872,7 +861,7 @@ export class CustomizeView extends LitElement {
                     {value: 'scroll_down', label: '⬇️ Scroll Down'}
                 ];
                 
-                const tb = this.prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
+                const tb = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
                 let tMidX = Math.max(0, (100 - (2 * tb.cornerSize) - tb.centerX) / 2);
                 let tMidY = Math.max(0, (100 - (2 * tb.cornerSize) - tb.centerY) / 2);
                 const tGridCols = `${tb.cornerSize}fr ${tMidX}fr ${tb.centerX}fr ${tMidX}fr ${tb.cornerSize}fr`;
@@ -906,8 +895,21 @@ export class CustomizeView extends LitElement {
                             ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'typerHotCorners')}
                             
                             <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
-                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center;">ZONE CONFIG</h3>
-                                <p style="font-size: 10px; color: #ccc; text-align: center;">(Geometry syncs with OA Corners tab)</p>
+                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">TYPER SETTINGS</h3>
+                                <div style="display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%;">
+                                    <div class="slider-row">
+                                        <label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label>
+                                        <input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => this.savePref('typerDelay', parseInt(e.target.value))}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60}</span></label>
+                                        <input type="range" min="10" max="180" step="10" .value=${this.prefs.wpmSpeed || 60} @input=${(e) => this.savePref('wpmSpeed', parseInt(e.target.value))}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Mistakes</span> <span style="color: #f14c4c;">${this.prefs.typerMistakes ?? 2}%</span></label>
+                                        <input type="range" min="0" max="15" step="1" .value=${this.prefs.typerMistakes ?? 2} @input=${(e) => this.savePref('typerMistakes', parseInt(e.target.value))}>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
