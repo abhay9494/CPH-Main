@@ -1295,7 +1295,8 @@ export class AssistantView extends LitElement {
                 window.dispatchEvent(new CustomEvent('typing-state-changed', { detail: { state: 'typing' } }));
                 this.requestUpdate();
                 const payloadCode = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
-                window.require('electron').ipcRenderer.send('start-auto-type', payloadCode, this.wpmSpeed);
+                // 🟢 FIX: Send the mistake chance to PowerShell so it doesn't crash instantly!
+                window.require('electron').ipcRenderer.send('start-auto-type', payloadCode, this.wpmSpeed, this.typerMistakes);
             }
         };
         this.typeTimer = setTimeout(tick, 1000);

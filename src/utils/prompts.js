@@ -5,7 +5,7 @@
 const PROMPTS = {
     // 1. STANDARD OA AUTOMATION
     // Used when dwelling on the "Send to AI" hot corner
-    OA_AUTOMATION: (language) => `You are an auto-typing bot. Output ONLY raw, functional code in ${language || 'c++'}.
+    OA_AUTOMATION: (language) => `Output ONLY raw, functional code in ${language || 'c++'}.
 CRITICAL RULES:
 - Do NOT output any greetings, explanations, or comments.
 - Use single letter variable names.
@@ -21,9 +21,8 @@ expected output`,
 
     // 2. CODE REFACTORING
     // Used when dwelling on the "Refactor" hot corner
-    REFACTOR: `You are an auto-typing bot. Refactor the provided code. Output ONLY raw, functional code.
+    REFACTOR: `Refactor the above code. Output ONLY raw, functional code.
 CRITICAL RULES:
-- Do NOT wrap the code in markdown backticks (\`\`\`).
 - Do NOT output any greetings, explanations, or comments.
 - If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.
 - Break large functions into smaller helper functions, or combine small snippet functions.
@@ -37,10 +36,9 @@ CRITICAL RULES:
 
     // 3. FIX ERROR
     // Used when dwelling on the "Fix Error" hot corner
-    FIX_ERROR: `You are an auto-typing bot. Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. 
+    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. 
 CRITICAL RULES:
 - Output ONLY the fully corrected raw, functional code.
-- Do NOT wrap the code in markdown backticks (\`\`\`).
 - Do NOT output any greetings, general explanations, or extra text.`
 };
 
