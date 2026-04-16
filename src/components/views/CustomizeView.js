@@ -896,10 +896,14 @@ export class CustomizeView extends LitElement {
                             
                             <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
                                 <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">TYPER SETTINGS</h3>
-                                <div style="display: grid; grid-template-columns: 1fr; gap: 8px; width: 100%;">
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
                                     <div class="slider-row">
                                         <label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label>
                                         <input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => this.savePref('typerDelay', parseInt(e.target.value))}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Select Speed</span> <span style="color: #00cc66;">${this.prefs.typerSelectionSpeed ?? 0.5}s</span></label>
+                                        <input type="range" min="0.1" max="2.0" step="0.1" .value=${this.prefs.typerSelectionSpeed ?? 0.5} @input=${(e) => this.savePref('typerSelectionSpeed', parseFloat(e.target.value))}>
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60}</span></label>

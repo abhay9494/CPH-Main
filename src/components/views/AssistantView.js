@@ -303,8 +303,12 @@ export class AssistantView extends LitElement {
             this.wpmSpeed = e.detail.value;
             this.requestUpdate();
         }
-        if (e.detail && e.detail.key === 'typerMistakes') { // 🟢 NEW
+        if (e.detail && e.detail.key === 'typerMistakes') { 
             this.typerMistakes = e.detail.value;
+            this.requestUpdate();
+        }
+        if (e.detail && e.detail.key === 'typerSelectionSpeed') { // 🟢 Sync the new slider
+            this.typerSelectionSpeed = e.detail.value;
             this.requestUpdate();
         }
     }
@@ -381,6 +385,7 @@ export class AssistantView extends LitElement {
                 this.wpmSpeed = prefs.wpmSpeed || 60;
                 this.typerDelay = prefs.typerDelay ?? 5;
                 this.typerMistakes = prefs.typerMistakes ?? 2;
+                this.typerSelectionSpeed = prefs.typerSelectionSpeed ?? 0.5; // 🟢 Load the new setting
                 this.style.setProperty('--response-font-size', `${this.fontSize}px`);
                 
                 // 🟢 LOAD THE DUAL BRAINS
@@ -620,7 +625,15 @@ export class AssistantView extends LitElement {
                         if (continuousActions.includes(action)) {
                             this.hoverProgress = 100; 
                             this.trimTick++;
-                            if (this.trimTick >= 6) { // 🟢 Fires every 300ms for smooth controlled scrolling/zooming
+                            
+                            // 🟢 DYNAMIC SPEED MATH
+                            let ticksReq = 6; // Default 300ms for scrolling/opacity
+                            if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
+                                // 50ms per tick. If slider is 0.5s, ticksReq = 10.
+                                ticksReq = Math.max(1, Math.round((this.typerSelectionSpeed || 0.5) * 1000 / 50)); 
+                            }
+
+                            if (this.trimTick >= ticksReq) { 
                                 this.executeHotCorner(action);
                                 this.trimTick = 0;
                             }
@@ -692,13 +705,31 @@ export class AssistantView extends LitElement {
             case 'send_ai': this.showToast('🚀 Firing to AI'); this.handleSendToAI(); break;
             case 'fix_error': this.showToast('🔧 Fixing Error...'); this.handleFixError(); break;
             case 'hide_unhide': this.showToast('👻 Toggled Stealth'); window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
-            case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); break;
-            case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
+            // case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); break;
+            // case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
+            case 'scroll_up':
+                if (this.viewMode === 'typer') {
+                    this.shadowRoot.querySelector('.typer-code-container')?.scrollBy({top: -150, behavior: 'smooth'});
+                } else {
+                    this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'});
+                }
+                break;
+            case 'scroll_down':
+                if (this.viewMode === 'typer') {
+                    this.shadowRoot.querySelector('.typer-code-container')?.scrollBy({top: 150, behavior: 'smooth'});
+                } else {
+                    this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'});
+                }
+                break;
             case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
             case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
 
             // Add this inside the switch(action) block:
             case 'auto_type':
+                // 🟢 HARDWARE COOLDOWN: Prevent accidental double-triggers from mouse wiggling
+                if (Date.now() - (this._lastAutoTypeToggle || 0) < 2000) return;
+                this._lastAutoTypeToggle = Date.now();
+
                 if (this.viewMode === 'chat') {
                     // ▶️ WE ARE IN CHAT: SWITCH TO TYPER, DO NOT START
                     const lastMsg = this.localChatHistory[this.localChatHistory.length - 1] || '';
