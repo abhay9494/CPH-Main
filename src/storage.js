@@ -34,11 +34,11 @@ const DEFAULT_PREFERENCES = {
         bottom_left: 'send_ai', bottom_mid_left: 'reset', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'auto_type'
     },
     hotCornersPage2: {
-        top_left: 'text_inc', top_mid_left: 'text_dec', top_center: 'none', top_mid_right: 'bg_inc', top_right: 'bg_dec',
-        left_mid_top: 'language', right_mid_top: 'mic',
-        middle_left: 'change_profile', middle_right: 'none',
-        left_mid_bottom: 'none', right_mid_bottom: 'none',
-        bottom_left: 'none', bottom_mid_left: 'none', bottom_center: 'none', bottom_mid_right: 'toggle_page2', bottom_right: 'none'
+        top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',
+        left_mid_top: 'bg_inc', right_mid_top: 'text_inc',
+        middle_left: 'change_profile', middle_right: 'language',
+        left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec',
+        bottom_left: 'send_ai', bottom_mid_left: 'mic', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'auto_type'
     },
     typerHotCorners: { 
         top_left: 'abort_oa', top_mid_left: 'none', top_center: 'scroll_up', top_mid_right: 'none', top_right: 'hide_unhide',

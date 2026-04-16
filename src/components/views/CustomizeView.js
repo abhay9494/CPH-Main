@@ -543,13 +543,14 @@ export class CustomizeView extends LitElement {
 
     getShortLabel(action) {
         const labels = {
-            'none': '—', 'capture': '📸', 'send_ai': '🚀', 'hide_unhide': '👻',
-            'scroll_up': '⬆️', 'scroll_down': '⬇️', 'prev_resp': '◀', 'next_resp': '▶',
-            'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
-            'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜',
-            'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️', 
-            'auto_type': '⌨️', 'trim_top': '✂️ Top', 'trim_bottom': '✂️ Bot', 'abort_typer': '🛑', 'abort_oa': '🚪',
-            'expand_top': '➕ Top', 'expand_bottom': '➕ Bot', 'reset_typer': '🔄 Reset' // 🟢 FIX: Added missing grid labels
+            'none': '—',              'capture': '📸',         'send_ai': '🚀',        'hide_unhide': '👻',
+            'scroll_up': '⬆️',       'scroll_down': '⬇️',      'prev_resp': '◀',       'next_resp': '▶',
+            'change_ai': '🤖',       'change_profile': '👤',   'fast_think': '⚡🧠',     'refactor': '🛠️',
+            'reset': '✨',           'text_inc': 'A+',         'text_dec': 'A-',        'bg_inc': '⬛',      'bg_dec': '⬜',
+            'fix_error': '🔧',       'language': '💻',         'mic': '🎙️',            'toggle_ai_vis': '👁️', 
+            'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
+            'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
+            'toggle_page2': '🔄'
         };
         return labels[action] || '—';
     }
@@ -783,9 +784,11 @@ export class CustomizeView extends LitElement {
                             Click any zone on the screen to assign an action. Drag the sliders in the center to physically adjust your hitboxes in real-time.
                         </p>
 
-                        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
-                            <button class="action-btn ${this.editingPage === 1 ? 'selected' : ''}" style="${this.editingPage === 1 ? 'background: #4285f4; color: white; border-color: #4285f4;' : ''}" @click=${() => { this.editingPage = 1; this.requestUpdate(); }}>📄 Page 1 (Primary)</button>
-                            <button class="action-btn ${this.editingPage === 2 ? 'selected' : ''}" style="${this.editingPage === 2 ? 'background: #a142f4; color: white; border-color: #a142f4;' : ''}" @click=${() => { this.editingPage = 2; this.requestUpdate(); }}>📄 Page 2 (Shift)</button>
+                        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+                            <div style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
+                                <button @click=${() => { this.editingPage = 1; this.requestUpdate(); }} style="background: ${this.editingPage === 1 ? '#4285f4' : 'transparent'}; color: ${this.editingPage === 1 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: default !important; transition: 0.2s;">📄 Page 1 (Primary)</button>
+                                <button @click=${() => { this.editingPage = 2; this.requestUpdate(); }} style="background: ${this.editingPage === 2 ? '#a142f4' : 'transparent'}; color: ${this.editingPage === 2 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: default !important; transition: 0.2s;">📄 Page 2 (Shift)</button>
+                            </div>
                         </div>
                         
                         <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
@@ -839,7 +842,7 @@ export class CustomizeView extends LitElement {
                         </div>
                     </div>
 
-                    ${this.editingZone && this.editingMap === 'hotCorners' ? html`
+                    ${this.editingZone && (this.editingMap === 'hotCorners' || this.editingMap === 'hotCornersPage2') ? html`
                         <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
                         <div class="zone-editor-modal">
                             <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Action</h3>
@@ -850,7 +853,8 @@ export class CustomizeView extends LitElement {
                                     <button class="action-select-btn ${currentCorners[this.editingZone] === act.value ? 'selected' : ''}"
                                         @click=${() => {
                                             const newCorners = { ...currentCorners, [this.editingZone]: act.value };
-                                            this.savePref('hotCorners', newCorners);
+                                            // 🟢 FIX: Save to the active map dynamically!
+                                            this.savePref(this.editingMap, newCorners);
                                             this.editingZone = null;
                                         }}>
                                         ${act.label}
