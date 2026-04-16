@@ -4,9 +4,12 @@ const fs = require('node:fs');
 const os = require('os');
 const storage = require('../storage');
 
-let mouseEventsIgnored = false;
+// let mouseEventsIgnored = false;
+global.isOAModeActive = false;
 let windowResizing = false;
 let resizeAnimation = null;
+// let isOAModeActive = false; // 🟢 Tracks if Proctored OA is active
+let isClickThroughState = false; // 🟢 Tracks the exact Click-Through state
 const RESIZE_ANIMATION_DURATION = 500; // milliseconds
 
 // 🐛 FIX: Declare this globally so the export at the bottom can read it!
@@ -129,6 +132,7 @@ function getDefaultKeybinds() {
         scrollUp: isMac ? 'Cmd+Shift+Up' : 'Ctrl+Shift+Up',
         scrollDown: isMac ? 'Cmd+Shift+Down' : 'Ctrl+Shift+Down',
         emergencyErase: isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E',
+        emergencyKill: isMac ? 'Cmd+Shift+Q' : 'Ctrl+Shift+Q', // 🟢 NEW: Instant Death
     };
 }
 
@@ -155,24 +159,28 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // ----------------------------------------------------
     const moveStep = 20;
     register('moveUp', keybinds.moveUp, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, y: bounds.y - moveStep });
         }
     });
     register('moveDown', keybinds.moveDown, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, y: bounds.y + moveStep });
         }
     });
     register('moveLeft', keybinds.moveLeft, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, x: bounds.x - moveStep });
         }
     });
     register('moveRight', keybinds.moveRight, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, x: bounds.x + moveStep });
@@ -183,6 +191,8 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     let wasAiVisibleBeforeShortcut = false; // 🟢 NEW: Memory Variable
 
     register('toggleVisibility', keybinds.toggleVisibility, () => {
+        if (global.isOAModeActive) return; // 🟢 NUKE SHORTCUT IN OA MODE
+
         if (mainWindow && !mainWindow.isDestroyed()) {
             isStealthHidden = !isStealthHidden;
             if (isStealthHidden) {
@@ -211,7 +221,14 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 });
             } else {
                 mainWindow.setOpacity(1);
-                mainWindow.setIgnoreMouseEvents(false);
+                
+                // 🟢 FIX: Restore the tracked click-through state instead of blindly setting it to false!
+                if (isClickThroughState) {
+                    mainWindow.setIgnoreMouseEvents(true, { forward: true });
+                } else {
+                    mainWindow.setIgnoreMouseEvents(false);
+                }
+                
                 mainWindow.webContents.send('app-made-visible');
 
                 BrowserWindow.getAllWindows().forEach(w => {
@@ -238,6 +255,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
     let isClickThrough = false;
     register('toggleClickThrough', keybinds.toggleClickThrough, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             isClickThrough = !isClickThrough;
             mainWindow.setIgnoreMouseEvents(isClickThrough, { forward: true });
@@ -249,6 +267,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 3. AI ACTIONS (Capture Screenshot)
     // ----------------------------------------------------
     register('nextStep', keybinds.nextStep, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             // Tells the UI to trigger handleCaptureScreenshot()
             mainWindow.webContents.send('execute-widget-action', 'capture');
@@ -259,9 +278,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 4. NAVIGATION (Responses)
     // ----------------------------------------------------
     register('previousResponse', keybinds.previousResponse, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-previous-response');
     });
     register('nextResponse', keybinds.nextResponse, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-next-response');
     });
 
@@ -269,9 +290,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 5. SCROLLING
     // ----------------------------------------------------
     register('scrollUp', keybinds.scrollUp, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-up');
     });
     register('scrollDown', keybinds.scrollDown, () => {
+        if (global.isOAModeActive) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-down');
     });
 
@@ -297,12 +320,34 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             app.quit(); // Force quit even if cleanup fails
         }
     });
+
+    register('emergencyKill', keybinds.emergencyKill, () => {
+        console.log("💀 EMERGENCY KILL TRIGGERED!");
+        app.exit(0); // 🟢 INSTANT KILL: Bypasses all teardown events and vanishes immediately.
+    });
 }
 
 function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     ipcMain.on('view-changed', (event, view) => {
         if (view !== 'assistant' && !mainWindow.isDestroyed()) {
             mainWindow.setIgnoreMouseEvents(false);
+        }
+    });
+
+    iipcMain.on('set-oa-mode', (event, isActive) => {
+        global.isOAModeActive = isActive;
+        if (isActive) global.isClickThroughState = true;
+    });
+
+    // 🟢 FIX: Intercept and track the ignore-mouse events here so the global shortcuts can read it!
+    ipcMain.removeAllListeners('set-ignore-mouse-events');
+    ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
+        global.isClickThroughState = ignore;
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+            win.setIgnoreMouseEvents(ignore, { forward: true });
+            // 🟢 BEAM THE STATE TO THE APP HEADER INDICATOR!
+            win.webContents.send('ghost-state-changed', ignore);
         }
     });
 

@@ -630,93 +630,78 @@ function createMainWindow() {
 // ==========================================================
 let autoTyperProcess = null;
 
-ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed) => {
+ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
     BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-status', true));
-
     let cleanCode = rawCode.replace(/^(c\+\+|python|java|javascript|js)\s*\n/i, '');
     const b64Code = Buffer.from(cleanCode).toString('base64');
-    
     const ps1Path = path.join(os.tmpdir(), 'cptyper.ps1');
+    
+    // 🟢 NEW: Powershell script now accepts the exact Mistake Chance percentage!
     const psScript = `
-        param([string]$b64, [int]$wpm)
-        Add-Type -AssemblyName System.Windows.Forms
-        $text = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
-        $chars = $text.ToCharArray()
-        
-        $baseDelay = [math]::Round(12000 / $wpm)
-        if ($baseDelay -lt 10) { $baseDelay = 10 }
-        
-        $lineIdx = 0
-        [Console]::WriteLine("LINE_0")
-        [Console]::Out.Flush()
-        
-        foreach ($c in $chars) {
-            $key = $c.ToString()
-            
-            if ($key -eq "\`r") { continue }
-            if ($key -eq "\`n") { 
-                [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-                Start-Sleep -Milliseconds 50
-                [System.Windows.Forms.SendKeys]::SendWait("x+{HOME}+{HOME}{BACKSPACE}")
-                Start-Sleep -Milliseconds ($baseDelay * 2)
-                
-                # 🟢 BEAM THE LINE PROGRESS TO THE FRONTEND
-                $lineIdx++
-                [Console]::WriteLine("LINE_$lineIdx")
-                [Console]::Out.Flush()
-                continue
-            } 
-            
-            if ('+^%~(){}[]'.Contains($key)) { 
-                $key = "{$key}" 
-            }
-            
-            if ($key -match '^[a-z]$') {
-                if ((Get-Random -Minimum 1 -Maximum 100) -le 2) {
-                    $wrongChars = "abcdefghijklmnopqrstuvwxyz"
-                    $wrong = $wrongChars[(Get-Random -Maximum 26)].ToString()
-                    [System.Windows.Forms.SendKeys]::SendWait($wrong)
-                    Start-Sleep -Milliseconds ($baseDelay + 50)
-                    [System.Windows.Forms.SendKeys]::SendWait("{BACKSPACE}")
-                    Start-Sleep -Milliseconds ($baseDelay + 50)
-                }
-            }
-            
-            [System.Windows.Forms.SendKeys]::SendWait($key)
-            
-            if ($c -eq '{' -or $c -eq '[' -or $c -eq '(' -or $c -eq '"' -or $c -eq "'") {
-                Start-Sleep -Milliseconds 40 
-                [System.Windows.Forms.SendKeys]::SendWait("{DELETE}")
-            }
-            
-            $variance = Get-Random -Minimum -10 -Maximum 10
-            $delay = $baseDelay + $variance
-            if ($delay -lt 10) { $delay = 10 }
-            Start-Sleep -Milliseconds $delay
+    param([string]$b64, [int]$wpm, [int]$mistakeChance)
+    Add-Type -AssemblyName System.Windows.Forms
+    $text = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
+    $chars = $text.ToCharArray()
+    $baseDelay = [math]::Round(12000 / $wpm)
+    if ($baseDelay -lt 10) { $baseDelay = 10 }
+    
+    $lineIdx = 0
+    [Console]::WriteLine("LINE_0")
+    [Console]::Out.Flush()
+    
+    foreach ($c in $chars) {
+        $key = $c.ToString()
+        if ($key -eq "\`r") { continue }
+        if ($key -eq "\`n") {
+            [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
+            Start-Sleep -Milliseconds 50
+            [System.Windows.Forms.SendKeys]::SendWait("x+{HOME}+{HOME}{BACKSPACE}")
+            Start-Sleep -Milliseconds ($baseDelay * 2)
+            $lineIdx++
+            [Console]::WriteLine("LINE_$lineIdx")
+            [Console]::Out.Flush()
+            continue
         }
+        if ('+^%~(){}[]'.Contains($key)) { $key = "{$key}" }
+        
+        if ($key -match '^[a-z]$') {
+            # 🟢 DRUNK TYPER: Mathematically applies your settings slider
+            if ((Get-Random -Minimum 1 -Maximum 100) -le $mistakeChance) {
+                $wrongChars = "abcdefghijklmnopqrstuvwxyz"
+                $wrong = $wrongChars[(Get-Random -Maximum 26)].ToString()
+                [System.Windows.Forms.SendKeys]::SendWait($wrong)
+                Start-Sleep -Milliseconds ($baseDelay + 50)
+                [System.Windows.Forms.SendKeys]::SendWait("{BACKSPACE}")
+                Start-Sleep -Milliseconds ($baseDelay + 50)
+            }
+        }
+        [System.Windows.Forms.SendKeys]::SendWait($key)
+        if ($c -eq '{' -or $c -eq '[' -or $c -eq '(' -or $c -eq '"' -or $c -eq "'") {
+            Start-Sleep -Milliseconds 40
+            [System.Windows.Forms.SendKeys]::SendWait("{DELETE}")
+        }
+        $variance = Get-Random -Minimum -10 -Maximum 10
+        $delay = $baseDelay + $variance
+        if ($delay -lt 10) { $delay = 10 }
+        Start-Sleep -Milliseconds $delay
+    }
     `;
     fs.writeFileSync(ps1Path, psScript);
+    if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
     
-    if (autoTyperProcess) {
-        try { autoTyperProcess.kill(); } catch(e){}
-    }
+    // Spawn with the new parameter
+    autoTyperProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance]);
     
-    autoTyperProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed]);
-    
-    // 🟢 CATCH THE LIVE POWERSHELL SIGNALS AND SEND THEM TO REACT
     autoTyperProcess.stdout.on('data', (data) => {
         const text = data.toString();
         const lines = text.split(/[\r\n]+/);
         lines.forEach(l => {
             if (l.startsWith('LINE_')) {
                 const idx = parseInt(l.replace('LINE_', ''));
-                if (!isNaN(idx)) {
-                    BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-progress', idx));
-                }
+                if (!isNaN(idx)) BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-progress', idx));
             }
         });
     });
-
     autoTyperProcess.on('close', () => {
         BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-status', false));
     });
@@ -1638,6 +1623,7 @@ function setupGeneralIpcHandlers() {
     // MINI WIDGET MANAGER
     // ==========================================================
     ipcMain.handle('show-widget', async () => {
+        if (global.isOAModeActive) return false;
         if (!widgetWindow || widgetWindow.isDestroyed()) {
             const { screen } = require('electron');
             const primaryDisplay = screen.getPrimaryDisplay();
@@ -1867,7 +1853,7 @@ function setupGeneralIpcHandlers() {
                 mainWindow.webContents.send('app-made-visible'); // 🟢 SYNC FRONTEND
                 
                 mainWindow.setOpacity(1);
-                mainWindow.setIgnoreMouseEvents(false);
+                mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
                     if (wasAiVisibleBeforeGhost) {
                         aiWebWindow.setOpacity(1);

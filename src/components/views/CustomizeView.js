@@ -22,12 +22,15 @@ export class CustomizeView extends LitElement {
         }
         .sidebar {
             width: 180px;
-            background: transparent; 
+            min-width: 180px; /* 🟢 FIX: Prevent squishing */
+            flex-shrink: 0; /* 🟢 FIX: Lock the width */
+            background: transparent;
             border-right: 1px solid var(--border-color);
-            display: flex;
-            flex-direction: column;
-            padding: 0; /* 🐛 FIX: Removed the 10px top gap */
+            display: block; /* 🟢 FIX: Changed from flex to block to force scrollbar visibility */
+            padding: 0;
+            padding-bottom: 25px; /* 🟢 FIX: Extra space at the bottom so the last tab isn't cut off */
             overflow-y: auto;
+            overflow-x: hidden;
         }
         .tab-btn {
             background: transparent;
@@ -321,15 +324,16 @@ export class CustomizeView extends LitElement {
             { id: 'capture', icon: '📸', label: 'Capture' },
             { id: 'shortcuts', icon: '⌨️', label: 'Shortcuts' },
             { id: 'hotcorners', icon: '🖱️', label: 'Hot Corners' },
+            { id: 'typercorners', icon: '🎯', label: 'Typer Corners' },
             { id: 'search', icon: '🔍', label: 'Search' },
-            { id: 'advanced', icon: '⚠️', label: 'Advanced' },
-            
+            { id: 'advanced', icon: '⚠️', label: 'Advanced' },  
         ];
 
         this.shortcutLabels = {
             moveUp: 'Move Window Up', moveDown: 'Move Window Down', moveLeft: 'Move Window Left', moveRight: 'Move Window Right',
             toggleVisibility: 'Toggle Hide/Show', toggleClickThrough: 'Toggle Click-Through', nextStep: 'Capture/Send Prompt',
-            previousResponse: 'Previous Response', nextResponse: 'Next Response', scrollUp: 'Scroll Up', scrollDown: 'Scroll Down', emergencyErase: 'Emergency Erase & Quit'
+            previousResponse: 'Previous Response', nextResponse: 'Next Response', scrollUp: 'Scroll Up', scrollDown: 'Scroll Down', 
+            emergencyErase: 'Emergency Erase (Wipe Data)', emergencyKill: 'Emergency Kill (Instant Quit)'
         };
         this.newProfileName = '';
         this.newProfileAI = '0'; 
@@ -489,10 +493,12 @@ export class CustomizeView extends LitElement {
         const aiNames = ['ChatGPT', 'Gemini', 'Grok'];
         const targetName = this.newProfileName.trim();
         
-        let currentPrefs = await window.cheatingDaddy.storage.getPreferences();
+        // 🟢 FIX 1: Properly unpack the database payload before opening the window!
+        let raw1 = await window.cheatingDaddy.storage.getPreferences();
+        let currentPrefs = raw1?.data || raw1 || {};
         let profiles = currentPrefs.aiProfiles || [];
-        let existingIndex = profiles.findIndex(p => p.name.toLowerCase() === targetName.toLowerCase());
         
+        let existingIndex = profiles.findIndex(p => p.name.toLowerCase() === targetName.toLowerCase());
         let profileId = existingIndex >= 0 ? profiles[existingIndex].id : Date.now().toString();
 
         if (window.require) {
@@ -501,18 +507,24 @@ export class CustomizeView extends LitElement {
             
             await ipcRenderer.invoke('open-login-window', profileId, aiIdx);
             
-            currentPrefs = await window.cheatingDaddy.storage.getPreferences();
+            // 🟢 FIX 2: Properly unpack the database payload AGAIN after the window closes!
+            let raw2 = await window.cheatingDaddy.storage.getPreferences();
+            currentPrefs = raw2?.data || raw2 || {};
             profiles = currentPrefs.aiProfiles || [];
-            let finalIndex = profiles.findIndex(p => p.id === profileId);
             
-            if (finalIndex === -1) profiles.push({ id: profileId, name: targetName, loggedAIs: [aiIdx] });
-            else {
+            let finalIndex = profiles.findIndex(p => p.id === profileId);
+
+            if (finalIndex === -1) {
+                profiles.push({ id: profileId, name: targetName, loggedAIs: [aiIdx] });
+            } else {
                 if (!profiles[finalIndex].loggedAIs) profiles[finalIndex].loggedAIs = [];
-                if (!profiles[finalIndex].loggedAIs.includes(aiIdx)) profiles[finalIndex].loggedAIs.push(aiIdx); 
+                if (!profiles[finalIndex].loggedAIs.includes(aiIdx)) {
+                    profiles[finalIndex].loggedAIs.push(aiIdx);
+                }
             }
             
             await this.savePref('aiProfiles', profiles);
-            this.newProfileName = ''; 
+            this.newProfileName = '';
             this.requestUpdate();
         }
     }
@@ -531,20 +543,22 @@ export class CustomizeView extends LitElement {
             'scroll_up': '⬆️', 'scroll_down': '⬇️', 'prev_resp': '◀', 'next_resp': '▶',
             'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
             'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜',
-            'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️',
-            'auto_type': '⌨️' // 🟢 NEW
+            'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️', 
+            'auto_type': '⌨️', 'trim_top': '✂️ Top', 'trim_bottom': '✂️ Bot', 'abort_typer': '🛑' // 🟢 NEW
         };
         return labels[action] || '—';
     }
 
-    renderMatrixCell(id, row, col, label) {
-        const currentCorners = this.prefs.hotCorners || {};
+    renderMatrixCell(id, row, col, label, mapName = 'hotCorners') {
+        const currentCorners = this.prefs[mapName] || {};
         const action = currentCorners[id] || 'none';
         const shortLabel = this.getShortLabel(action);
         
         return html`
-            <div class="matrix-cell" style="grid-area: ${row} / ${col};" @click=${() => this.editingZone = id}>
-                <div style="font-size: 16px; margin-bottom: 2px;">${shortLabel}</div> <div style="font-size: 8px; opacity: 0.4; text-align: center; line-height: 1.1; padding: 0 2px;">${label}</div> </div>
+            <div class="matrix-cell" style="grid-area: ${row} / ${col};" @click=${() => { this.editingZone = id; this.editingMap = mapName; }}>
+                <div style="font-size: 16px; margin-bottom: 2px;">${shortLabel}</div>
+                <div style="font-size: 8px; opacity: 0.4; text-align: center; line-height: 1.1; padding: 0 2px;">${label}</div>
+            </div>
         `;
     }
 
@@ -724,11 +738,12 @@ export class CustomizeView extends LitElement {
                     </div>
                     </div>
                 `;
+            
             case 'hotcorners':
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
-                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, // 🟢 NEW
+                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
@@ -742,7 +757,6 @@ export class CustomizeView extends LitElement {
                 const b = this.prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
                 const currentCorners = this.prefs.hotCorners || {};
 
-                // 🟢 MATH FIX: Use Fractions (fr) instead of Percentages (%) to eliminate Grid Overflow!
                 let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
                 let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
 
@@ -757,84 +771,68 @@ export class CustomizeView extends LitElement {
                         </p>
                         
                         <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
-                            
-                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner')}
-                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L')}
-                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center')}
-                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R')}
-                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner')}
+                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'hotCorners')}
+                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'hotCorners')}
+                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'hotCorners')}
+                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'hotCorners')}
+                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'hotCorners')}
 
-                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T')}
-                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T')}
+                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'hotCorners')}
+                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'hotCorners')}
 
-                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center')}
-                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center')}
+                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', 'hotCorners')}
+                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', 'hotCorners')}
 
-                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B')}
-                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B')}
+                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'hotCorners')}
+                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'hotCorners')}
 
-                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner')}
-                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L')}
-                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center')}
-                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R')}
-                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner')}
+                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'hotCorners')}
+                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'hotCorners')}
+                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'hotCorners')}
+                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'hotCorners')}
+                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'hotCorners')}
 
-                            <div class="matrix-center" style="padding: 6px 12px;">
-                                <h3 style="margin-top: 0; margin-bottom: 6px; color: #fff; font-size: 11px; letter-spacing: 1px;">ZONE CONFIG</h3>
+                            <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
+                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">ZONE CONFIG</h3>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
                                     <div class="slider-row">
-                                        <label><span>Corner</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
-                                        <input type="range" min="5" max="30" step="1" .value=${b.cornerSize} @input=${(e) => {
-                                            const nB = {...b, cornerSize: parseInt(e.target.value)};
-                                            this.savePref('hotCornerBounds', nB);
-                                        }}>
+                                        <label><span>Corner %</span> <span style="color: #4285f4;">${tb.cornerSize}%</span></label>
+                                        <input type="range" min="5" max="30" step="1" .value=${tb.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...tb, cornerSize: parseInt(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
-                                        <input type="range" min="1" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => {
-                                            const nB = {...b, dwellTime: parseFloat(e.target.value)};
-                                            this.savePref('hotCornerBounds', nB);
-                                        }}>
+                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${tb.dwellTime || 3}s</span></label>
+                                        <input type="range" min="1" max="5" step="0.5" .value=${tb.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...tb, dwellTime: parseFloat(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${b.centerX} @input=${(e) => {
-                                            const nB = {...b, centerX: parseInt(e.target.value)};
-                                            this.savePref('hotCornerBounds', nB);
-                                        }}>
+                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${tb.centerX}%</span></label>
+                                        <input type="range" min="10" max="70" step="5" .value=${tb.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...tb, centerX: parseInt(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label>
-                                        <input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => {
-                                            const nB = {...b, hideTime: parseFloat(e.target.value)};
-                                            this.savePref('hotCornerBounds', nB);
-                                        }}>
+                                        <label><span>L/R Height</span> <span style="color: #00cc66;">${tb.centerY}%</span></label>
+                                        <input type="range" min="10" max="70" step="5" .value=${tb.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...tb, centerY: parseInt(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60} WPM</span></label>
-                                        <input type="range" min="10" max="180" step="10" .value=${this.prefs.wpmSpeed || 60} @input=${(e) => {
-                                            this.savePref('wpmSpeed', parseInt(e.target.value));
-                                        }}>
+                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(tb.hideTime || 0) === 0 ? 'Instant' : (tb.hideTime || 0) + 's'}</span></label>
+                                        <input type="range" min="0" max="5" step="0.5" .value=${tb.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...tb, hideTime: parseFloat(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label>
-                                        <input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => {
-                                            this.savePref('typerDelay', parseInt(e.target.value));
-                                        }}>
+                                        <input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => this.savePref('typerDelay', parseInt(e.target.value))}>
                                     </div>
-                                    <div class="slider-row" style="grid-column: span 2; margin-top: 2px;">
-                                        <label><span>Left/Right Height</span> <span style="color: #a142f4;">${b.centerY}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => {
-                                            const nB = {...b, centerY: parseInt(e.target.value)};
-                                            this.savePref('hotCornerBounds', nB);
-                                        }}>
+                                    <div class="slider-row">
+                                        <label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60}</span></label>
+                                        <input type="range" min="10" max="180" step="10" .value=${this.prefs.wpmSpeed || 60} @input=${(e) => this.savePref('wpmSpeed', parseInt(e.target.value))}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Mistakes</span> <span style="color: #f14c4c;">${this.prefs.typerMistakes ?? 2}%</span></label>
+                                        <input type="range" min="0" max="15" step="1" .value=${this.prefs.typerMistakes ?? 2} @input=${(e) => this.savePref('typerMistakes', parseInt(e.target.value))}>
                                     </div>
                                 </div>
                             </div>
                         </div>
                     </div>
 
-                    ${this.editingZone ? html`
+                    ${this.editingZone && this.editingMap === 'hotCorners' ? html`
                         <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
                         <div class="zone-editor-modal">
                             <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Action</h3>
@@ -855,6 +853,82 @@ export class CustomizeView extends LitElement {
                         </div>
                     ` : ''}
                 `;
+
+            case 'typercorners':
+                const typerActionsList = [
+                    {value: 'none', label: 'None (Disabled)'},
+                    {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
+                    {value: 'trim_top', label: '✂️ Unselect Top Line (Hold)'},
+                    {value: 'expand_top', label: '➕ Expand Top Line (Hold)'}, // 🟢 NEW
+                    {value: 'trim_bottom', label: '✂️ Unselect Bottom Line (Hold)'},
+                    {value: 'expand_bottom', label: '➕ Expand Bottom Line (Hold)'}, // 🟢 NEW
+                    {value: 'reset_typer', label: '🔄 Reset Selection'}, // 🟢 NEW
+                    {value: 'abort_typer', label: '🛑 Abort & Go Back'},
+                    {value: 'hide_unhide', label: '👻 Hide / Unhide'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'},
+                    {value: 'scroll_down', label: '⬇️ Scroll Down'}
+                ];
+                
+                const tb = this.prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
+                let tMidX = Math.max(0, (100 - (2 * tb.cornerSize) - tb.centerX) / 2);
+                let tMidY = Math.max(0, (100 - (2 * tb.cornerSize) - tb.centerY) / 2);
+                const tGridCols = `${tb.cornerSize}fr ${tMidX}fr ${tb.centerX}fr ${tMidX}fr ${tb.cornerSize}fr`;
+                const tGridRows = `${tb.cornerSize}fr ${tMidY}fr ${tb.centerY}fr ${tMidY}fr ${tb.cornerSize}fr`;
+                const currentTyperCorners = this.prefs.typerHotCorners || {};
+
+                return html`
+                    <div class="scrollable-tab">
+                        <h2 style="margin-bottom: 5px;">Typer Ghost Mode Map</h2>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
+                            When you switch to the Auto-Typer, the AI swaps to this brain. Holding the scissors will continuously trim lines.
+                        </p>
+                        <div class="monitor-matrix" style="grid-template-columns: ${tGridCols}; grid-template-rows: ${tGridRows};">
+                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'typerHotCorners')}
+                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'typerHotCorners')}
+                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'typerHotCorners')}
+                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'typerHotCorners')}
+                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'typerHotCorners')}
+                            
+                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'typerHotCorners')}
+                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'typerHotCorners')}
+                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', 'typerHotCorners')}
+                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', 'typerHotCorners')}
+                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'typerHotCorners')}
+                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'typerHotCorners')}
+                            
+                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'typerHotCorners')}
+                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'typerHotCorners')}
+                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'typerHotCorners')}
+                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'typerHotCorners')}
+                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'typerHotCorners')}
+                            
+                            <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
+                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center;">ZONE CONFIG</h3>
+                                <p style="font-size: 10px; color: #ccc; text-align: center;">(Geometry syncs with OA Corners tab)</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    ${this.editingZone && this.editingMap === 'typerHotCorners' ? html`
+                        <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
+                        <div class="zone-editor-modal">
+                            <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Typer Action</h3>
+                            <div class="zone-action-grid">
+                                ${typerActionsList.map(act => html`
+                                    <button class="action-select-btn ${currentTyperCorners[this.editingZone] === act.value ? 'selected' : ''}" 
+                                            @click=${() => {
+                                                const newCorners = { ...currentTyperCorners, [this.editingZone]: act.value };
+                                                this.savePref('typerHotCorners', newCorners);
+                                                this.editingZone = null;
+                                            }}>
+                                        ${act.label}
+                                    </button>
+                                `)}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+
             case 'search':
                 return html`
                     <h2>Google Search</h2>

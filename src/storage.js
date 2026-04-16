@@ -24,7 +24,13 @@ const DEFAULT_PREFERENCES = {
     fontSize: 'medium',
     backgroundTransparency: 0.8,
     googleSearchEnabled: false,
-    aiProfiles: [] // 👤 NEW: Stores [{ id: '171...', name: 'Abhay', loggedAIs: [0, 1] }]
+    aiProfiles: [],
+    // 🟢 NEW: Dual-Brain Memory for Context Switching
+    typerHotCorners: { 
+        top_left: 'trim_top', top_center: 'auto_type', top_right: 'hide_unhide',
+        middle_left: 'scroll_up', middle_right: 'scroll_down',
+        bottom_left: 'trim_bottom', bottom_center: 'abort_typer', bottom_right: 'none'
+    }
 };
 
 const DEFAULT_KEYBINDS = null; // null means use system defaults

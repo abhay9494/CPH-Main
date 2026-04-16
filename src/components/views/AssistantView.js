@@ -211,6 +211,7 @@ export class AssistantView extends LitElement {
         hotCornerBounds: { type: Object },
         bgTransparency: { type: Number },
         resetArmed: { type: Boolean },
+        typerMistakes: { type: Number }
     };
 
     constructor() {
@@ -259,6 +260,8 @@ export class AssistantView extends LitElement {
         this.hoverProgress = 0;
         this.resetArmed = false;
         this.resetArmTimer = null;
+        this.hotCornersMap = {};
+        this.typerHotCornersMap = {};
     }
 
     showToast(msg) {
@@ -274,6 +277,10 @@ export class AssistantView extends LitElement {
     syncPreferences(e) {
         if (e.detail && e.detail.key === 'hotCorners') {
             this.hotCornersMap = e.detail.value;
+            this.requestUpdate();
+        }
+        if (e.detail && e.detail.key === 'typerHotCorners') {
+            this.typerHotCornersMap = e.detail.value;
             this.requestUpdate();
         }
         if (e.detail && e.detail.key === 'hotCornerBounds') {
@@ -294,6 +301,10 @@ export class AssistantView extends LitElement {
         }
         if (e.detail && e.detail.key === 'wpmSpeed') {
             this.wpmSpeed = e.detail.value;
+            this.requestUpdate();
+        }
+        if (e.detail && e.detail.key === 'typerMistakes') { // 🟢 NEW
+            this.typerMistakes = e.detail.value;
             this.requestUpdate();
         }
     }
@@ -364,20 +375,32 @@ export class AssistantView extends LitElement {
                 this.hasResumeContext = !!(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
                 this.hotCornerBounds = prefs.hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40, dwellTime: 3, hideTime: 0 };
                 
-                // 🟢 FIX: Safely load starting values into fast local memory!
+                // 🟢 Safely load starting values into fast local memory!
                 this.fontSize = prefs.fontSize ?? 13;
                 this.bgTransparency = prefs.backgroundTransparency ?? 0.8;
                 this.wpmSpeed = prefs.wpmSpeed || 60;
                 this.typerDelay = prefs.typerDelay ?? 5;
+                this.typerMistakes = prefs.typerMistakes ?? 2;
                 this.style.setProperty('--response-font-size', `${this.fontSize}px`);
                 
-                // 🟢 FIX: Restoring the Scroll Edges so you can scroll in Ghost Mode!
+                // 🟢 LOAD THE DUAL BRAINS
                 this.hotCornersMap = prefs.hotCorners || {
                     top_left: 'capture', bottom_left: 'send_ai', 
                     top_right: 'hide_unhide', bottom_right: 'change_profile',
                     top_center: 'change_ai', bottom_center: 'fast_think',
                     middle_left: 'scroll_up', middle_right: 'scroll_down' 
                 };
+                
+                this.typerHotCornersMap = prefs.typerHotCorners || {
+                    top_left: 'trim_top', top_center: 'auto_type', top_right: 'hide_unhide',
+                    middle_left: 'scroll_up', middle_right: 'scroll_down',
+                    bottom_left: 'trim_bottom', bottom_center: 'abort_typer', bottom_right: 'none'
+                }; // 🟢 NEW: Load the Typer Brain
+
+                // 🟢 DEFAULT GHOST BOOT: Instantly turn on Click-Through if in OA mode!
+                if (this.currentMode === 'proctored_oa') {
+                    this.setGhostMode(true);
+                }
 
                 if (this.currentProfileId) await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
                 if (prefs.tacThinkMode !== undefined) {
@@ -473,7 +496,11 @@ export class AssistantView extends LitElement {
                 if (this.typingState === 'idle') {
                     this.viewMode = 'chat';
                     window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
-                    if (window.require) window.require('electron').ipcRenderer.invoke('show-widget'); // 🐛 FIX: Restore widget
+                    
+                    // 🐛 FIX: Only restore the widget if we are NOT in a proctored exam!
+                    if (window.require && this.currentMode !== 'proctored_oa') {
+                        window.require('electron').ipcRenderer.invoke('show-widget');
+                    }
                     this.requestUpdate();
                 }
             };
@@ -540,37 +567,36 @@ export class AssistantView extends LitElement {
             ipcRenderer.on('hot-corner-hover', async (event, zone) => {
                 if (this.currentMode !== 'proctored_oa') return;
                 
-                if (this.hoverTimer) { clearInterval(this.hoverTimer); this.hoverTimer = null; }
+                if (this.hoverTimer) {
+                    clearInterval(this.hoverTimer);
+                    this.hoverTimer = null;
+                }
                 this.hoverZone = zone;
                 this.hoverProgress = 0;
+                this.trimTick = 0; // Reset continuous hold
                 this.requestUpdate();
 
-                if (!zone) return; 
+                if (!zone) return;
 
-                const action = this.hotCornersMap[zone];
+                // 🟢 THE DUAL-BRAIN SWITCH
+                const activeMap = this.viewMode === 'typer' ? (this.typerHotCornersMap || {}) : (this.hotCornersMap || {});
+                const action = activeMap[zone];
                 if (!action || action === 'none') return;
 
-                // 🚨 STRICT STEALTH LOCKOUT: If the overlay is hidden, ignore ALL corners except the unhide trigger!
-                if (this._isGhostHidden && action !== 'hide_unhide') {
+                // 🟢 NEW: Allow auto_type to punch through the hidden window so you can pause invisibly!
+                if (this._isGhostHidden && action !== 'hide_unhide' && action !== 'auto_type') return;
+
+                const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic'];
+                if (this.isSolving && lockedActions.includes(action)) {
+                    this.showToast('⏳ AI is busy...');
                     return;
                 }
 
-                // 🚨 INSTANT VISUAL LOCKOUT: Stop the bar from filling and drop warning instantly!
-                const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic', 'auto_type'];
-                if (this.isSolving && lockedActions.includes(action)) {
-                    this.showToast('⏳ AI is busy...');
-                    return; 
-                }
-
                 const bounds = this.hotCornerBounds || { dwellTime: 3, hideTime: 0 };
-                
-                // 🟢 SMART TIMERS: Instant Pause, Delayed Unhide, Standard Dwell
                 let targetTimeMs = (bounds.dwellTime || 3) * 1000;
-                if (action === 'hide_unhide') {
-                    targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
-                } else if (action === 'auto_type' && this.typingState !== 'idle') {
-                    targetTimeMs = 0; // 🚨 INSTANT PAUSE: Slam the brakes immediately!
-                }
+
+                if (action === 'hide_unhide') targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
+                else if (action === 'auto_type' && this.typingState !== 'idle') targetTimeMs = 0;
 
                 if (targetTimeMs === 0) {
                     this.hoverProgress = 100;
@@ -579,13 +605,23 @@ export class AssistantView extends LitElement {
                 }
 
                 this.hoverTimer = setInterval(() => {
-                    this.hoverProgress += (50 / targetTimeMs) * 100; 
+                    this.hoverProgress += (50 / targetTimeMs) * 100;
                     this.requestUpdate();
-                    
+
                     if (this.hoverProgress >= 100) {
-                        clearInterval(this.hoverTimer);
-                        this.hoverTimer = null;
-                        this.executeHotCorner(action);
+                        // 🟢 EXPANDED CONTINUOUS HOLD LOGIC FOR RECOVERY ACTIONS
+                        if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
+                            this.hoverProgress = 100; 
+                            this.trimTick++;
+                            if (this.trimTick >= 10) { 
+                                this.executeHotCorner(action);
+                                this.trimTick = 0;
+                            }
+                        } else {
+                            clearInterval(this.hoverTimer);
+                            this.hoverTimer = null;
+                            this.executeHotCorner(action);
+                        }
                     }
                 }, 50);
             });
@@ -605,6 +641,10 @@ export class AssistantView extends LitElement {
         if (changedProperties.has('currentMode')) {
             if (window.require) {
                 const { ipcRenderer } = window.require('electron');
+                
+                // 🟢 TELL BACKGROUND WE ARE IN OA MODE TO NUKE SHORTCUTS
+                ipcRenderer.send('set-oa-mode', this.currentMode === 'proctored_oa');
+
                 if (this.currentMode === 'proctored_oa') {
                     ipcRenderer.invoke('hide-widget');
                 } else {
@@ -652,26 +692,17 @@ export class AssistantView extends LitElement {
 
             // Add this inside the switch(action) block:
             case 'auto_type':
-                if (this.typingState !== 'idle') {
-                    // 🛑 IT IS RUNNING -> STOP IT
-                    this.showToast('🛑 Auto-Type Paused');
-                    this.handleStopTyping();
-                } else {
-                    // ▶️ IT IS IDLE -> START IT
-                    // Blind payload extraction: grab the absolute latest message
+                if (this.viewMode === 'chat') {
+                    // ▶️ WE ARE IN CHAT: SWITCH TO TYPER, DO NOT START
                     const lastMsg = this.localChatHistory[this.localChatHistory.length - 1] || '';
                     const parts = lastMsg.split('🤖 AI:\n');
-                    
+
                     if (parts.length > 1) {
                         let codeText = parts[1].trim();
-                        // Strip the language tag if markdown slipped through
                         codeText = codeText.replace(/```(c\+\+|python|java|javascript|js|cpp)?/gi, '').replace(/```/g, '').trim();
                         const newLines = codeText.split('\n');
-                        
-                        // 🟢 SMART RESUME: Check if this is the exact same payload we just paused!
                         const isSamePayload = this.typerCodeLines && this.typerCodeLines.join('\n') === newLines.join('\n');
-                        
-                        // If it's a brand new AI response, reset the start line to 0
+
                         if (!isSamePayload) {
                             this.typerCodeLines = newLines;
                             this.typerStartLine = 0;
@@ -679,18 +710,64 @@ export class AssistantView extends LitElement {
                             this.typingCurrentLineIndex = 0;
                         }
 
-                        this.showToast(isSamePayload ? '⌨️ Resuming Auto-Type' : '⌨️ Auto-Type Started');
-
-                        // Force the UI into Typer mode and instantly start the 5-second physical countdown!
+                        this.showToast(isSamePayload ? '🎯 Typer Ready. Trigger again to resume.' : '🎯 Typer Ready. Trigger again to start.');
                         this.viewMode = 'typer';
                         window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: true }));
                         this.requestUpdate();
-
-                        setTimeout(() => this.startTyperCountdown(), 100);
                     } else {
                         this.showToast('⚠️ No payload ready');
                     }
+                } else {
+                    // ▶️ WE ARE IN TYPER: TOGGLE PLAY/PAUSE
+                    if (this.typingState !== 'idle') {
+                        this.showToast('🛑 Auto-Type Paused');
+                        this.handleStopTyping();
+                    } else {
+                        this.showToast('⌨️ Auto-Type Started');
+                        setTimeout(() => this.startTyperCountdown(), 100);
+                    }
                 }
+                break;
+
+            case 'trim_top':
+                if (this.typerStartLine < this.typerEndLine) {
+                    this.typerStartLine++;
+                    this.scrollToLine(this.typerStartLine); // 🟢 Auto-Scroll
+                    this.requestUpdate();
+                }
+                break;
+
+            case 'trim_bottom':
+                if (this.typerEndLine > this.typerStartLine) {
+                    this.typerEndLine--;
+                    this.scrollToLine(this.typerEndLine); // 🟢 Auto-Scroll
+                    this.requestUpdate();
+                }
+                break;
+
+            case 'expand_top':
+                if (this.typerStartLine > 0) {
+                    this.typerStartLine--;
+                    this.scrollToLine(this.typerStartLine);
+                    this.requestUpdate();
+                }
+                break;
+
+            case 'expand_bottom':
+                if (this.typerEndLine < this.typerCodeLines.length - 1) {
+                    this.typerEndLine++;
+                    this.scrollToLine(this.typerEndLine);
+                    this.requestUpdate();
+                }
+                break;
+
+            case 'reset_typer':
+                this.typerStartLine = 0;
+                this.typerEndLine = this.typerCodeLines.length - 1;
+                this.typingCurrentLineIndex = 0;
+                this.scrollToLine(0);
+                this.showToast('🔄 Selection Reset');
+                this.requestUpdate();
                 break;
 
             case 'mic': 
@@ -763,7 +840,20 @@ export class AssistantView extends LitElement {
                 window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: this.bgTransparency } })); 
                 break;
             
-            case 'toggle_ai_vis': this.showToast('👁️ Toggled AI Background Window'); this.handleToggleAiVisibility(); break;
+            case 'toggle_ai_vis': this.showToast('👁️ Toggled AI Background Window'); this.handleToggleAiVisibility(); 
+                break;
+            
+            case 'abort_typer':
+                this.showToast('🛑 Aborted Auto-Typer');
+                this.handleStopTyping(); // Stops powershell immediately if running
+                this.viewMode = 'chat';
+                window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
+                // 🐛 FIX: Do NOT summon the widget if we are in an OA!
+                if (window.require && this.currentMode !== 'proctored_oa') {
+                    window.require('electron').ipcRenderer.invoke('show-widget');
+                }
+                this.requestUpdate();
+                break;
         }
     }
 
@@ -1084,6 +1174,17 @@ export class AssistantView extends LitElement {
         }
     }
 
+    scrollToLine(lineIdx) {
+        setTimeout(() => {
+            const container = this.shadowRoot.querySelector('.typer-code-container');
+            const lineEl = this.shadowRoot.querySelector('#typer-line-' + lineIdx);
+            if (container && lineEl) {
+                const offset = lineEl.offsetTop - (container.clientHeight / 2) + (lineEl.clientHeight / 2);
+                container.scrollTo({ top: Math.max(0, offset), behavior: 'smooth' });
+            }
+        }, 50);
+    }
+
     handleLineClick(index) {
         if (this.typingState !== 'idle') return; 
 
@@ -1122,7 +1223,7 @@ export class AssistantView extends LitElement {
             window.dispatchEvent(new CustomEvent('typing-state-changed', { detail: { state: 'typing' } }));
             this.requestUpdate();
             const payloadCode = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
-            window.require('electron').ipcRenderer.send('start-auto-type', payloadCode, this.wpmSpeed);
+            window.require('electron').ipcRenderer.send('start-auto-type', payloadCode, this.wpmSpeed, this.typerMistakes);
             return;
         }
 
@@ -1440,36 +1541,24 @@ export class AssistantView extends LitElement {
     renderTyperMode() {
         return html`
             <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent;">                
-                <div style="padding: 12px 16px;">
-                    <div style="background: rgba(161, 66, 244, 0.15); border: 1px solid rgba(161, 66, 244, 0.5); padding: 10px 14px; border-radius: 6px; color: var(--text-color); font-size: 13px; line-height: 1.5;">
-                        <strong style="color: #a142f4;">Select Range to Type.</strong> Area in purple will be written as it is.<br/>
-                        <span style="color: #f14c4c; font-weight: bold; font-size: 12px;">[Note: Auto Typer can make mistakes, Recheck Yourself before submitting]</span>
+                ${this.currentMode === 'proctored_oa' ? '' : html`
+                    <div style="padding: 12px 16px;">
+                        <div style="background: rgba(161, 66, 244, 0.15); border: 1px solid rgba(161, 66, 244, 0.5); padding: 10px 14px; border-radius: 6px; color: var(--text-color); font-size: 13px; line-height: 1.5;">
+                            <strong style="color: #a142f4;">Select Range to Type.</strong> Area in purple will be written as it is.<br/>
+                            <span style="color: #f14c4c; font-weight: bold; font-size: 12px;">[Note: Auto Typer can make mistakes, Recheck Yourself before submitting]</span>
+                        </div>
                     </div>
-                </div>
+                `}
                 
-                <div class="typer-code-container" style="flex: 1; overflow-y: auto; padding: 0 16px 20px 16px; font-family: 'SF Mono', Consolas, monospace; font-size: var(--response-font-size, 13px); line-height: 1.6; color: var(--text-color);">
+                <div class="typer-code-container" style="position: relative; flex: 1; overflow-y: auto; padding: 0 16px 20px 16px; font-family: 'SF Mono', Consolas, monospace; font-size: var(--response-font-size, 13px); line-height: 1.6; color: var(--text-color);">
                     ${this.typerCodeLines.map((line, idx) => {
                         const isHighlighted = idx >= this.typerStartLine && idx <= this.typerEndLine;
-                        
-                        // 🟢 LIVE HIGHLIGHTER CSS INJECTION
                         const isCurrentTypingLine = (this.typingState === 'typing') && isHighlighted && (idx === this.typerStartLine + this.typingCurrentLineIndex);
                         
-                        let bgStyle = 'transparent';
-                        let borderStyle = '1px solid transparent';
-                        let textColor = 'var(--text-color)';
-                        let numColor = '#666';
+                        let bgStyle = 'transparent'; let borderStyle = '1px solid transparent'; let textColor = 'var(--text-color)'; let numColor = '#666';
 
-                        if (isCurrentTypingLine) {
-                            bgStyle = 'rgba(0, 204, 102, 0.25)'; 
-                            borderStyle = '1px solid #00cc66';
-                            textColor = '#fff';
-                            numColor = '#00cc66';
-                        } else if (isHighlighted) {
-                            bgStyle = 'rgba(161, 66, 244, 0.2)'; 
-                            borderStyle = '1px solid rgba(161, 66, 244, 0.3)';
-                            textColor = 'var(--text-color)';
-                            numColor = '#a142f4';
-                        }
+                        if (isCurrentTypingLine) { bgStyle = 'rgba(0, 204, 102, 0.25)'; borderStyle = '1px solid #00cc66'; textColor = '#fff'; numColor = '#00cc66'; } 
+                        else if (isHighlighted) { bgStyle = 'rgba(161, 66, 244, 0.2)'; borderStyle = '1px solid rgba(161, 66, 244, 0.3)'; textColor = 'var(--text-color)'; numColor = '#a142f4'; }
 
                         return html`
                             <div id="typer-line-${idx}" style="display: flex; cursor: default !important; border-radius: 4px; padding: 2px 4px; margin-bottom: 2px; transition: 0.2s; background: ${bgStyle}; border: ${borderStyle}; color: ${textColor};" 
@@ -1481,31 +1570,31 @@ export class AssistantView extends LitElement {
                     })}
                 </div>
                 
-                <div class="bottom-controls" style="padding: 12px; border-top: 1px solid #444;">
-                    <div class="control-row">
-                        <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-secondary); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color);">
-                            <span style="font-size: 11px; color: var(--text-color); font-weight: bold;">Speed: ${this.wpmSpeed}</span>
-                            <input type="range" min="10" max="180" step="10" .value=${this.wpmSpeed} @input=${(e) => {
-                                this.wpmSpeed = parseInt(e.target.value);
-                                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
-                                    window.cheatingDaddy.storage.updatePreference('wpmSpeed', this.wpmSpeed);
-                                    window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'wpmSpeed', value: this.wpmSpeed } }));
-                                }
-                                this.requestUpdate();
-                            }} style="width: 80px; accent-color: #a142f4; background: transparent;">
-                        </div>
+                ${this.currentMode === 'proctored_oa' ? this.renderOAControls() : html`
+                    <div class="bottom-controls" style="padding: 12px; border-top: 1px solid #444;">
+                        <div class="control-row">
+                            <div style="display: flex; gap: 8px; align-items: center; background: var(--bg-secondary); padding: 6px 10px; border-radius: 4px; border: 1px solid var(--border-color);">
+                                <span style="font-size: 11px; color: var(--text-color); font-weight: bold;">Speed: ${this.wpmSpeed}</span>
+                                <input type="range" min="10" max="180" step="10" .value=${this.wpmSpeed} @input=${(e) => {
+                                    this.wpmSpeed = parseInt(e.target.value);
+                                    if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                                        window.cheatingDaddy.storage.updatePreference('wpmSpeed', this.wpmSpeed);
+                                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'wpmSpeed', value: this.wpmSpeed } }));
+                                    }
+                                    this.requestUpdate();
+                                }} style="width: 80px; accent-color: #a142f4; background: transparent;">
+                            </div>
 
-                        ${this.typingState === 'idle' ? html`
-                            <button class="action-btn success" @click=${this.startTyperCountdown}>
-                                ▶ Start Typing
-                            </button>
-                        ` : html`
-                            <button class="action-btn danger" style="animation: pulse 1s infinite;" @click=${this.handleStopTyping}>
-                                ${this.typingState === 'countdown' ? `⏳ Starts in ${this.typingCountdown}s...` : '🛑 Stop Typing'}
-                            </button>
-                        `}
+                            ${this.typingState === 'idle' ? html`
+                                <button class="action-btn success" @click=${this.startTyperCountdown}>▶ Start Typing</button>
+                            ` : html`
+                                <button class="action-btn danger" style="animation: pulse 1s infinite;" @click=${this.handleStopTyping}>
+                                    ${this.typingState === 'countdown' ? `⏳ Starts in ${this.typingCountdown}s...` : '🛑 Stop Typing'}
+                                </button>
+                            `}
+                        </div>
                     </div>
-                </div>
+                `}
             </div>
         `;
     }
@@ -1518,21 +1607,21 @@ export class AssistantView extends LitElement {
             'change_profile': '👤 Profile', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
-            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic'
+            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
+            'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
+            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 'reset_typer': '🔄 Reset'
         };
         return labels[action] || action || '—';
     }
 
-    renderProctoredOAMode() {
-        const map = this.hotCornersMap || {};
+    renderOAControls() {
+        const map = this.viewMode === 'typer' ? (this.typerHotCornersMap || {}) : (this.hotCornersMap || {});
         const b = this.hotCornerBounds || { dwellTime: 3, hideTime: 0 };
-        
         const currentProfile = (this.aiProfiles || []).find(p => p.id === this.currentProfileId);
         const profileName = currentProfile ? currentProfile.name : 'None';
         const aiName = this.currentProviderName || 'ChatGPT';
         const modeName = this.tacThinkMode ? 'Think' : 'Fast';
-        
-        // 🟢 FIX: Perfect vertical and horizontal centering using Flexbox and line-height: 1
+
         const renderZone = (id) => {
             const isHover = this.hoverZone === id;
             const action = map[id];
@@ -1549,12 +1638,8 @@ export class AssistantView extends LitElement {
             if (action === 'language') displayLabel = `💻 ${this.programmingLanguage}`;
             if (action === 'mic') displayLabel = `🎙️ Mic: ${this.isMicOn ? 'ON' : 'OFF'}`;
             if (action === 'toggle_ai_vis') displayLabel = this.isAiVisible ? '👻 Hide AI' : '👁️ Show AI';
-            
             if (action === 'reset' && this.resetArmed) {
-                displayLabel = `⚠️ CONFIRM RESET`;
-                borderOverride = '#f14c4c';
-                textOverride = '#f14c4c';
-                bgOverride = 'rgba(241, 76, 76, 0.15)';
+                displayLabel = `⚠️ CONFIRM RESET`; borderOverride = '#f14c4c'; textOverride = '#f14c4c'; bgOverride = 'rgba(241, 76, 76, 0.15)';
             }
 
             return html`
@@ -1565,47 +1650,37 @@ export class AssistantView extends LitElement {
             `;
         };
 
-        let toastColor = '#00cc66'; 
+        let toastColor = '#00cc66';
         if (this.ghostToastMessage) {
-            if (this.ghostToastMessage.includes('⚠️') || this.ghostToastMessage.includes('⏳')) toastColor = '#f59e0b'; 
-            if (this.ghostToastMessage.includes('🛑')) toastColor = '#f14c4c'; 
+            if (this.ghostToastMessage.includes('⚠️') || this.ghostToastMessage.includes('⏳')) toastColor = '#f59e0b';
+            if (this.ghostToastMessage.includes('🛑')) toastColor = '#f14c4c';
         }
-
-        const centerMsg = this.ghostToastMessage 
-            ? html`<div style="color: ${toastColor}; font-size: 11px; font-weight: bold; text-transform: uppercase; animation: fadeIn 0.2s; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">${this.ghostToastMessage}</div>`
-            : html`<div style="font-size: 9.5px; opacity: 0.4; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">🎯 HOLD ${b.dwellTime}s TO TRIGGER</div>`;
-
-        let m = "🟢 **Ghost Sensors Active.** Move mouse to screen edges/corners and hold to trigger actions.";
-        const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
+        const centerMsg = this.ghostToastMessage ? html`<div style="color: ${toastColor}; font-size: 11px; font-weight: bold; text-transform: uppercase; animation: fadeIn 0.2s; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">${this.ghostToastMessage}</div>` : html`<div style="font-size: 9.5px; opacity: 0.4; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">🎯 HOLD ${b.dwellTime}s TO TRIGGER</div>`;
 
         return html`
-            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent; position: relative;">
-                
-                <div class="markdown-body" 
-                     style="flex: 1; min-height: 0; height: auto;"
-                     @click=${this.handleMarkdownClick} 
-                     .innerHTML=${this.renderMarkdown(c)}>
-                </div>
-
-                <div class="bottom-controls" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
-                    
-                    <div style="display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 24px); gap: 4px; text-align: center; font-size: 8.5px; font-weight: bold; width: 100%;">
-                        
-                        ${renderZone('top_left')} ${renderZone('top_mid_left')} ${renderZone('top_center')} ${renderZone('top_mid_right')} ${renderZone('top_right')}
-                        
-                        ${renderZone('left_mid_top')} 
-                        <div style="grid-column: span 3; grid-row: span 3; display: flex; align-items: center; justify-content: center; height: 100%;">
-                            ${centerMsg}
-                        </div> 
-                        ${renderZone('right_mid_top')}
-                        
-                        ${renderZone('middle_left')} ${renderZone('middle_right')}
-                        ${renderZone('left_mid_bottom')} ${renderZone('right_mid_bottom')}
-                        
-                        ${renderZone('bottom_left')} ${renderZone('bottom_mid_left')} ${renderZone('bottom_center')} ${renderZone('bottom_mid_right')} ${renderZone('bottom_right')}
+            <div class="bottom-controls" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0;">
+                <div style="display: grid; grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(5, 24px); gap: 4px; text-align: center; font-size: 8.5px; font-weight: bold; width: 100%;">
+                    ${renderZone('top_left')} ${renderZone('top_mid_left')} ${renderZone('top_center')} ${renderZone('top_mid_right')} ${renderZone('top_right')}
+                    ${renderZone('left_mid_top')}
+                    <div style="grid-column: span 3; grid-row: span 3; display: flex; align-items: center; justify-content: center; height: 100%;">
+                        ${centerMsg}
                     </div>
-
+                    ${renderZone('right_mid_top')}
+                    ${renderZone('middle_left')} ${renderZone('middle_right')}
+                    ${renderZone('left_mid_bottom')} ${renderZone('right_mid_bottom')}
+                    ${renderZone('bottom_left')} ${renderZone('bottom_mid_left')} ${renderZone('bottom_center')} ${renderZone('bottom_mid_right')} ${renderZone('bottom_right')}
                 </div>
+            </div>
+        `;
+    }
+
+    renderProctoredOAMode() {
+        let m = "🟢 **Ghost Sensors Active.** Move mouse to screen edges/corners and hold to trigger actions.";
+        const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
+        return html`
+            <div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: transparent; position: relative;">
+                <div class="markdown-body" style="flex: 1; min-height: 0; height: auto;" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(c)}></div>
+                ${this.renderOAControls()}
             </div>
         `;
     }

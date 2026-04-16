@@ -7,7 +7,6 @@ const PROMPTS = {
     // Used when dwelling on the "Send to AI" hot corner
     OA_AUTOMATION: (language) => `You are an auto-typing bot. Output ONLY raw, functional code in ${language || 'c++'}.
 CRITICAL RULES:
-- Do NOT wrap the code in markdown backticks (\`\`\`).
 - Do NOT output any greetings, explanations, or comments.
 - Use single letter variable names.
 - Give me code with a main function so that I can run locally.

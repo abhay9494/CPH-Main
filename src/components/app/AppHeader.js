@@ -161,6 +161,13 @@ export class AppHeader extends LitElement {
             background: #e81123;
             color: white;
         } /* Classic Windows Red */
+
+        .ghost-badge {
+            -webkit-app-region: no-drag; font-size: 10px; font-weight: bold; padding: 4px 10px; 
+            border-radius: 4px; margin-right: 15px; cursor: default !important; transition: 0.2s;
+        }
+        .ghost-badge.active { background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid rgba(0, 204, 102, 0.4); }
+        .ghost-badge.broken { background: rgba(241, 76, 76, 0.15); color: #f14c4c; border: 1px solid #f14c4c; animation: pulse-alert 1s infinite; }
     `;
 
     static properties = {
@@ -177,6 +184,7 @@ export class AppHeader extends LitElement {
         isHelpingMode: { type: Boolean },
         helperStatus: { type: String },
         connectionPin: { type: String },
+        isGhostActive: { type: Boolean },
     };
 
     constructor() {
@@ -227,7 +235,14 @@ export class AppHeader extends LitElement {
         };
         window.addEventListener('update-pin-display', this.pinHandler);
 
+        // 🟢 Here is the modified block!
         if (window.require) {
+            // 🟢 NEW: The Ghost State Tracker
+            window.require('electron').ipcRenderer.on('ghost-state-changed', (event, state) => {
+                this.isGhostActive = state;
+                this.requestUpdate();
+            });
+
             window.require('electron').ipcRenderer.on('typing-status', (event, status) => {
                 if (!status) {
                     this.typingState = 'idle';
@@ -281,94 +296,59 @@ export class AppHeader extends LitElement {
         if (this.isTyperMode) displayTitle = 'CP Helper 20 - Auto Typer';
         if (this.isHelpingMode) displayTitle = 'CP Helper 20 - Helping Other';
 
+        // 🟢 FIX: Check if we are in Proctored OA mode based on the title
+        const isOA = displayTitle.includes('Proctored');
+
         return html`
             <div class="header">
-                ${this.isTyperMode
-                    ? html` <button class="back-btn" @click=${() => window.dispatchEvent(new CustomEvent('cancel-typer-mode'))}>◀ Display</button> `
-                    : this.isHelpingMode
-                      ? html`
-                            <button
-                                class="back-btn"
-                                @click=${() => {
-                                    window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false }));
-                                    if (this.onBackClick) this.onBackClick();
-                                }}
-                            >
-                                ◀ Back
-                            </button>
-                        `
-                      : this.currentView !== 'main'
-                        ? html`<button class="back-btn" @click=${this.onBackClick}>◀ Hub</button>`
-                        : ''}
+                ${!isOA && this.isTyperMode ? html`
+                    <button class="back-btn" @click=${() => window.dispatchEvent(new CustomEvent('cancel-typer-mode'))}>◀ Display</button>
+                ` : !isOA && this.isHelpingMode ? html`
+                    <button class="back-btn" @click=${() => {
+                        window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false }));
+                        if (this.onBackClick) this.onBackClick();
+                    }}>◀ Back</button>
+                ` : !isOA && this.currentView !== 'main' ? html`
+                    <button class="back-btn" @click=${this.onBackClick}>◀ Hub</button>
+                ` : ''}
+
+                ${isOA ? html`
+                    <div class="ghost-badge ${this.isGhostActive ? 'active' : 'broken'}">
+                        ${this.isGhostActive ? '👻 GHOST MODE ON' : '⚠️ GHOST BROKEN'}
+                    </div>
+                ` : ''}
 
                 <div class="header-title">${displayTitle}</div>
 
-                ${this.isHelpingMode && this.connectionPin
-                    ? html`
-                          <div
-                              class="header-pin"
-                              @click=${e => {
-                                  if (window.require) window.require('electron').clipboard.writeText(this.connectionPin);
-                                  const oldText = e.target.innerText;
-                                  e.target.innerText = '✅ Copied!';
-                                  setTimeout(() => {
-                                      e.target.innerText = oldText;
-                                  }, 1500);
-                              }}
-                          >
-                              🔗 PIN: ${this.connectionPin}
-                          </div>
-                      `
-                    : ''}
-                ${this.isHelpingMode
-                    ? html`
-                          <div class="status-badge ${this.helperStatus === 'connected' ? 'connected' : 'disconnected'}">
-                              ${this.helperStatus === 'connected' ? '🟢 LINKED' : '🔴 DISCONNECTED'}
-                          </div>
-                      `
-                    : ''}
-                ${(this.missingAccount || this.missingContext) && this.typingState === 'idle' && !this.isTyperMode && !this.isHelpingMode
-                    ? html`
-                          <div class="blinking-alert" style="cursor: default !important;">
-                              ⚠️ SETUP MISSING: ${this.missingAccount ? 'Accounts' : ''} ${this.missingAccount && this.missingContext ? ' & ' : ''}
-                              ${this.missingContext ? 'Resume' : ''}
-                          </div>
-                      `
-                    : ''}
+                ${!isOA && this.isHelpingMode && this.connectionPin ? html`
+                    <div class="header-pin" @click=${e => {
+                        if (window.require) window.require('electron').clipboard.writeText(this.connectionPin);
+                        const oldText = e.target.innerText;
+                        e.target.innerText = '✅ Copied!';
+                        setTimeout(() => { e.target.innerText = oldText; }, 1500);
+                    }}>🔗 PIN: ${this.connectionPin}</div>
+                ` : ''}
+
+                ${!isOA && this.isHelpingMode ? html`
+                    <div class="status-badge ${this.helperStatus === 'connected' ? 'connected' : 'disconnected'}">
+                        ${this.helperStatus === 'connected' ? '🟢 LINKED' : '🔴 DISCONNECTED'}
+                    </div>
+                ` : ''}
+
+                ${!isOA && (this.missingAccount || this.missingContext) && this.typingState === 'idle' && !this.isTyperMode && !this.isHelpingMode ? html`
+                    <div class="blinking-alert" style="cursor: default !important;">
+                        ⚠️ SETUP MISSING: ${this.missingAccount ? 'Accounts' : ''} ${this.missingAccount && this.missingContext ? ' & ' : ''} ${this.missingContext ? 'Resume' : ''}
+                    </div>
+                ` : ''}
 
                 <div class="header-actions" 
-                     @mouseenter=${() => { if (window.require) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', false); }} 
-                     @mouseleave=${() => { if (window.require && this.title.includes('Proctored')) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', true); }}>
+                    @mouseenter=${() => { if (window.require) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', false); }}
+                    @mouseleave=${() => { if (window.require && this.title.includes('Proctored')) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', true); }}>
                     <button @click=${this.handleHardClose} class="icon-button danger">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            width="16"
-                            height="16"
-                        >
-                            <line x1="18" y1="6" x2="6" y2="18"></line>
-                            <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
                     </button>
                     <button @click=${this.onHideClick} class="icon-button window-close">
-                        <svg
-                            xmlns="http://www.w3.org/2000/svg"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            stroke-width="2"
-                            stroke-linecap="round"
-                            stroke-linejoin="round"
-                            width="16"
-                            height="16"
-                        >
-                            <line x1="5" y1="12" x2="19" y2="12"></line>
-                        </svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" width="16" height="16"><line x1="5" y1="12" x2="19" y2="12"></line></svg>
                     </button>
                 </div>
             </div>
