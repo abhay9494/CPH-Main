@@ -771,6 +771,7 @@ export class CustomizeView extends LitElement {
                         </p>
                         
                         <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
+                            
                             ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'hotCorners')}
                             ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'hotCorners')}
                             ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'hotCorners')}
@@ -796,24 +797,24 @@ export class CustomizeView extends LitElement {
                                 <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">ZONE CONFIG</h3>
                                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
                                     <div class="slider-row">
-                                        <label><span>Corner %</span> <span style="color: #4285f4;">${tb.cornerSize}%</span></label>
-                                        <input type="range" min="5" max="30" step="1" .value=${tb.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...tb, cornerSize: parseInt(e.target.value)})}>
+                                        <label><span>Corner %</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
+                                        <input type="range" min="5" max="30" step="1" .value=${b.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...b, cornerSize: parseInt(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${tb.dwellTime || 3}s</span></label>
-                                        <input type="range" min="1" max="5" step="0.5" .value=${tb.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...tb, dwellTime: parseFloat(e.target.value)})}>
+                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
+                                        <input type="range" min="1" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${tb.centerX}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${tb.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...tb, centerX: parseInt(e.target.value)})}>
+                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
+                                        <input type="range" min="10" max="70" step="5" .value=${b.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerX: parseInt(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>L/R Height</span> <span style="color: #00cc66;">${tb.centerY}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${tb.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...tb, centerY: parseInt(e.target.value)})}>
+                                        <label><span>L/R Height</span> <span style="color: #00cc66;">${b.centerY}%</span></label>
+                                        <input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerY: parseInt(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
-                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(tb.hideTime || 0) === 0 ? 'Instant' : (tb.hideTime || 0) + 's'}</span></label>
-                                        <input type="range" min="0" max="5" step="0.5" .value=${tb.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...tb, hideTime: parseFloat(e.target.value)})}>
+                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label>
+                                        <input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...b, hideTime: parseFloat(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label>
@@ -860,11 +861,12 @@ export class CustomizeView extends LitElement {
                     {value: 'none', label: 'None (Disabled)'},
                     {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
                     {value: 'trim_top', label: '✂️ Unselect Top Line (Hold)'},
-                    {value: 'expand_top', label: '➕ Expand Top Line (Hold)'}, // 🟢 NEW
+                    {value: 'expand_top', label: '➕ Expand Top Line (Hold)'},
                     {value: 'trim_bottom', label: '✂️ Unselect Bottom Line (Hold)'},
-                    {value: 'expand_bottom', label: '➕ Expand Bottom Line (Hold)'}, // 🟢 NEW
-                    {value: 'reset_typer', label: '🔄 Reset Selection'}, // 🟢 NEW
+                    {value: 'expand_bottom', label: '➕ Expand Bottom Line (Hold)'},
+                    {value: 'reset_typer', label: '🔄 Reset Selection'},
                     {value: 'abort_typer', label: '🛑 Abort & Go Back'},
+                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'},
                     {value: 'scroll_down', label: '⬇️ Scroll Down'}
