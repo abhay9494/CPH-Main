@@ -25,11 +25,27 @@ const DEFAULT_PREFERENCES = {
     backgroundTransparency: 0.8,
     googleSearchEnabled: false,
     aiProfiles: [],
-    // 🟢 NEW: Dual-Brain Memory for Context Switching
+    // 🟢 NEW: Tri-Brain Memory (Page 1, Page 2, and Typer)
+    hotCorners: {
+        top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',
+        left_mid_top: 'refactor', right_mid_top: 'prev_resp',
+        middle_left: 'change_ai', middle_right: 'fast_think',
+        left_mid_bottom: 'fix_error', right_mid_bottom: 'next_resp',
+        bottom_left: 'send_ai', bottom_mid_left: 'reset', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'auto_type'
+    },
+    hotCornersPage2: {
+        top_left: 'text_inc', top_mid_left: 'text_dec', top_center: 'none', top_mid_right: 'bg_inc', top_right: 'bg_dec',
+        left_mid_top: 'language', right_mid_top: 'mic',
+        middle_left: 'change_profile', middle_right: 'none',
+        left_mid_bottom: 'none', right_mid_bottom: 'none',
+        bottom_left: 'none', bottom_mid_left: 'none', bottom_center: 'none', bottom_mid_right: 'toggle_page2', bottom_right: 'none'
+    },
     typerHotCorners: { 
-        top_left: 'trim_top', top_center: 'auto_type', top_right: 'hide_unhide',
-        middle_left: 'scroll_up', middle_right: 'scroll_down',
-        bottom_left: 'trim_bottom', bottom_center: 'abort_typer', bottom_right: 'none'
+        top_left: 'abort_oa', top_mid_left: 'none', top_center: 'scroll_up', top_mid_right: 'none', top_right: 'hide_unhide',
+        left_mid_top: 'trim_top', right_mid_top: 'trim_bottom',
+        middle_left: 'none', middle_right: 'none',
+        left_mid_bottom: 'expand_top', right_mid_bottom: 'expand_bottom',
+        bottom_left: 'reset_typer', bottom_mid_left: 'none', bottom_center: 'scroll_down', bottom_mid_right: 'none', bottom_right: 'auto_type'
     }
 };
 

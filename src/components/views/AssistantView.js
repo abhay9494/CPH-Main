@@ -211,7 +211,9 @@ export class AssistantView extends LitElement {
         hotCornerBounds: { type: Object },
         bgTransparency: { type: Number },
         resetArmed: { type: Boolean },
-        typerMistakes: { type: Number }
+        typerMistakes: { type: Number },
+        hotCornersPage2Map: { type: Object }, 
+        activePage: { type: Number },
     };
 
     constructor() {
@@ -262,6 +264,8 @@ export class AssistantView extends LitElement {
         this.resetArmTimer = null;
         this.hotCornersMap = {};
         this.typerHotCornersMap = {};
+        this.activePage = 1;
+        this.hotCornersPage2Map = {};
     }
 
     showToast(msg) {
@@ -278,6 +282,10 @@ export class AssistantView extends LitElement {
         if (e.detail && e.detail.key === 'hotCorners') {
             this.hotCornersMap = e.detail.value;
             this.requestUpdate();
+        }
+        if (e.detail && e.detail.key === 'hotCornersPage2') { 
+            this.hotCornersPage2Map = e.detail.value; 
+            this.requestUpdate(); 
         }
         if (e.detail && e.detail.key === 'typerHotCorners') {
             this.typerHotCornersMap = e.detail.value;
@@ -389,6 +397,7 @@ export class AssistantView extends LitElement {
                 this.style.setProperty('--response-font-size', `${this.fontSize}px`);
                 
                 // 🟢 LOAD THE DUAL BRAINS
+                this.hotCornersPage2Map = prefs.hotCornersPage2 || {}; // 🟢 Load Page 2
                 this.hotCornersMap = prefs.hotCorners || {
                     top_left: 'capture', bottom_left: 'send_ai', 
                     top_right: 'hide_unhide', bottom_right: 'change_profile',
@@ -589,8 +598,11 @@ export class AssistantView extends LitElement {
 
                 if (!zone) return;
 
-                // 🟢 THE DUAL-BRAIN SWITCH
-                const activeMap = this.viewMode === 'typer' ? (this.typerHotCornersMap || {}) : (this.hotCornersMap || {});
+                // 🟢 THE TRI-BRAIN SWITCH
+                let activeMap = this.hotCornersMap || {};
+                if (this.viewMode === 'typer') activeMap = this.typerHotCornersMap || {};
+                else if (this.activePage === 2) activeMap = this.hotCornersPage2Map || {};
+
                 const action = activeMap[zone];
                 if (!action || action === 'none') return;
 
@@ -711,8 +723,11 @@ export class AssistantView extends LitElement {
             case 'send_ai': this.showToast('🚀 Firing to AI'); this.handleSendToAI(); break;
             case 'fix_error': this.showToast('🔧 Fixing Error...'); this.handleFixError(); break;
             case 'hide_unhide': this.showToast('👻 Toggled Stealth'); window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
-            // case 'scroll_up': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'}); break;
-            // case 'scroll_down': this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'}); break;
+            case 'toggle_page2':
+                this.activePage = this.activePage === 1 ? 2 : 1;
+                this.showToast(`📄 Switched to Page ${this.activePage}`);
+                this.requestUpdate();
+                break;
             case 'scroll_up':
                 if (this.viewMode === 'typer') {
                     this.shadowRoot.querySelector('.typer-code-container')?.scrollBy({top: -150, behavior: 'smooth'});
@@ -1671,13 +1686,21 @@ export class AssistantView extends LitElement {
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
-            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA'
+            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
+            'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2'
         };
         return labels[action] || action || '—';
     }
 
     renderOAControls() {
-        const map = this.viewMode === 'typer' ? (this.typerHotCornersMap || {}) : (this.hotCornersMap || {});
+        let map = this.hotCornersMap || {};
+        let pageLabel = '';
+        if (this.viewMode === 'typer') {
+            map = this.typerHotCornersMap || {};
+        } else if (this.activePage === 2) {
+            map = this.hotCornersPage2Map || {};
+            pageLabel = ' (PAGE 2)';
+        }
         const b = this.hotCornerBounds || { dwellTime: 3, hideTime: 0 };
         const currentProfile = (this.aiProfiles || []).find(p => p.id === this.currentProfileId);
         const profileName = currentProfile ? currentProfile.name : 'None';
@@ -1717,7 +1740,7 @@ export class AssistantView extends LitElement {
             if (this.ghostToastMessage.includes('⚠️') || this.ghostToastMessage.includes('⏳')) toastColor = '#f59e0b';
             if (this.ghostToastMessage.includes('🛑')) toastColor = '#f14c4c';
         }
-        const centerMsg = this.ghostToastMessage ? html`<div style="color: ${toastColor}; font-size: 11px; font-weight: bold; text-transform: uppercase; animation: fadeIn 0.2s; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">${this.ghostToastMessage}</div>` : html`<div style="font-size: 9.5px; opacity: 0.4; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">🎯 HOLD ${b.dwellTime}s TO TRIGGER</div>`;
+        const centerMsg = this.ghostToastMessage ? html`<div style="color: ${toastColor}; font-size: 11px; font-weight: bold; text-transform: uppercase; animation: fadeIn 0.2s; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">${this.ghostToastMessage}</div>` : html`<div style="font-size: 9.5px; opacity: 0.4; letter-spacing: 1px; display: flex; align-items: center; justify-content: center; text-align: center; width: 100%; height: 100%;">🎯 HOLD ${b.dwellTime}s TO TRIGGER${pageLabel}</div>`;
 
         return html`
             <div class="bottom-controls" style="padding: 6px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0;">

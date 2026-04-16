@@ -349,15 +349,19 @@ export class CustomizeView extends LitElement {
             this.prefs = { ...this.prefs, ...prefs };
 
             const keybinds = await window.cheatingDaddy.storage.getKeybinds();
-            if (keybinds) this.keybinds = { ...keybinds };
-            else {
-                this.keybinds = {
-                    moveUp: 'Ctrl+Up', moveDown: 'Ctrl+Down', moveLeft: 'Ctrl+Left', moveRight: 'Ctrl+Right',
-                    toggleVisibility: 'Ctrl+\\', toggleClickThrough: 'Ctrl+M', nextStep: 'Ctrl+Enter',
-                    previousResponse: 'Ctrl+[', nextResponse: 'Ctrl+]', scrollUp: 'Ctrl+Shift+Up',
-                    scrollDown: 'Ctrl+Shift+Down', emergencyErase: 'Ctrl+Shift+E'
-                };
+            const defaultKeybinds = {
+                moveUp: 'Ctrl+Up', moveDown: 'Ctrl+Down', moveLeft: 'Ctrl+Left', moveRight: 'Ctrl+Right',
+                toggleVisibility: 'Ctrl+\\', toggleClickThrough: 'Ctrl+M', nextStep: 'Ctrl+Enter',
+                previousResponse: 'Ctrl+[', nextResponse: 'Ctrl+]', scrollUp: 'Ctrl+Shift+Up', scrollDown: 'Ctrl+Shift+Down',
+                emergencyErase: 'Ctrl+Shift+E', emergencyKill: 'Ctrl+Shift+Q'
+            };
+            
+            if (keybinds && Object.keys(keybinds).length > 0) {
+                this.keybinds = { ...defaultKeybinds, ...keybinds };
+            } else {
+                this.keybinds = { ...defaultKeybinds };
             }
+            
             this.requestUpdate();
         }
 
@@ -752,11 +756,19 @@ export class CustomizeView extends LitElement {
                     {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'language', label: '💻 Change Language'},
                     {value: 'refactor', label: '🛠️ Refactor Code'}, {value: 'mic', label: '🎙️ Toggle Mic'},
                     {value: 'reset', label: '✨ Reset Session'}, {value: 'text_inc', label: 'A+ Text Size'},
-                    {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'}
+                    {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
+                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'} // 🟢 NEW
                 ];
                 
+                this.editingPage = this.editingPage || 1; // Default to Page 1
                 const b = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
-                const currentCorners = this.prefs.hotCorners || {};
+                
+                // Read from Page 1 or Page 2 based on toggle
+                const activeMapName = this.editingPage === 1 ? 'hotCorners' : 'hotCornersPage2';
+                const currentCorners = this.prefs[activeMapName] || {};
+                
+                // 🟢 CLUTTER FILTER: Find all used actions
+                const usedActions = Object.values(currentCorners);
 
                 let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
                 let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
@@ -770,29 +782,34 @@ export class CustomizeView extends LitElement {
                         <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
                             Click any zone on the screen to assign an action. Drag the sliders in the center to physically adjust your hitboxes in real-time.
                         </p>
+
+                        <div style="display: flex; justify-content: center; gap: 10px; margin-bottom: 15px;">
+                            <button class="action-btn ${this.editingPage === 1 ? 'selected' : ''}" style="${this.editingPage === 1 ? 'background: #4285f4; color: white; border-color: #4285f4;' : ''}" @click=${() => { this.editingPage = 1; this.requestUpdate(); }}>📄 Page 1 (Primary)</button>
+                            <button class="action-btn ${this.editingPage === 2 ? 'selected' : ''}" style="${this.editingPage === 2 ? 'background: #a142f4; color: white; border-color: #a142f4;' : ''}" @click=${() => { this.editingPage = 2; this.requestUpdate(); }}>📄 Page 2 (Shift)</button>
+                        </div>
                         
                         <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
                             
-                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'hotCorners')}
-                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'hotCorners')}
-                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'hotCorners')}
-                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'hotCorners')}
-                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'hotCorners')}
+                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', activeMapName)}
+                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', activeMapName)}
+                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', activeMapName)}
+                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', activeMapName)}
+                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', activeMapName)}
 
-                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'hotCorners')}
-                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'hotCorners')}
+                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', activeMapName)}
+                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', activeMapName)}
 
-                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', 'hotCorners')}
-                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', 'hotCorners')}
+                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', activeMapName)}
+                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', activeMapName)}
 
-                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'hotCorners')}
-                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'hotCorners')}
+                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', activeMapName)}
+                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', activeMapName)}
 
-                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'hotCorners')}
-                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'hotCorners')}
-                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'hotCorners')}
-                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'hotCorners')}
-                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'hotCorners')}
+                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', activeMapName)}
+                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', activeMapName)}
+                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', activeMapName)}
+                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
+                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', activeMapName)}
 
                             <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
                                 <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
@@ -829,7 +846,7 @@ export class CustomizeView extends LitElement {
                             <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Select what happens when you hover over the <strong>${this.editingZone.replace(/_/g, ' ').toUpperCase()}</strong> zone.</p>
                             
                             <div class="zone-action-grid">
-                                ${cornerActions.map(act => html`
+                                ${cornerActions.filter(act => act.value === 'none' || act.value === currentCorners[this.editingZone] || !usedActions.includes(act.value)).map(act => html`
                                     <button class="action-select-btn ${currentCorners[this.editingZone] === act.value ? 'selected' : ''}"
                                         @click=${() => {
                                             const newCorners = { ...currentCorners, [this.editingZone]: act.value };
@@ -923,7 +940,7 @@ export class CustomizeView extends LitElement {
                         <div class="zone-editor-modal">
                             <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Typer Action</h3>
                             <div class="zone-action-grid">
-                                ${typerActionsList.map(act => html`
+                                ${typerActionsList.filter(act => act.value === 'none' || act.value === currentTyperCorners[this.editingZone] || !Object.values(currentTyperCorners).includes(act.value)).map(act => html`
                                     <button class="action-select-btn ${currentTyperCorners[this.editingZone] === act.value ? 'selected' : ''}" 
                                             @click=${() => {
                                                 const newCorners = { ...currentTyperCorners, [this.editingZone]: act.value };
