@@ -334,7 +334,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
     });
 
-    iipcMain.on('set-oa-mode', (event, isActive) => {
+    ipcMain.on('set-oa-mode', (event, isActive) => {
         global.isOAModeActive = isActive;
         if (isActive) global.isClickThroughState = true;
     });
