@@ -544,7 +544,7 @@ export class CustomizeView extends LitElement {
             'change_ai': '🤖', 'change_profile': '👤', 'fast_think': '🧠', 'refactor': '🛠️',
             'reset': '✨', 'text_inc': 'A+', 'text_dec': 'A-', 'bg_inc': '⬛', 'bg_dec': '⬜',
             'fix_error': '🔧', 'language': '💻', 'mic': '🎙️', 'toggle_ai_vis': '👁️', 
-            'auto_type': '⌨️', 'trim_top': '✂️ Top', 'trim_bottom': '✂️ Bot', 'abort_typer': '🛑' // 🟢 NEW
+            'auto_type': '⌨️', 'trim_top': '✂️ Top', 'trim_bottom': '✂️ Bot', 'abort_typer': '🛑', 'abort_oa': '🚪'
         };
         return labels[action] || '—';
     }
@@ -739,11 +739,11 @@ export class CustomizeView extends LitElement {
                     </div>
                 `;
             
-            case 'hotcorners':
+            case 'hotcorners': {
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
-                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'},
+                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
@@ -853,8 +853,9 @@ export class CustomizeView extends LitElement {
                         </div>
                     ` : ''}
                 `;
+            }
 
-            case 'typercorners':
+            case 'typercorners': {
                 const typerActionsList = [
                     {value: 'none', label: 'None (Disabled)'},
                     {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
@@ -928,6 +929,7 @@ export class CustomizeView extends LitElement {
                         </div>
                     ` : ''}
                 `;
+            }
 
             case 'search':
                 return html`

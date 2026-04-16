@@ -312,12 +312,6 @@ export class AppHeader extends LitElement {
                     <button class="back-btn" @click=${this.onBackClick}>◀ Hub</button>
                 ` : ''}
 
-                ${isOA ? html`
-                    <div class="ghost-badge ${this.isGhostActive ? 'active' : 'broken'}">
-                        ${this.isGhostActive ? '👻 GHOST MODE ON' : '⚠️ GHOST BROKEN'}
-                    </div>
-                ` : ''}
-
                 <div class="header-title">${displayTitle}</div>
 
                 ${!isOA && this.isHelpingMode && this.connectionPin ? html`
@@ -338,6 +332,12 @@ export class AppHeader extends LitElement {
                 ${!isOA && (this.missingAccount || this.missingContext) && this.typingState === 'idle' && !this.isTyperMode && !this.isHelpingMode ? html`
                     <div class="blinking-alert" style="cursor: default !important;">
                         ⚠️ SETUP MISSING: ${this.missingAccount ? 'Accounts' : ''} ${this.missingAccount && this.missingContext ? ' & ' : ''} ${this.missingContext ? 'Resume' : ''}
+                    </div>
+                ` : ''}
+
+                ${isOA ? html`
+                    <div class="ghost-badge ${this.isGhostActive ? 'active' : 'broken'}">
+                        ${this.isGhostActive ? '👻 GHOST MODE ON' : '⚠️ GHOST BROKEN'}
                     </div>
                 ` : ''}
 

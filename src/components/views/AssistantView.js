@@ -845,14 +845,28 @@ export class AssistantView extends LitElement {
             
             case 'abort_typer':
                 this.showToast('🛑 Aborted Auto-Typer');
-                this.handleStopTyping(); // Stops powershell immediately if running
+                this.handleStopTyping(); 
                 this.viewMode = 'chat';
                 window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
-                // 🐛 FIX: Do NOT summon the widget if we are in an OA!
                 if (window.require && this.currentMode !== 'proctored_oa') {
                     window.require('electron').ipcRenderer.invoke('show-widget');
                 }
                 this.requestUpdate();
+                break;
+            case 'abort_oa':
+                this.showToast('🚪 Exiting Proctored OA...');
+                this.handleStopTyping();
+                this.setGhostMode(false); // Instantly turn off click-through
+                if (window.require) {
+                    window.require('electron').ipcRenderer.send('set-oa-mode', false);
+                }
+                // Try to gracefully click the header back button, otherwise force reload to Hub
+                const header = document.querySelector('app-header');
+                if (header && header.onBackClick) {
+                    header.onBackClick();
+                } else {
+                    window.location.reload(); 
+                }
                 break;
         }
     }
@@ -1609,7 +1623,7 @@ export class AssistantView extends LitElement {
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
-            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 'reset_typer': '🔄 Reset'
+            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA'
         };
         return labels[action] || action || '—';
     }
