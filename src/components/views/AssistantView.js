@@ -485,6 +485,12 @@ export class AssistantView extends LitElement {
                         this.viewMode = 'chat';
                         window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
                         this.showToast('✅ Typing Complete');
+                        
+                        // 🟢 THE FIX: Wipe the memory lines clean so it doesn't corrupt a retry of the same payload!
+                        this.typerStartLine = 0;
+                        this.typerEndLine = this.typerCodeLines.length - 1;
+                        this.typingCurrentLineIndex = 0;
+
                         if (window.require && this.currentMode !== 'proctored_oa') {
                             window.require('electron').ipcRenderer.invoke('show-widget');
                         }
@@ -740,15 +746,18 @@ export class AssistantView extends LitElement {
                         codeText = codeText.replace(/```(c\+\+|python|java|javascript|js|cpp)?/gi, '').replace(/```/g, '').trim();
                         const newLines = codeText.split('\n');
                         const isSamePayload = this.typerCodeLines && this.typerCodeLines.join('\n') === newLines.join('\n');
-
-                        if (!isSamePayload) {
+                        
+                        // 🟢 THE FIX: If it's the exact same payload but we already finished typing it earlier, override the lock!
+                        const isAlreadyFinished = this.typingCurrentLineIndex > 0 && this.typingCurrentLineIndex >= (this.typerEndLine - this.typerStartLine);
+                        
+                        if (!isSamePayload || isAlreadyFinished) {
                             this.typerCodeLines = newLines;
                             this.typerStartLine = 0;
                             this.typerEndLine = this.typerCodeLines.length - 1;
                             this.typingCurrentLineIndex = 0;
                         }
-
-                        this.showToast(isSamePayload ? '🎯 Typer Ready. Trigger again to resume.' : '🎯 Typer Ready. Trigger again to start.');
+                    
+                        this.showToast((isSamePayload && !isAlreadyFinished) ? '🎯 Typer Ready. Trigger again to resume.' : '🎯 Typer Ready. Trigger again to start.');
                         this.viewMode = 'typer';
                         window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: true }));
                         this.requestUpdate();
