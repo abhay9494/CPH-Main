@@ -407,25 +407,29 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     let radialAnchorY = 0;
     let currentRadialSlice = null;
     const DEADZONE_PX = 40; // You must pull the mouse 40px to trigger
-    
+
     ipcMain.on('sync-radial-labels', (event, labels) => {
         global.activeRadialLabels = labels || Array(16).fill('—');
+        // 🟢 Beams the text straight into the Radial HUD
+        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
+        }
     });
-    
+
     ipcMain.on('toggle-radial-permanent', (event, isVisible) => {
         global.isLiveInterviewMode = isVisible;
         if (isVisible) {
             global.createRadialWindow();
             global.radialHudWindow.showInactive();
             global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
-        
+
             // 🟢 SPAN THE BGMI CTRL TRACKER (Zero OS Shortcut Hijacking!)
             if (!bgmiTrackerProcess) {
                 const { spawn } = require('child_process');
                 const fs = require('fs');
                 const os = require('os');
                 const path = require('path');
-            
+
                 // This lightweight C# loop physically watches the Ctrl key state without intercepting it
                 const psScript = `
                 $code = @'
@@ -450,9 +454,9 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 `;
                 const scriptPath = path.join(os.tmpdir(), 'bgmi_tracker.ps1');
                 fs.writeFileSync(scriptPath, psScript);
-            
+
                 bgmiTrackerProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', scriptPath]);
-            
+
                 bgmiTrackerProcess.stdout.on('data', (data) => {
                     const output = data.toString().trim();
                     if (output.includes('CTRL_DOWN')) {
@@ -461,14 +465,14 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                         const point = screen.getCursorScreenPoint();
                         radialAnchorX = point.x;
                         radialAnchorY = point.y;
-                    
+
                         if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
                         radialTelemetryLoop = setInterval(() => {
                             const p = screen.getCursorScreenPoint();
                             const dx = p.x - radialAnchorX;
                             const dy = p.y - radialAnchorY;
                             const dist = Math.sqrt(dx*dx + dy*dy);
-                        
+
                             if (dist > DEADZONE_PX) {
                                 let angle = Math.atan2(dy, dx) * (180 / Math.PI);
                                 angle = angle + 90; // Shift 0 to Top Center
@@ -478,7 +482,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                             } else {
                                 currentRadialSlice = null; // Inside deadzone
                             }
-                        
+
                             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                                 global.radialHudWindow.webContents.send('update-hud', {
                                     slice: currentRadialSlice,
@@ -518,17 +522,6 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     ipcMain.on('set-oa-mode', (event, isActive) => {
         global.isOAModeActive = isActive;
         if (isActive) global.isClickThroughState = true;
-    });
-
-    ipcMain.on('toggle-radial-permanent', (event, isVisible) => {
-        global.isLiveInterviewMode = isVisible;
-        if (isVisible) {
-            global.createRadialWindow();
-            global.radialHudWindow.showInactive();
-            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: activeRadialLabels });
-        } else {
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
-        }
     });
 
     // 🟢 FIX: Intercept and track the ignore-mouse events here so the global shortcuts can read it!
