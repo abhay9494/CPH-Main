@@ -968,6 +968,7 @@ export class AssistantView extends LitElement {
                 this.setGhostMode(false); // Instantly turn off click-through
                 if (window.require) {
                     window.require('electron').ipcRenderer.send('set-oa-mode', false);
+                    window.require('electron').ipcRenderer.send('toggle-radial-permanent', false);
                 }
                 // Try to gracefully click the header back button, otherwise force reload to Hub
                 const header = document.querySelector('app-header');

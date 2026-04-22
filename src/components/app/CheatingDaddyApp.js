@@ -555,6 +555,7 @@ export class CheatingDaddyApp extends LitElement {
 
         if (destination === 'main') {
             window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false }));
+            ipcRenderer.send('toggle-radial-permanent', false);
             this.currentView = destination;
             this.requestUpdate();
             return;
