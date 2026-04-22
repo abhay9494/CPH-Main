@@ -133,6 +133,7 @@ function getDefaultKeybinds() {
         scrollDown: isMac ? 'Cmd+Shift+Down' : 'Ctrl+Shift+Down',
         emergencyErase: isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E',
         emergencyKill: isMac ? 'Cmd+Shift+Q' : 'Ctrl+Shift+Q', // 🟢 NEW: Instant Death
+        toggleRadial: isMac ? 'Cmd+Space' : 'Ctrl+Space'
     };
 }
 
@@ -324,6 +325,56 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     register('emergencyKill', keybinds.emergencyKill, () => {
         console.log("💀 EMERGENCY KILL TRIGGERED!");
         app.exit(0); // 🟢 INSTANT KILL: Bypasses all teardown events and vanishes immediately.
+    });
+
+    // 🟢 THE WRIST-FLICK AUTO-FIRE ENGINE
+    let radialInterval = null;
+    let radialStartX = 0;
+    let radialStartY = 0;
+    let currentRadialSlice = null;
+
+    register('toggleRadial', keybinds.toggleRadial, () => {
+        if (!mainWindow || mainWindow.isDestroyed()) return;
+        
+        // If already open, close it manually
+        if (radialInterval) {
+            clearInterval(radialInterval);
+            radialInterval = null;
+            mainWindow.webContents.send('hide-radial-hud');
+            return;
+        }
+
+        const { screen } = require('electron');
+        const point = screen.getCursorScreenPoint();
+        radialStartX = point.x;
+        radialStartY = point.y;
+        currentRadialSlice = null;
+
+        mainWindow.webContents.send('show-radial-hud');
+
+        radialInterval = setInterval(() => {
+            const current = screen.getCursorScreenPoint();
+            const dx = current.x - radialStartX;
+            const dy = current.y - radialStartY;
+            const dist = Math.sqrt(dx*dx + dy*dy);
+
+            if (dist > 25) {
+                let angle = Math.atan2(dy, dx) * 180 / Math.PI;
+                let shifted = (angle + 90 + 360) % 360;
+                currentRadialSlice = Math.floor(((shifted + 11.25) % 360) / 22.5);
+                mainWindow.webContents.send('update-radial-hud', { slice: currentRadialSlice, dist });
+            } else {
+                currentRadialSlice = null;
+                mainWindow.webContents.send('update-radial-hud', { slice: null, dist });
+            }
+
+            // 🟢 THE AUTO-FIRE THRESHOLD (120 pixels)
+            if (dist > 120) { 
+                clearInterval(radialInterval);
+                radialInterval = null;
+                mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
+            }
+        }, 16);
     });
 }
 

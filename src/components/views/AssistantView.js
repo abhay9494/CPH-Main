@@ -214,6 +214,11 @@ export class AssistantView extends LitElement {
         typerMistakes: { type: Number },
         hotCornersPage2Map: { type: Object }, 
         activePage: { type: Number },
+        radialMap: { type: Object },
+        radialActive: { type: Boolean },
+        radialX: { type: Number },
+        radialY: { type: Number },
+        radialSlice: { type: Number }
     };
 
     constructor() {
@@ -266,6 +271,11 @@ export class AssistantView extends LitElement {
         this.typerHotCornersMap = {};
         this.activePage = 1;
         this.hotCornersPage2Map = {};
+        this.radialMap = {};
+        this.radialActive = false;
+        this.radialX = null;
+        this.radialY = null;
+        this.radialSlice = null;
     }
 
     showToast(msg) {
@@ -366,6 +376,55 @@ export class AssistantView extends LitElement {
         window.addEventListener('app-quitting', this.appQuittingHandler);
         window.addEventListener('sync-preference', (e) => this.syncPreferences(e));
         window.addEventListener('focus', () => this.requestUpdate());
+        
+        // 🟢 NEW: IPC RADIAL LISTENERS (Bypasses OS Focus Restrictions)
+        if (window.require) {
+            const { ipcRenderer } = window.require('electron');
+            
+            ipcRenderer.on('show-radial-hud', () => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                this.radialActive = true;
+                this.radialSlice = null;
+                this.requestUpdate();
+            });
+
+            ipcRenderer.on('hide-radial-hud', () => {
+                this.radialActive = false;
+                this.radialSlice = null;
+                this.requestUpdate();
+            });
+
+            ipcRenderer.on('update-radial-hud', (event, data) => {
+                if (!this.radialActive) return;
+                this.radialSlice = data.slice;
+                this.radialDistance = data.dist;
+                this.requestUpdate();
+            });
+
+            ipcRenderer.on('execute-radial-hud', (event, sliceIndex) => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                this.radialActive = false;
+                this.requestUpdate();
+                
+                if (sliceIndex !== null) {
+                    const slices = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+                    const action = this.radialMap[slices[sliceIndex]];
+                    if (action && action !== 'none') this.executeHotCorner(action);
+                }
+            });
+        }
+
+        this._boundWheel = (e) => {
+            if (this.currentMode !== 'proctored_live_interview') return;
+            if (e.ctrlKey) {
+                e.preventDefault(); 
+                const leftPane = this.shadowRoot.querySelector('#code-pane');
+                const rightPane = this.shadowRoot.querySelector('#chat-pane');
+                if (e.shiftKey) { if (leftPane) leftPane.scrollTop += e.deltaY; } 
+                else { if (rightPane) rightPane.scrollTop += e.deltaY; }
+            }
+        };
+        window.addEventListener('wheel', this._boundWheel, {passive: false});
 
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
@@ -374,7 +433,7 @@ export class AssistantView extends LitElement {
                 if (this.isMicOn !== isListening) { this.isMicOn = isListening; this.requestUpdate(); }
             });
 
-            if (this.currentMode !== 'proctored_oa') {
+            if (this.currentMode !== 'proctored_oa' && this.currentMode !== 'proctored_live_interview') {
                 ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
             } else {
                 ipcRenderer.invoke('hide-widget');
@@ -397,7 +456,13 @@ export class AssistantView extends LitElement {
                 this.style.setProperty('--response-font-size', `${this.fontSize}px`);
                 
                 // 🟢 LOAD THE DUAL BRAINS
-                this.hotCornersPage2Map = prefs.hotCornersPage2 || {}; // 🟢 Load Page 2
+                this.hotCornersPage2Map = prefs.hotCornersPage2 || {}; 
+                this.radialMap = prefs.radialCorners || {
+                    N: 'none', NNE: 'none', NE: 'hide_unhide', ENE: 'none',
+                    E: 'next_resp', ESE: 'none', SE: 'fix_error', SSE: 'none',
+                    S: 'scroll_down', SSW: 'none', SW: 'send_ai', WSW: 'none',
+                    W: 'prev_resp', WNW: 'none', NW: 'capture', NNW: 'none'
+                };
                 this.hotCornersMap = prefs.hotCorners || {
                     top_left: 'capture', bottom_left: 'send_ai', 
                     top_right: 'hide_unhide', bottom_right: 'change_profile',
@@ -461,7 +526,7 @@ export class AssistantView extends LitElement {
             });
             this.handleAppMadeVisible = () => {
                 this._isGhostHidden = false;
-                if (this.currentMode !== 'proctored_oa') {
+                if (this.currentMode !== 'proctored_oa' && this.currentMode !== 'proctored_live_interview') {
                     ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
                 }
                 const container = this.shadowRoot.querySelector('.markdown-body');
@@ -518,7 +583,7 @@ export class AssistantView extends LitElement {
                     window.dispatchEvent(new CustomEvent('typer-mode-toggled', { detail: false }));
                     
                     // 🐛 FIX: Only restore the widget if we are NOT in a proctored exam!
-                    if (window.require && this.currentMode !== 'proctored_oa') {
+                    if (window.require && this.currentMode !== 'proctored_oa' && this.currentMode !== 'proctored_live_interview') {
                         window.require('electron').ipcRenderer.invoke('show-widget');
                     }
                     this.requestUpdate();
@@ -683,7 +748,7 @@ export class AssistantView extends LitElement {
                 // 🟢 TELL BACKGROUND WE ARE IN OA MODE TO NUKE SHORTCUTS
                 ipcRenderer.send('set-oa-mode', this.currentMode === 'proctored_oa');
 
-                if (this.currentMode === 'proctored_oa') {
+                if (this.currentMode === 'proctored_oa' || this.currentMode === 'proctored_live_interview') {
                     ipcRenderer.invoke('hide-widget');
                 } else {
                     ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
@@ -700,6 +765,7 @@ export class AssistantView extends LitElement {
         window.removeEventListener('help-mode-toggled', this.helpModeHandler);
         window.removeEventListener('app-quitting', this.appQuittingHandler);
         window.removeEventListener('sync-preference', (e) => this.syncPreferences(e));
+        window.removeEventListener('wheel', this._boundWheel);
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeAllListeners('ai-new-message');
@@ -1759,6 +1825,65 @@ export class AssistantView extends LitElement {
         `;
     }
 
+    renderProctoredLiveInterviewMode() {
+        let leftContent = "";
+        let rightContent = "";
+
+        if (this.localChatHistory.length === 0) {
+            leftContent = "🟢 **Code Window**\nAwaiting `<FULL_CODE>` blocks...";
+            rightContent = "🟢 **Live Feed**\nAwaiting chat & minor fixes...";
+        } else {
+            this.localChatHistory.forEach(msg => {
+                if (msg.startsWith('👤 You:')) {
+                    rightContent += `\n\n**👤 You:** ${msg.substring(7).split('🤖 AI:')[0]}\n`;
+                }
+                
+                const aiPart = msg.split('🤖 AI:')[1] || msg;
+                const fullCodes = aiPart.match(/<FULL_CODE>([\s\S]*?)<\/FULL_CODE>/g);
+                const minorFixes = aiPart.match(/<MINOR_FIX>([\s\S]*?)<\/MINOR_FIX>/g);
+                const chats = aiPart.match(/<CHAT>([\s\S]*?)<\/CHAT>/g);
+
+                if (fullCodes) {
+                    // 🟢 PINS LATEST CODE: Overwrite Left pane with ONLY the latest code blocks in this response
+                    leftContent = fullCodes.map(c => c.replace(/<\/?FULL_CODE>/g, '').trim()).join('\n\n');
+                }
+
+                if (minorFixes) minorFixes.forEach(c => rightContent += `\n\n**Minor Fix:**\n${c.replace(/<\/?MINOR_FIX>/g, '')}`);
+                if (chats) chats.forEach(c => rightContent += `\n\n${c.replace(/<\/?CHAT>/g, '')}`);
+
+                if (!fullCodes && !minorFixes && !chats && msg.includes('🤖 AI:')) {
+                    rightContent += `\n\n🤖 AI:\n${aiPart.trim()}`;
+                }
+            });
+        }
+
+        const slices = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
+
+        return html`
+            <div style="display: flex; width: 100%; height: 100%; background: transparent; position: relative;">
+                <div id="code-pane" class="markdown-body" style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px;" .innerHTML=${this.renderMarkdown(leftContent)}></div>
+                
+                <div id="chat-pane" class="markdown-body" style="flex: 1; overflow-y: auto; padding-left: 10px;" .innerHTML=${this.renderMarkdown(rightContent)}></div>
+
+                ${this.radialActive ? html`
+                    <div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 220px; height: 220px; border-radius: 50%; background: rgba(10,10,10,0.85); border: 3px solid rgba(255,255,255,0.1); pointer-events: none; z-index: 9999; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); backdrop-filter: blur(4px);">
+                        ${this.radialSlice !== null ? html`
+                            <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from ${this.radialSlice * 22.5 - 11.25}deg, rgba(0, 204, 102, 0.4) 0deg, rgba(0, 204, 102, 0.4) 22.5deg, transparent 22.5deg);"></div>
+                            <div style="position: absolute; bottom: -35px; background: #00cc66; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: bold; white-space: nowrap; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
+                                ${this.getHotCornerLabel(this.radialMap[slices[this.radialSlice]])}
+                            </div>
+                        ` : html`
+                            <div style="color: #888; font-size: 12px; font-weight: bold; text-align: center;">Move Mouse<br/>to Select</div>
+                        `}
+                        <div style="width: 40px; height: 40px; border-radius: 50%; background: #222; border: 2px solid #555; display: flex; align-items: center; justify-content: center; z-index: 2;">
+                            <span style="font-size: 10px; color: #aaa; font-weight: bold;">CTRL</span>
+                        </div>
+                    </div>
+                ` : ''}
+            </div>
+        `;
+    }
+
     renderProctoredOAMode() {
         let m = "🟢 **Ghost Sensors Active.** Move mouse to screen edges/corners and hold to trigger actions.";
         const c = this.localChatHistory.length > 0 && this.localChatIndex >= 0 ? this.localChatHistory[this.localChatIndex] : m;
@@ -1832,6 +1957,7 @@ export class AssistantView extends LitElement {
     render() {
         if (this.viewMode === 'typer') return this.renderTyperMode();
         if (this.currentMode === 'proctored_oa') return this.renderProctoredOAMode();
+        if (this.currentMode === 'proctored_live_interview') return this.renderProctoredLiveInterviewMode();
         if (this.isHelpingMode && this.helperStatus !== 'connected') return this.renderHelpingMode();
 
         let m = "🟢 **System Online. Awaiting inputs...**";

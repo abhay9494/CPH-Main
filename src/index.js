@@ -1648,7 +1648,10 @@ function setupGeneralIpcHandlers() {
             // if (process.platform === 'win32') widgetWindow.setDisplayAffinity('exclude_from_capture');
             widgetWindow.loadFile('src/widget.html');
         } else {
-            widgetWindow.show();
+            // 🟢 FIX: Restore Opacity and Mouse Clicks when returning from Ghost state!
+            widgetWindow.setOpacity(1);
+            widgetWindow.setIgnoreMouseEvents(false);
+            widgetWindow.showInactive(); // Shows it without stealing your keyboard focus
         }
     });
 

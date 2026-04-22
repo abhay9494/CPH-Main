@@ -46,10 +46,18 @@ const DEFAULT_PREFERENCES = {
         middle_left: 'none', middle_right: 'none',
         left_mid_bottom: 'expand_top', right_mid_bottom: 'expand_bottom',
         bottom_left: 'reset_typer', bottom_mid_left: 'none', bottom_center: 'scroll_down', bottom_mid_right: 'none', bottom_right: 'auto_type'
+    },
+    radialCorners: {
+        N: 'none', NNE: 'none', NE: 'hide_unhide', ENE: 'none',
+        E: 'next_resp', ESE: 'none', SE: 'fix_error', SSE: 'none',
+        S: 'scroll_down', SSW: 'none', SW: 'send_ai', WSW: 'none',
+        W: 'prev_resp', WNW: 'none', NW: 'capture', NNW: 'none'
     }
 };
 
-const DEFAULT_KEYBINDS = null; // null means use system defaults
+const DEFAULT_KEYBINDS = {
+    toggleRadial: 'Ctrl+Space' // 🟢 NEW: Default Radial trigger
+};
 
 const DEFAULT_LIMITS = {
     data: [] // Array of { date: 'YYYY-MM-DD', flash: { count }, flashLite: { count }, groq: { 'qwen3-32b': { chars, limit }, 'gpt-oss-120b': { chars, limit }, 'gpt-oss-20b': { chars, limit } }, gemini: { 'gemma-3-27b-it': { chars } } }

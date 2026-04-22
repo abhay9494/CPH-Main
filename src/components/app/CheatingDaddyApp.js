@@ -560,20 +560,22 @@ export class CheatingDaddyApp extends LitElement {
             return;
         }
 
-        if (destination === 'oa' || destination === 'interview' || destination === 'companion' || destination === 'proctored_oa') {
+        if (destination === 'oa' || destination === 'interview' || destination === 'companion' || destination === 'proctored_oa' || destination === 'proctored_live_interview') {
             this.sessionMode = destination === 'interview' ? 'interview' : destination;
-
             const targetEngine = (destination === 'oa' || destination === 'proctored_oa') ? 1 : 0;
             await ipcRenderer.invoke('set-ai-provider', targetEngine);
 
-            // 🟢 FIX: Send custom boundary sliders to the C++ Telemetry Engine!
             if (destination === 'proctored_oa') {
                 const raw = await window.cheatingDaddy.storage.getPreferences();
                 const bounds = (raw?.data || raw || {}).hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
                 ipcRenderer.send('start-hot-corners', bounds);
-                
-                ipcRenderer.invoke('hide-widget'); // Kill the widget
-                ipcRenderer.send('set-ignore-mouse-events', true); // Instantly turn on Click-Through
+                ipcRenderer.invoke('hide-widget'); 
+                ipcRenderer.send('set-ignore-mouse-events', true); 
+            } else if (destination === 'proctored_live_interview') {
+                // 🟢 PROCTORED LIVE INTERVIEW LOCKS
+                ipcRenderer.send('stop-hot-corners'); // Disable edge triggers!
+                ipcRenderer.invoke('hide-widget'); // Kill the widget!
+                ipcRenderer.send('set-ignore-mouse-events', true); // Turn on Click-Through Ghost Mode!
             } else {
                 ipcRenderer.send('set-ignore-mouse-events', false); // Restore clicks for other modes
             }
@@ -659,6 +661,7 @@ export class CheatingDaddyApp extends LitElement {
             case 'assistant':
                 if (this.sessionMode === 'oa') return 'CP Helper 20 - Online Assessment';
                 if (this.sessionMode === 'proctored_oa') return 'CP Helper 20 - Proctored OA';
+                if (this.sessionMode === 'proctored_live_interview') return 'CP Helper 20 - Proctored Live Interview';
                 return 'CP Helper 20 - Live Interview';
             case 'customize':
                 return 'CP Helper 20 - Settings';

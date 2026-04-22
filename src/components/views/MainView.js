@@ -5,7 +5,8 @@ export class MainView extends LitElement {
         :host {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             height: 100%; width: 100%; color: var(--text-color); background: transparent; 
-            overflow: hidden; /* 🐛 Strictly prohibits scrollbars */
+            overflow-y: auto; /* 🟢 FIX: Allows smooth scrolling for the extra cards */
+            padding: 20px 0;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; cursor: default !important;
         }
         .hub-wrapper {
@@ -19,7 +20,14 @@ export class MainView extends LitElement {
         .hub-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.5px; }
         .hub-subtitle { font-size: 13px; color: var(--text-muted, #888); margin-bottom: 15px; }
 
-        .primary-grid { display: grid; grid-template-columns: repeat(2, minmax(220px, 1fr)); gap: 12px; width: 100%; margin-bottom: 15px; }
+        .primary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px;
+            width: 100%;
+            max-width: 800px;
+            margin-bottom: 20px;
+        }
         .mode-card {
             background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
             padding: 12px 15px; display: flex; flex-direction: column; align-items: flex-start;
@@ -82,6 +90,11 @@ export class MainView extends LitElement {
                         <div class="icon-wrapper">🤝</div>
                         <div class="card-title">Help a Friend</div>
                         <div class="card-desc">Connect to a peer's session via secure WebRTC to quietly push answers and code to their screen.</div>
+                    </div>
+                    <div class="mode-card card-interview" @click=${() => this.onNavigate('proctored_live_interview')} style="border-top-color: #00cc66;">
+                        <div class="icon-wrapper" style="color: #00cc66; background: rgba(0, 204, 102, 0.15); border-color: rgba(0, 204, 102, 0.3);">🕵️</div>
+                        <div class="card-title">Proctored Live Interview</div>
+                        <div class="card-desc">Dual-pane code & chat view. Zero-click 16-zone radial wrist-flicks to execute commands silently.</div>
                     </div>
                 </div>
 

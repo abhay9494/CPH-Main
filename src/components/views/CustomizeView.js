@@ -333,7 +333,7 @@ export class CustomizeView extends LitElement {
             moveUp: 'Move Window Up', moveDown: 'Move Window Down', moveLeft: 'Move Window Left', moveRight: 'Move Window Right',
             toggleVisibility: 'Toggle Hide/Show', toggleClickThrough: 'Toggle Click-Through', nextStep: 'Capture/Send Prompt',
             previousResponse: 'Previous Response', nextResponse: 'Next Response', scrollUp: 'Scroll Up', scrollDown: 'Scroll Down', 
-            emergencyErase: 'Emergency Erase (Wipe Data)', emergencyKill: 'Emergency Kill (Instant Quit)'
+            emergencyErase: 'Emergency Erase (Wipe Data)', emergencyKill: 'Emergency Kill (Instant Quit)', toggleRadial: '🎯 Spawn Radial HUD (Wrist Flick)'
         };
         this.newProfileName = '';
         this.newProfileAI = '0'; 
