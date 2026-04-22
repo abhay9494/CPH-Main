@@ -1838,30 +1838,42 @@ function setupGeneralIpcHandlers() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
             if (isGhostHidden) {
-                mainWindow.webContents.send('app-made-hidden'); // 🟢 SYNC FRONTEND
-                
+                mainWindow.webContents.send('app-made-hidden');
+                // 🟢 SYNC FRONTEND
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
                     wasAiVisibleBeforeGhost = aiWebWindow.isVisible() && aiWebWindow.getOpacity() !== 0;
                 } else {
                     wasAiVisibleBeforeGhost = false;
                 }
-
                 mainWindow.setOpacity(0);
                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
+
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
                     aiWebWindow.setOpacity(0);
                     aiWebWindow.setIgnoreMouseEvents(true, { forward: true });
                 }
+
+                // 🟢 LINK THE MINIMAP TO STEALTH MODE
+                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                    global.radialHudWindow.hide();
+                }
+
             } else {
-                mainWindow.webContents.send('app-made-visible'); // 🟢 SYNC FRONTEND
-                
+                mainWindow.webContents.send('app-made-visible');
+                // 🟢 SYNC FRONTEND
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
+
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
                     if (wasAiVisibleBeforeGhost) {
                         aiWebWindow.setOpacity(1);
                         aiWebWindow.setIgnoreMouseEvents(false);
                     }
+                }
+
+                // 🟢 RESTORE THE MINIMAP
+                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+                    global.radialHudWindow.showInactive();
                 }
             }
         }

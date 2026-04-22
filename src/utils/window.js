@@ -406,31 +406,33 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     let radialAnchorX = 0;
     let radialAnchorY = 0;
     let currentRadialSlice = null;
-    const DEADZONE_PX = 40; // You must pull the mouse 40px to trigger
-
+    const DEADZONE_PX = 25; // 🟢 Tightened so releasing the mouse doesn't accidentally cancel it!
+    
     ipcMain.on('sync-radial-labels', (event, labels) => {
         global.activeRadialLabels = labels || Array(16).fill('—');
-        // 🟢 Beams the text straight into the Radial HUD
         if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
             global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
         }
     });
-
+    
     ipcMain.on('toggle-radial-permanent', (event, isVisible) => {
         global.isLiveInterviewMode = isVisible;
         if (isVisible) {
             global.createRadialWindow();
-            global.radialHudWindow.showInactive();
-            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
-
-            // 🟢 SPAN THE BGMI CTRL TRACKER (Zero OS Shortcut Hijacking!)
+            
+            // 🟢 Start the HUD Hidden! It only appears after the Long-Press.
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.hide();
+                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
+            }
+        
+            // 🟢 SPAWN THE BGMI LONG-PRESS TRACKER
             if (!bgmiTrackerProcess) {
                 const { spawn } = require('child_process');
                 const fs = require('fs');
                 const os = require('os');
                 const path = require('path');
-
-                // This lightweight C# loop physically watches the Ctrl key state without intercepting it
+            
                 const psScript = `
                 $code = @'
                 using System;
@@ -447,66 +449,104 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                     $isDown = ($state -band 0x8000) -ne 0
                     if ($isDown -ne $ctrlDown) {
                         $ctrlDown = $isDown
-                        if ($isDown) { Write-Host "CTRL_DOWN" } else { Write-Host "CTRL_UP" }
+                        if ($isDown) { 
+                            [Console]::WriteLine("CTRL_DOWN")
+                            [Console]::Out.Flush()
+                        } else { 
+                            [Console]::WriteLine("CTRL_UP")
+                            [Console]::Out.Flush()
+                        }
                     }
-                    Start-Sleep -Milliseconds 15
+                    Start-Sleep -Milliseconds 10
                 }
                 `;
                 const scriptPath = path.join(os.tmpdir(), 'bgmi_tracker.ps1');
                 fs.writeFileSync(scriptPath, psScript);
-
+    
                 bgmiTrackerProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', scriptPath]);
-
+    
                 bgmiTrackerProcess.stdout.on('data', (data) => {
-                    const output = data.toString().trim();
-                    if (output.includes('CTRL_DOWN')) {
-                        // Anchor point set!
-                        const { screen } = require('electron');
-                        const point = screen.getCursorScreenPoint();
-                        radialAnchorX = point.x;
-                        radialAnchorY = point.y;
-
-                        if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
-                        radialTelemetryLoop = setInterval(() => {
-                            const p = screen.getCursorScreenPoint();
-                            const dx = p.x - radialAnchorX;
-                            const dy = p.y - radialAnchorY;
-                            const dist = Math.sqrt(dx*dx + dy*dy);
-
-                            if (dist > DEADZONE_PX) {
-                                let angle = Math.atan2(dy, dx) * (180 / Math.PI);
-                                angle = angle + 90; // Shift 0 to Top Center
-                                if (angle < 0) angle += 360;
-                                let adjustedAngle = (angle + 11.25) % 360;
-                                currentRadialSlice = Math.floor(adjustedAngle / 22.5);
-                            } else {
-                                currentRadialSlice = null; // Inside deadzone
-                            }
-
-                            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                global.radialHudWindow.webContents.send('update-hud', {
-                                    slice: currentRadialSlice,
-                                    labels: global.activeRadialLabels
-                                });
-                            }
-                        }, 30);
-                    } else if (output.includes('CTRL_UP')) {
-                        // FIRE THE TRIGGER
-                        if (radialTelemetryLoop) {
-                            clearInterval(radialTelemetryLoop);
-                            radialTelemetryLoop = null;
+                    const lines = data.toString().split('\n');
+                    
+                    for (let output of lines) {
+                        output = output.trim();
+                        
+                        if (output === 'CTRL_DOWN') {
+                            // 🟢 THE LONG-PRESS TIMER (Filters out Ctrl+C / Ctrl+V)
+                            global.ctrlHoldTimer = setTimeout(() => {
+                                global.isRadialModeActive = true;
+                                
+                                const { screen } = require('electron');
+                                const point = screen.getCursorScreenPoint();
+                                radialAnchorX = point.x;
+                                radialAnchorY = point.y;
+                            
+                                // 🟢 0.4s has passed. Reveal the HUD!
+                                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                    global.radialHudWindow.showInactive();
+                                }
+                            
+                                if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
+                                radialTelemetryLoop = setInterval(() => {
+                                    const p = screen.getCursorScreenPoint();
+                                    const dx = p.x - radialAnchorX;
+                                    const dy = p.y - radialAnchorY;
+                                    const dist = Math.sqrt(dx*dx + dy*dy);
+                                
+                                    if (dist > DEADZONE_PX) {
+                                        let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                                        angle = angle + 90; 
+                                        if (angle < 0) angle += 360;
+                                        let adjustedAngle = (angle + 11.25) % 360;
+                                        currentRadialSlice = Math.floor(adjustedAngle / 22.5);
+                                    } else {
+                                        currentRadialSlice = null; // Inside deadzone
+                                    }
+                                
+                                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                        global.radialHudWindow.webContents.send('update-hud', {
+                                            slice: currentRadialSlice,
+                                            labels: global.activeRadialLabels
+                                        });
+                                    }
+                                }, 30);
+                            }, 400); // <-- Change this 400 to 2000 if you want exactly 2 seconds
                         }
-                        if (currentRadialSlice !== null && mainWindow && !mainWindow.isDestroyed()) {
-                            mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
-                        }
-                        currentRadialSlice = null;
-                        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
+                        
+                        if (output === 'CTRL_UP') {
+                            // 🟢 QUICK TAP: Cancel the timer. The HUD never shows, OS works normally.
+                            if (global.ctrlHoldTimer) {
+                                clearTimeout(global.ctrlHoldTimer);
+                                global.ctrlHoldTimer = null;
+                            }
+                        
+                            // 🟢 RADIAL MODE FIRE: You held it long enough, now we execute!
+                            if (global.isRadialModeActive) {
+                                if (radialTelemetryLoop) {
+                                    clearInterval(radialTelemetryLoop);
+                                    radialTelemetryLoop = null;
+                                }
+                                
+                                // Execute the action!
+                                if (currentRadialSlice !== null && mainWindow && !mainWindow.isDestroyed()) {
+                                    mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
+                                }
+                                
+                                currentRadialSlice = null;
+                                global.isRadialModeActive = false;
+                                
+                                // Instantly vanish the HUD
+                                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                    global.radialHudWindow.hide();
+                                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
+                                }
+                            }
                         }
                     }
                 });
             }
         } else {
+            // Clean up when exiting the mode
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
             if (bgmiTrackerProcess) {
                 bgmiTrackerProcess.kill();
