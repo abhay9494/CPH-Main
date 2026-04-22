@@ -399,18 +399,6 @@ export class AssistantView extends LitElement {
             });
         }
 
-        this._boundWheel = (e) => {
-            if (this.currentMode !== 'proctored_live_interview') return;
-            if (e.ctrlKey) {
-                e.preventDefault(); 
-                const leftPane = this.shadowRoot.querySelector('#code-pane');
-                const rightPane = this.shadowRoot.querySelector('#chat-pane');
-                if (e.shiftKey) { if (leftPane) leftPane.scrollTop += e.deltaY; } 
-                else { if (rightPane) rightPane.scrollTop += e.deltaY; }
-            }
-        };
-        window.addEventListener('wheel', this._boundWheel, {passive: false});
-
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
 
@@ -757,7 +745,6 @@ export class AssistantView extends LitElement {
         window.removeEventListener('help-mode-toggled', this.helpModeHandler);
         window.removeEventListener('app-quitting', this.appQuittingHandler);
         window.removeEventListener('sync-preference', (e) => this.syncPreferences(e));
-        window.removeEventListener('wheel', this._boundWheel);
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeAllListeners('ai-new-message');

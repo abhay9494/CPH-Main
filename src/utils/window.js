@@ -14,8 +14,8 @@ const RESIZE_ANIMATION_DURATION = 500; // milliseconds
 
 // 🐛 FIX: Declare this globally so the export at the bottom can read it!
 let companionChatWindow = null;
-let radialHudWindow = null; // 🟢 NEW
-let activeRadialLabels = Array(16).fill('—'); // 🟢 NEW
+global.radialHudWindow = null; 
+global.activeRadialLabels = Array(16).fill('—');
 
 function createWindow(sendToRenderer, geminiSessionRef) {
     // Get layout preference (default to 'normal')
@@ -135,7 +135,6 @@ function getDefaultKeybinds() {
         scrollDown: isMac ? 'Cmd+Shift+Down' : 'Ctrl+Shift+Down',
         emergencyErase: isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E',
         emergencyKill: isMac ? 'Cmd+Shift+Q' : 'Ctrl+Shift+Q', // 🟢 NEW: Instant Death
-        toggleRadial: isMac ? 'Cmd+Space' : 'Ctrl+Space'
     };
 }
 
@@ -253,9 +252,9 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                     }
                 });
                 if (isStealthHidden) {
-                    if (radialHudWindow && !radialHudWindow.isDestroyed()) radialHudWindow.hide();
+                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
                 } else {
-                    if (radialHudWindow && !radialHudWindow.isDestroyed() && global.isLiveInterviewMode) radialHudWindow.showInactive();
+                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) global.radialHudWindow.showInactive();
                 }
             }
         }
@@ -337,12 +336,12 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 🟢 CREATE THE INDEPENDENT RADIAL WINDOW AS A PERMANENT MINIMAP
     global.createRadialWindow = () => {
         const { screen } = require('electron');
-        if (!radialHudWindow || radialHudWindow.isDestroyed()) {
-            radialHudWindow = new BrowserWindow({
+        if (!global.radialHudWindow || global.radialHudWindow.isDestroyed()) {
+            global.radialHudWindow = new BrowserWindow({
                 width: 400, height: 400, frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
                 webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
-            radialHudWindow.setContentProtection(true);
+            global.radialHudWindow.setContentProtection(true);
             const htmlContent = `
                 <html><body style="margin:0; overflow:hidden; font-family:sans-serif; color:white;">
                 <div id="container" style="position:relative; width:400px; height:400px; border-radius:50%; background:rgba(10,10,10,0.85); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
@@ -386,10 +385,10 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 </script>
                 </body></html>
             `;
-            radialHudWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+            global.radialHudWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
             const primaryDisplay = screen.getPrimaryDisplay();
             const { width, height } = primaryDisplay.workAreaSize;
-            radialHudWindow.setPosition(Math.floor((width - 400) / 2), height - 420);
+            global.radialHudWindow.setPosition(Math.floor((width - 400) / 2), height - 420);
         }
     };
 }
@@ -401,9 +400,119 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
     });
 
-    // 🟢 NEW: Listen for labels from the frontend
+    // 🟢 BGMI Tracker Variables
+    let bgmiTrackerProcess = null;
+    let radialTelemetryLoop = null;
+    let radialAnchorX = 0;
+    let radialAnchorY = 0;
+    let currentRadialSlice = null;
+    const DEADZONE_PX = 40; // You must pull the mouse 40px to trigger
+    
     ipcMain.on('sync-radial-labels', (event, labels) => {
-        activeRadialLabels = labels || Array(16).fill('—');
+        global.activeRadialLabels = labels || Array(16).fill('—');
+    });
+    
+    ipcMain.on('toggle-radial-permanent', (event, isVisible) => {
+        global.isLiveInterviewMode = isVisible;
+        if (isVisible) {
+            global.createRadialWindow();
+            global.radialHudWindow.showInactive();
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
+        
+            // 🟢 SPAN THE BGMI CTRL TRACKER (Zero OS Shortcut Hijacking!)
+            if (!bgmiTrackerProcess) {
+                const { spawn } = require('child_process');
+                const fs = require('fs');
+                const os = require('os');
+                const path = require('path');
+            
+                // This lightweight C# loop physically watches the Ctrl key state without intercepting it
+                const psScript = `
+                $code = @'
+                using System;
+                using System.Runtime.InteropServices;
+                public class KeyH {
+                    [DllImport("user32.dll")]
+                    public static extern short GetAsyncKeyState(int vKey);
+                }
+                '@
+                Add-Type -TypeDefinition $code
+                $ctrlDown = $false
+                while ($true) {
+                    $state = [KeyH]::GetAsyncKeyState(0x11)
+                    $isDown = ($state -band 0x8000) -ne 0
+                    if ($isDown -ne $ctrlDown) {
+                        $ctrlDown = $isDown
+                        if ($isDown) { Write-Host "CTRL_DOWN" } else { Write-Host "CTRL_UP" }
+                    }
+                    Start-Sleep -Milliseconds 15
+                }
+                `;
+                const scriptPath = path.join(os.tmpdir(), 'bgmi_tracker.ps1');
+                fs.writeFileSync(scriptPath, psScript);
+            
+                bgmiTrackerProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', scriptPath]);
+            
+                bgmiTrackerProcess.stdout.on('data', (data) => {
+                    const output = data.toString().trim();
+                    if (output.includes('CTRL_DOWN')) {
+                        // Anchor point set!
+                        const { screen } = require('electron');
+                        const point = screen.getCursorScreenPoint();
+                        radialAnchorX = point.x;
+                        radialAnchorY = point.y;
+                    
+                        if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
+                        radialTelemetryLoop = setInterval(() => {
+                            const p = screen.getCursorScreenPoint();
+                            const dx = p.x - radialAnchorX;
+                            const dy = p.y - radialAnchorY;
+                            const dist = Math.sqrt(dx*dx + dy*dy);
+                        
+                            if (dist > DEADZONE_PX) {
+                                let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                                angle = angle + 90; // Shift 0 to Top Center
+                                if (angle < 0) angle += 360;
+                                let adjustedAngle = (angle + 11.25) % 360;
+                                currentRadialSlice = Math.floor(adjustedAngle / 22.5);
+                            } else {
+                                currentRadialSlice = null; // Inside deadzone
+                            }
+                        
+                            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                global.radialHudWindow.webContents.send('update-hud', {
+                                    slice: currentRadialSlice,
+                                    labels: global.activeRadialLabels
+                                });
+                            }
+                        }, 30);
+                    } else if (output.includes('CTRL_UP')) {
+                        // FIRE THE TRIGGER
+                        if (radialTelemetryLoop) {
+                            clearInterval(radialTelemetryLoop);
+                            radialTelemetryLoop = null;
+                        }
+                        if (currentRadialSlice !== null && mainWindow && !mainWindow.isDestroyed()) {
+                            mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
+                        }
+                        currentRadialSlice = null;
+                        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels });
+                        }
+                    }
+                });
+            }
+        } else {
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
+            if (bgmiTrackerProcess) {
+                bgmiTrackerProcess.kill();
+                bgmiTrackerProcess = null;
+            }
+            if (radialTelemetryLoop) {
+                clearInterval(radialTelemetryLoop);
+                radialTelemetryLoop = null;
+            }
+        }
     });
 
     ipcMain.on('set-oa-mode', (event, isActive) => {
@@ -415,10 +524,10 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         global.isLiveInterviewMode = isVisible;
         if (isVisible) {
             global.createRadialWindow();
-            radialHudWindow.showInactive();
-            radialHudWindow.webContents.send('update-hud', { slice: null, labels: activeRadialLabels });
+            global.radialHudWindow.showInactive();
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: activeRadialLabels });
         } else {
-            if (radialHudWindow && !radialHudWindow.isDestroyed()) radialHudWindow.hide();
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
         }
     });
 

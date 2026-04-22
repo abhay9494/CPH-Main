@@ -1771,13 +1771,6 @@ function setupGeneralIpcHandlers() {
                 if (mainWindow && !mainWindow.isDestroyed()) {
                     mainWindow.webContents.send('hot-corner-hover', currentDwellZone);
                 }
-                
-                // 🟢 SYNC VISUALS WITH THE RADIAL HUD MINIMAP
-                if (radialHudWindow && !radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
-                    const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
-                    const sliceIdx = activeZone ? clockWiseGrid.indexOf(activeZone) : null;
-                    radialHudWindow.webContents.send('update-hud', { slice: sliceIdx !== -1 ? sliceIdx : null, labels: activeRadialLabels });
-                }
             }
         }, 50);
     });
