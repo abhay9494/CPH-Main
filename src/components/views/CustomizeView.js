@@ -325,6 +325,7 @@ export class CustomizeView extends LitElement {
             { id: 'shortcuts', icon: '⌨️', label: 'Shortcuts' },
             { id: 'hotcorners', icon: '🖱️', label: 'Hot Corners' },
             { id: 'typercorners', icon: '🎯', label: 'Typer Corners' },
+            { id: 'interviewcorners', icon: '🕵️', label: 'Interview HUD' }, // 🟢 NEW
             { id: 'search', icon: '🔍', label: 'Search' },
             { id: 'advanced', icon: '⚠️', label: 'Advanced' },  
         ];
@@ -550,7 +551,7 @@ export class CustomizeView extends LitElement {
             'fix_error': '🔧',       'language': '💻',         'mic': '🎙️',            'toggle_ai_vis': '👁️', 
             'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
             'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
-            'toggle_page2': '🔄'
+            'toggle_page2': '🔄', 'regenerate': '🔄 Regen'
         };
         return labels[action] || '—';
     }
@@ -951,6 +952,83 @@ export class CustomizeView extends LitElement {
                                                 this.savePref('typerHotCorners', newCorners);
                                                 this.editingZone = null;
                                             }}>
+                                        ${act.label}
+                                    </button>
+                                `)}
+                            </div>
+                        </div>
+                    ` : ''}
+                `;
+            }
+
+            case 'interviewcorners': {
+                const interviewActions = [
+                    {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'regenerate', label: '🔄 Regenerate Response'}, {value: 'abort_oa', label: '🚪 Abort Interview & Exit'},
+                    {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
+                    {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
+                    {value: 'change_ai', label: '🤖 Change AI Model'}, {value: 'change_profile', label: '👤 Switch Profile'},
+                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'language', label: '💻 Change Language'},
+                    {value: 'mic', label: '🎙️ Mic ON/OFF'}, {value: 'reset', label: '✨ Reset Session'}, 
+                    {value: 'text_inc', label: 'A+ Text Size'}, {value: 'text_dec', label: 'A- Text Size'}, 
+                    {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
+                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'}
+                ];
+                this.editingPage = this.editingPage || 1;
+                const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';
+                const currentCorners = this.prefs[activeMapName] || {};
+                
+                // Hardcoded symmetrical grid layout for visual mapping
+                const gridCols = `20fr 10fr 40fr 10fr 20fr`;
+                const gridRows = `20fr 10fr 40fr 10fr 20fr`;
+
+                return html`
+                    <div class="scrollable-tab">
+                        <h2 style="margin-bottom: 5px;">Live Interview Radial Map</h2>
+                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
+                            Map the 16 zones for your Wrist-Flick Radial HUD. The physical grid represents the 360-degree circle.
+                        </p>
+                        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
+                            <div style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
+                                <button @click=${() => { this.editingPage = 1; this.requestUpdate(); }} style="background: ${this.editingPage === 1 ? '#4285f4' : 'transparent'}; color: ${this.editingPage === 1 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; transition: 0.2s;">📄 Page 1 (Primary)</button>
+                                <button @click=${() => { this.editingPage = 2; this.requestUpdate(); }} style="background: ${this.editingPage === 2 ? '#a142f4' : 'transparent'}; color: ${this.editingPage === 2 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; transition: 0.2s;">📄 Page 2 (Shift)</button>
+                            </div>
+                        </div>
+                        <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows}; height: 260px;">
+                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L', activeMapName)}
+                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', activeMapName)}
+                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', activeMapName)}
+                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', activeMapName)}
+                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R', activeMapName)}
+
+                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', activeMapName)}
+                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', activeMapName)}
+                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', activeMapName)}
+                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', activeMapName)}
+                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', activeMapName)}
+                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', activeMapName)}
+
+                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L', activeMapName)}
+                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', activeMapName)}
+                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', activeMapName)}
+                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
+                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R', activeMapName)}
+                            
+                            <div class="matrix-center" style="padding: 6px 12px; background: rgba(0,0,0,0.8);">
+                                <h3 style="margin: 0; color: #fff; font-size: 11px;">RADIAL PREVIEW</h3>
+                            </div>
+                        </div>
+                    </div>
+                    ${this.editingZone && (this.editingMap === 'interviewCorners' || this.editingMap === 'interviewCornersPage2') ? html`
+                        <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
+                        <div class="zone-editor-modal">
+                            <h3 style="margin-top: 0; margin-bottom: 15px; color: #fff;">Assign Action</h3>
+                            <div class="zone-action-grid">
+                                ${interviewActions.map(act => html`
+                                    <button class="action-select-btn ${currentCorners[this.editingZone] === act.value ? 'selected' : ''}" 
+                                        @click=${() => { this.savePref(this.editingMap, { ...currentCorners, [this.editingZone]: act.value }); this.editingZone = null; }}>
                                         ${act.label}
                                     </button>
                                 `)}

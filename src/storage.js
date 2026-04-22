@@ -47,11 +47,19 @@ const DEFAULT_PREFERENCES = {
         left_mid_bottom: 'expand_top', right_mid_bottom: 'expand_bottom',
         bottom_left: 'reset_typer', bottom_mid_left: 'none', bottom_center: 'scroll_down', bottom_mid_right: 'none', bottom_right: 'auto_type'
     },
-    radialCorners: {
-        N: 'none', NNE: 'none', NE: 'hide_unhide', ENE: 'none',
-        E: 'next_resp', ESE: 'none', SE: 'fix_error', SSE: 'none',
-        S: 'scroll_down', SSW: 'none', SW: 'send_ai', WSW: 'none',
-        W: 'prev_resp', WNW: 'none', NW: 'capture', NNW: 'none'
+    interviewCorners: {
+        top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',
+        left_mid_top: 'mic', right_mid_top: 'change_ai',
+        middle_left: 'prev_resp', middle_right: 'next_resp',
+        left_mid_bottom: 'fast_think', right_mid_bottom: 'change_profile',
+        bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error'
+    },
+    interviewCornersPage2: {
+        top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',
+        left_mid_top: 'bg_inc', right_mid_top: 'text_inc',
+        middle_left: 'reset', middle_right: 'language',
+        left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec',
+        bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error'
     }
 };
 

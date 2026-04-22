@@ -380,13 +380,6 @@ export class AssistantView extends LitElement {
         // 🟢 NEW: IPC RADIAL LISTENERS (Bypasses OS Focus Restrictions)
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
-            
-            ipcRenderer.on('show-radial-hud', () => {
-                if (this.currentMode !== 'proctored_live_interview') return;
-                this.radialActive = true;
-                this.radialSlice = null;
-                this.requestUpdate();
-            });
 
             ipcRenderer.on('hide-radial-hud', () => {
                 this.radialActive = false;
@@ -394,21 +387,13 @@ export class AssistantView extends LitElement {
                 this.requestUpdate();
             });
 
-            ipcRenderer.on('update-radial-hud', (event, data) => {
-                if (!this.radialActive) return;
-                this.radialSlice = data.slice;
-                this.radialDistance = data.dist;
-                this.requestUpdate();
-            });
-
             ipcRenderer.on('execute-radial-hud', (event, sliceIndex) => {
                 if (this.currentMode !== 'proctored_live_interview') return;
-                this.radialActive = false;
-                this.requestUpdate();
-                
                 if (sliceIndex !== null) {
-                    const slices = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
-                    const action = this.radialMap[slices[sliceIndex]];
+                    // Map the clockwise index back to the grid key!
+                    const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
+                    const activeMap = this.activePage === 2 ? this.interviewCornersPage2Map : this.interviewCornersMap;
+                    const action = activeMap[clockWiseGrid[sliceIndex]];
                     if (action && action !== 'none') this.executeHotCorner(action);
                 }
             });
@@ -457,6 +442,8 @@ export class AssistantView extends LitElement {
                 
                 // 🟢 LOAD THE DUAL BRAINS
                 this.hotCornersPage2Map = prefs.hotCornersPage2 || {}; 
+                this.interviewCornersMap = prefs.interviewCorners || {};
+                this.interviewCornersPage2Map = prefs.interviewCornersPage2 || {};
                 this.radialMap = prefs.radialCorners || {
                     N: 'none', NNE: 'none', NE: 'hide_unhide', ENE: 'none',
                     E: 'next_resp', ESE: 'none', SE: 'fix_error', SSE: 'none',
@@ -735,7 +722,12 @@ export class AssistantView extends LitElement {
                 if (key === 'ctrl+enter' || key === 'cmd+enter') this.handleCaptureScreenshot();
             };
         }
-        this.brainSyncInterval = setInterval(() => { this.syncBrainModeWithBrowser(); }, 3000);
+        this.brainSyncInterval = setInterval(() => {
+            this.syncBrainModeWithBrowser();
+        }, 3000);
+        
+        // 🟢 FIX: Sync the labels immediately when the app boots up!
+        this.syncRadialToBackend();
     }
 
     // 🟢 FIX: Strictly enforce Widget visibility after the component properties finish loading
@@ -792,6 +784,8 @@ export class AssistantView extends LitElement {
             case 'toggle_page2':
                 this.activePage = this.activePage === 1 ? 2 : 1;
                 this.showToast(`📄 Switched to Page ${this.activePage}`);
+                // 🟢 FIX: Force the backend window to update its text when you flip the page!
+                this.syncRadialToBackend(); 
                 this.requestUpdate();
                 break;
             case 'scroll_up':
@@ -994,6 +988,20 @@ export class AssistantView extends LitElement {
                     header.onBackClick();
                 } else {
                     window.location.reload(); 
+                }
+                break;
+
+            case 'regenerate':
+                if (this.isSolving || !this.validateSetup()) return;
+                this.isSolving = true;
+                if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
+                this.lastUserPrompt = "🔄 Regenerating Response...";
+                this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Regenerating...)`];
+                this.localChatIndex = this.localChatHistory.length - 1;
+                this.requestUpdate();
+                this.saveCurrentSession();
+                if (window.require) {
+                    window.require('electron').ipcRenderer.invoke('send-manual-text', '[SYSTEM: Please regenerate your previous response. Provide a clearer or alternative explanation.]');
                 }
                 break;
         }
@@ -1758,6 +1766,19 @@ export class AssistantView extends LitElement {
         return labels[action] || action || '—';
     }
 
+    syncRadialToBackend() {
+        if (!window.require) return;
+        // 🟢 The exact clockwise order of the grid to map mathematically to the 16 slices (N to NNW)
+        const clockWiseGrid = [
+            'top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 
+            'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 
+            'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'
+        ];
+        const activeMap = this.activePage === 2 ? this.interviewCornersPage2Map : this.interviewCornersMap;
+        const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
+        window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
+    }
+
     renderOAControls() {
         let map = this.hotCornersMap || {};
         let pageLabel = '';
@@ -1864,22 +1885,6 @@ export class AssistantView extends LitElement {
                 <div id="code-pane" class="markdown-body" style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px;" .innerHTML=${this.renderMarkdown(leftContent)}></div>
                 
                 <div id="chat-pane" class="markdown-body" style="flex: 1; overflow-y: auto; padding-left: 10px;" .innerHTML=${this.renderMarkdown(rightContent)}></div>
-
-                ${this.radialActive ? html`
-                    <div style="position: absolute; bottom: 30px; left: 50%; transform: translateX(-50%); width: 220px; height: 220px; border-radius: 50%; background: rgba(10,10,10,0.85); border: 3px solid rgba(255,255,255,0.1); pointer-events: none; z-index: 9999; display: flex; align-items: center; justify-content: center; box-shadow: 0 10px 40px rgba(0,0,0,0.8); backdrop-filter: blur(4px);">
-                        ${this.radialSlice !== null ? html`
-                            <div style="position: absolute; width: 100%; height: 100%; border-radius: 50%; background: conic-gradient(from ${this.radialSlice * 22.5 - 11.25}deg, rgba(0, 204, 102, 0.4) 0deg, rgba(0, 204, 102, 0.4) 22.5deg, transparent 22.5deg);"></div>
-                            <div style="position: absolute; bottom: -35px; background: #00cc66; color: #fff; padding: 4px 10px; border-radius: 4px; font-size: 13px; font-weight: bold; white-space: nowrap; box-shadow: 0 4px 10px rgba(0,0,0,0.5);">
-                                ${this.getHotCornerLabel(this.radialMap[slices[this.radialSlice]])}
-                            </div>
-                        ` : html`
-                            <div style="color: #888; font-size: 12px; font-weight: bold; text-align: center;">Move Mouse<br/>to Select</div>
-                        `}
-                        <div style="width: 40px; height: 40px; border-radius: 50%; background: #222; border: 2px solid #555; display: flex; align-items: center; justify-content: center; z-index: 2;">
-                            <span style="font-size: 10px; color: #aaa; font-weight: bold;">CTRL</span>
-                        </div>
-                    </div>
-                ` : ''}
             </div>
         `;
     }
