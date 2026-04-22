@@ -252,6 +252,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                         }
                     }
                 });
+                if (isStealthHidden) {
+                    if (radialHudWindow && !radialHudWindow.isDestroyed()) radialHudWindow.hide();
+                } else {
+                    if (radialHudWindow && !radialHudWindow.isDestroyed() && global.isLiveInterviewMode) radialHudWindow.showInactive();
+                }
             }
         }
     });
@@ -329,42 +334,21 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
         app.exit(0); // 🟢 INSTANT KILL: Bypasses all teardown events and vanishes immediately.
     });
 
-    let radialInterval = null;
-    let radialStartX = 0;
-    let radialStartY = 0;
-    let currentRadialSlice = null;
-
-    register('toggleRadial', keybinds.toggleRadial, () => {
-        if (!mainWindow || mainWindow.isDestroyed()) return;
-        
-        // If already open, close it manually
-        if (radialInterval) {
-            clearInterval(radialInterval);
-            radialInterval = null;
-            if (radialHudWindow && !radialHudWindow.isDestroyed()) radialHudWindow.hide();
-            return;
-        }
-
+    // 🟢 CREATE THE INDEPENDENT RADIAL WINDOW AS A PERMANENT MINIMAP
+    global.createRadialWindow = () => {
         const { screen } = require('electron');
-        const point = screen.getCursorScreenPoint();
-        radialStartX = point.x;
-        radialStartY = point.y;
-        currentRadialSlice = null;
-
-        // 🟢 CREATE THE INDEPENDENT RADIAL WINDOW
         if (!radialHudWindow || radialHudWindow.isDestroyed()) {
             radialHudWindow = new BrowserWindow({
                 width: 400, height: 400, frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
                 webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
             radialHudWindow.setContentProtection(true);
-            // Math to draw the 16 icons in a perfect circle
             const htmlContent = `
                 <html><body style="margin:0; overflow:hidden; font-family:sans-serif; color:white;">
                 <div id="container" style="position:relative; width:400px; height:400px; border-radius:50%; background:rgba(10,10,10,0.85); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
                     <div id="highlight" style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; background:transparent; transition: 0.1s;"></div>
                     <div id="icons"></div>
-                    <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:13px; font-weight:bold; color:#00cc66; background:#111; padding:8px 12px; border-radius:8px; border:1px solid #333; width: 140px; text-transform:uppercase;">Move Mouse</div>
+                    <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:13px; font-weight:bold; color:#00cc66; background:#111; padding:8px 12px; border-radius:8px; border:1px solid #333; width: 140px; text-transform:uppercase;">RADIAL MINIMAP</div>
                 </div>
                 <script>
                     const { ipcRenderer } = require('electron');
@@ -388,7 +372,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                         const { slice, labels } = data;
                         for(let i=0; i<16; i++) {
                             const el = document.getElementById('icon-'+i);
-                            el.innerText = labels[i].split(' ')[0] || ''; // Extract emoji
+                            el.innerText = labels[i].split(' ')[0] || ''; 
                             if(slice === i) { el.style.opacity = '1'; el.style.transform = 'translate(-50%, -50%) scale(1.6)'; } 
                             else { el.style.opacity = '0.4'; el.style.transform = 'translate(-50%, -50%) scale(1)'; }
                         }
@@ -396,7 +380,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                             highlight.style.background = \`conic-gradient(from \${slice * 22.5 - 11.25}deg, rgba(0, 204, 102, 0.4) 0deg, rgba(0, 204, 102, 0.4) 22.5deg, transparent 22.5deg)\`;
                             centerText.innerText = labels[slice].replace(/^[^\w\s]+/, '').trim() || labels[slice];
                         } else {
-                            highlight.style.background = 'transparent'; centerText.innerText = 'Move Mouse';
+                            highlight.style.background = 'transparent'; centerText.innerText = 'RADIAL MINIMAP';
                         }
                     });
                 </script>
@@ -407,33 +391,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             const { width, height } = primaryDisplay.workAreaSize;
             radialHudWindow.setPosition(Math.floor((width - 400) / 2), height - 420);
         }
-        radialHudWindow.showInactive();
-
-        radialInterval = setInterval(() => {
-            const current = screen.getCursorScreenPoint();
-            const dx = current.x - radialStartX;
-            const dy = current.y - radialStartY;
-            const dist = Math.sqrt(dx*dx + dy*dy);
-
-            if (dist > 30) {
-                let angle = Math.atan2(dy, dx) * 180 / Math.PI;
-                let shifted = (angle + 90 + 360) % 360;
-                currentRadialSlice = Math.floor(((shifted + 11.25) % 360) / 22.5);
-                radialHudWindow.webContents.send('update-hud', { slice: currentRadialSlice, labels: activeRadialLabels });
-            } else {
-                currentRadialSlice = null;
-                radialHudWindow.webContents.send('update-hud', { slice: null, labels: activeRadialLabels });
-            }
-
-            // 🟢 AUTO FIRE THRESHOLD
-            if (dist > 130) {
-                clearInterval(radialInterval);
-                radialInterval = null;
-                radialHudWindow.hide();
-                mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
-            }
-        }, 16);
-    });
+    };
 }
 
 function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
@@ -451,6 +409,17 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     ipcMain.on('set-oa-mode', (event, isActive) => {
         global.isOAModeActive = isActive;
         if (isActive) global.isClickThroughState = true;
+    });
+
+    ipcMain.on('toggle-radial-permanent', (event, isVisible) => {
+        global.isLiveInterviewMode = isVisible;
+        if (isVisible) {
+            global.createRadialWindow();
+            radialHudWindow.showInactive();
+            radialHudWindow.webContents.send('update-hud', { slice: null, labels: activeRadialLabels });
+        } else {
+            if (radialHudWindow && !radialHudWindow.isDestroyed()) radialHudWindow.hide();
+        }
     });
 
     // 🟢 FIX: Intercept and track the ignore-mouse events here so the global shortcuts can read it!

@@ -980,9 +980,12 @@ export class CustomizeView extends LitElement {
                 const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';
                 const currentCorners = this.prefs[activeMapName] || {};
                 
-                // Hardcoded symmetrical grid layout for visual mapping
-                const gridCols = `20fr 10fr 40fr 10fr 20fr`;
-                const gridRows = `20fr 10fr 40fr 10fr 20fr`;
+                // 🟢 FIX: Dynamic Layout & Sliders (Exact match to Hot Corners)
+                const b = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
+                let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
+                let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
+                const gridCols = `${b.cornerSize}fr ${midX}fr ${b.centerX}fr ${midX}fr ${b.cornerSize}fr`;
+                const gridRows = `${b.cornerSize}fr ${midY}fr ${b.centerY}fr ${midY}fr ${b.cornerSize}fr`;
 
                 return html`
                     <div class="scrollable-tab">
@@ -1016,8 +1019,30 @@ export class CustomizeView extends LitElement {
                             ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
                             ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R', activeMapName)}
                             
-                            <div class="matrix-center" style="padding: 6px 12px; background: rgba(0,0,0,0.8);">
-                                <h3 style="margin: 0; color: #fff; font-size: 11px;">RADIAL PREVIEW</h3>
+                            <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
+                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
+                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
+                                    <div class="slider-row">
+                                        <label><span>Corner %</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
+                                        <input type="range" min="5" max="30" step="1" .value=${b.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...b, cornerSize: parseInt(e.target.value)})}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
+                                        <input type="range" min="1" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
+                                        <input type="range" min="10" max="70" step="5" .value=${b.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerX: parseInt(e.target.value)})}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>L/R Height</span> <span style="color: #00cc66;">${b.centerY}%</span></label>
+                                        <input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerY: parseInt(e.target.value)})}>
+                                    </div>
+                                    <div class="slider-row" style="grid-column: span 2;">
+                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label>
+                                        <input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...b, hideTime: parseFloat(e.target.value)})}>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>

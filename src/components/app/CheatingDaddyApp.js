@@ -573,11 +573,19 @@ export class CheatingDaddyApp extends LitElement {
                 ipcRenderer.send('set-ignore-mouse-events', true); 
             } else if (destination === 'proctored_live_interview') {
                 // 🟢 PROCTORED LIVE INTERVIEW LOCKS
-                ipcRenderer.send('stop-hot-corners'); // Disable edge triggers!
-                ipcRenderer.invoke('hide-widget'); // Kill the widget!
-                ipcRenderer.send('set-ignore-mouse-events', true); // Turn on Click-Through Ghost Mode!
+                const raw = await window.cheatingDaddy.storage.getPreferences();
+                const bounds = (raw?.data || raw || {}).hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
+                ipcRenderer.send('start-hot-corners', bounds); // 🟢 Re-enable Edge Triggers!
+                ipcRenderer.invoke('hide-widget'); 
+                ipcRenderer.send('set-ignore-mouse-events', true); 
+                ipcRenderer.send('toggle-radial-permanent', true); // 🟢 Show permanent Minimap HUD
             } else {
-                ipcRenderer.send('set-ignore-mouse-events', false); // Restore clicks for other modes
+                ipcRenderer.send('set-ignore-mouse-events', false); 
+            }
+            
+            // Turn off the HUD if we leave the mode
+            if (destination !== 'proctored_live_interview') {
+                ipcRenderer.send('toggle-radial-permanent', false);
             }
 
             this.currentView = 'assistant';
