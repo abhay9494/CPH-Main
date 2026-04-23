@@ -1545,25 +1545,32 @@ export class AssistantView extends LitElement {
     async handleSendProfileContext() {
         if (window.require) {
             if (this.isSolving) return;
-            this.isSolving = true; // 🟢 Hard Lock Start
+            this.isSolving = true;
             if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
-            
+
             const { ipcRenderer } = window.require('electron');
             const raw = await window.cheatingDaddy.storage.getPreferences();
             const prefs = raw?.data || raw || {};
-            
+
             if (!prefs.customPrompt || prefs.customPrompt.trim().length === 0) {
                 this.isSolving = false;
                 return;
             }
-            
-            let payload = `[SYSTEM DIRECTIVE: Act as an expert candidate interviewing for the role of "${prefs.interviewRole || 'Candidate'}".]\n`;
-            payload += `[CRITICAL RULE 1: You are the candidate. ALWAYS use FIRST-PERSON pronouns ("I", "my", "we"). NEVER refer to the candidate in the third person.]\n`;
-            payload += `[CANDIDATE BACKGROUND/RESUME DATA:\n${prefs.customPrompt}]\n\n`;
-            payload += `Please acknowledge that you have received this resume and are ready for the interview. Keep it brief.`;
 
-            this.lastUserPrompt = "📄 Sent Resume/Profile Context to AI";
-            this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ingesting context...)`];
+            // 🟢 THE STRICT XML INJECTION PAYLOAD
+            let payload = `[SYSTEM DIRECTIVE: Act as an expert candidate interviewing for the role of "${prefs.interviewRole || 'Candidate'}" taking a live coding interview.]\n`;
+            payload += `[CRITICAL RULE 1: You are the candidate. ALWAYS use FIRST-PERSON pronouns ("I", "my", "we"). NEVER refer to the candidate in the third person.]\n`;
+            payload += `[CRITICAL RULE 2: STRICT XML RESPONSE FORMATTING. You MUST format your ENTIRE response using ONLY the following XML tags:]\n\n`;
+            
+            payload += `<CHAT>\nPut all normal conversation, logic explanations, complexity analysis, and greeting acknowledgments here.\n</CHAT>\n\n`;
+            payload += `<FULL_CODE>\nPut ONLY the raw, complete, functional code here. No markdown formatting, no explanations inside this tag. Just the code.\n</FULL_CODE>\n\n`;
+            payload += `<MINOR_FIX>\nIf I ask for a small syntax fix or point out a bug, put the short corrected snippet here.\n</MINOR_FIX>\n\n`;
+            
+            payload += `[CANDIDATE BACKGROUND/RESUME DATA:\n${prefs.customPrompt}]\n\n`;
+            payload += `Please acknowledge that you have received this resume and understand the strict XML rules. Keep it brief. Respond ONLY using the <CHAT> tag.`;
+
+            this.lastUserPrompt = "📄 Sent Profile Context & XML Formatting Rules to AI";
+            this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ingesting context & rules...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
             this.saveCurrentSession();
@@ -1847,36 +1854,66 @@ export class AssistantView extends LitElement {
             leftContent = "🟢 **Code Window**\nAwaiting `<FULL_CODE>` blocks...";
             rightContent = "🟢 **Live Feed**\nAwaiting chat & minor fixes...";
         } else {
-            this.localChatHistory.forEach(msg => {
-                if (msg.startsWith('👤 You:')) {
-                    rightContent += `\n\n**👤 You:** ${msg.substring(7).split('🤖 AI:')[0]}\n`;
-                }
+            // 🟢 1. Target the EXACT page using the Pagination Index
+            const currentMsg = this.localChatHistory[this.localChatIndex];
+
+            // 🟢 2. Split User/System actions from the AI's response
+            const parts = currentMsg.split('🤖 AI:');
+            let userAndSystemPart = parts[0] ? parts[0].trim() : '';
+            let aiPart = parts[1] ? parts[1].trim() : '';
+
+            // This ensures Screenshots, manual prompts, and system statuses are visible on the right pane!
+            if (userAndSystemPart) {
+                rightContent += `${userAndSystemPart}\n\n`;
+            }
+
+            // 🟢 3. SMART CODE ANCHORING (Sticky Left Pane)
+            // Scans backward from the current page to find the most recent FULL_CODE.
+            // If page 3 is just a chat, the left pane will still reliably display Page 1's code!
+            let latestFullCode = null;
+            for (let i = this.localChatIndex; i >= 0; i--) {
+                const pastMsg = this.localChatHistory[i];
+                const pastAiPart = pastMsg.includes('🤖 AI:') ? pastMsg.split('🤖 AI:')[1] : pastMsg;
+                const pastCodes = pastAiPart ? pastAiPart.match(/<FULL_CODE>([\s\S]*?)<\/FULL_CODE>/g) : null;
                 
-                const aiPart = msg.split('🤖 AI:')[1] || msg;
-                const fullCodes = aiPart.match(/<FULL_CODE>([\s\S]*?)<\/FULL_CODE>/g);
+                if (pastCodes) {
+                    latestFullCode = pastCodes.map(c => c.replace(/<\/?FULL_CODE>/g, '').trim()).join('\n\n');
+                    break;
+                }
+            }
+
+            if (latestFullCode) {
+                leftContent = latestFullCode;
+            } else {
+                leftContent = "🟢 **Code Window**\nAwaiting `<FULL_CODE>` blocks...";
+            }
+
+            // 🟢 4. Render the specific AI elements for the CURRENT page on the Right Pane
+            if (aiPart) {
                 const minorFixes = aiPart.match(/<MINOR_FIX>([\s\S]*?)<\/MINOR_FIX>/g);
                 const chats = aiPart.match(/<CHAT>([\s\S]*?)<\/CHAT>/g);
 
-                if (fullCodes) {
-                    // 🟢 PINS LATEST CODE: Overwrite Left pane with ONLY the latest code blocks in this response
-                    leftContent = fullCodes.map(c => c.replace(/<\/?FULL_CODE>/g, '').trim()).join('\n\n');
+                if (minorFixes) {
+                    minorFixes.forEach(c => rightContent += `**🔧 Minor Fix:**\n${c.replace(/<\/?MINOR_FIX>/g, '').trim()}\n\n`);
+                }
+                if (chats) {
+                    chats.forEach(c => rightContent += `**💬 Chat:**\n${c.replace(/<\/?CHAT>/g, '').trim()}\n\n`);
                 }
 
-                if (minorFixes) minorFixes.forEach(c => rightContent += `\n\n**Minor Fix:**\n${c.replace(/<\/?MINOR_FIX>/g, '')}`);
-                if (chats) chats.forEach(c => rightContent += `\n\n${c.replace(/<\/?CHAT>/g, '')}`);
-
-                if (!fullCodes && !minorFixes && !chats && msg.includes('🤖 AI:')) {
-                    rightContent += `\n\n🤖 AI:\n${aiPart.trim()}`;
+                // Fallbacks for missing tags or system processing states
+                if (/^\(.*\)$/.test(aiPart.trim())) {
+                    // Catches system events like (Thinking...), (Solving...), (Refactoring...)
+                    rightContent += `🤖 AI:\n*${aiPart.trim()}*\n\n`;
+                } else if (!minorFixes && !chats && !aiPart.includes('<FULL_CODE>')) {
+                    // If the AI forgot to use tags entirely, dump it on the right so you don't lose the data
+                    rightContent += `🤖 AI:\n${aiPart.trim()}\n\n`;
                 }
-            });
+            }
         }
-
-        const slices = ['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSW','SW','WSW','W','WNW','NW','NNW'];
 
         return html`
             <div style="display: flex; width: 100%; height: 100%; background: transparent; position: relative;">
                 <div id="code-pane" class="markdown-body" style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px;" .innerHTML=${this.renderMarkdown(leftContent)}></div>
-                
                 <div id="chat-pane" class="markdown-body" style="flex: 1; overflow-y: auto; padding-left: 10px;" .innerHTML=${this.renderMarkdown(rightContent)}></div>
             </div>
         `;

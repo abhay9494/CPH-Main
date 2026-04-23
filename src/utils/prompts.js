@@ -4,9 +4,7 @@
 
 const PROMPTS = {
     // 1. STANDARD OA AUTOMATION
-    // Used when dwelling on the "Send to AI" hot corner
-    OA_AUTOMATION: (language) => `Output ONLY raw, functional code in ${language || 'c++'}.
-CRITICAL RULES:
+    OA_AUTOMATION: (language) => `Output ONLY raw, functional code in ${language || 'c++'}. CRITICAL RULES:
 - Do NOT output any greetings, explanations, or comments.
 - Use single letter variable names.
 - Give me code with a main function so that I can run locally.
@@ -15,14 +13,10 @@ CRITICAL RULES:
 test case1
 input
 expected output
-test case2
-input
-expected output`,
+- YOU MUST WRAP YOUR ENTIRE RESPONSE INSIDE <FULL_CODE> AND </FULL_CODE> TAGS!`,
 
     // 2. CODE REFACTORING
-    // Used when dwelling on the "Refactor" hot corner
-    REFACTOR: `Refactor the above code. Output ONLY raw, functional code.
-CRITICAL RULES:
+    REFACTOR: `Refactor the above code. Output ONLY raw, functional code. CRITICAL RULES:
 - Do NOT output any greetings, explanations, or comments.
 - If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.
 - Break large functions into smaller helper functions, or combine small snippet functions.
@@ -32,14 +26,14 @@ CRITICAL RULES:
 - Algorithms often iterate forward (0 to N). Changing this to backward iteration (N to 0) or using recursion changes the code signature significantly.
 - If the original code has a complex condition inside an if statement, extract those conditions into variables with semantic names. This changes the line-by-line structure.
 - If the original code uses a loop to solve a problem (like calculating a sum or searching a tree), rewriting it as a recursive function (a function that calls itself) completely changes the syntax tree.
-- Do not use classes`,
+- Do not use classes
+- YOU MUST WRAP YOUR ENTIRE RESPONSE INSIDE <FULL_CODE> AND </FULL_CODE> TAGS!`,
 
     // 3. FIX ERROR
-    // Used when dwelling on the "Fix Error" hot corner
-    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. 
-CRITICAL RULES:
+    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. CRITICAL RULES:
 - Output ONLY the fully corrected raw, functional code.
-- Do NOT output any greetings, general explanations, or extra text.`
+- Do NOT output any greetings, general explanations, or extra text.
+- YOU MUST WRAP YOUR ENTIRE RESPONSE INSIDE <FULL_CODE> AND </FULL_CODE> TAGS!`
 };
 
 module.exports = PROMPTS;

@@ -997,6 +997,28 @@ function setupGeneralIpcHandlers() {
         return app.getVersion();
     });
 
+    ipcMain.on('view-changed', (event, view) => {
+        if (view !== 'assistant') {
+            isGhostHidden = false;
+            wasAiVisibleBeforeGhost = false;
+
+            if (mainWindow && !mainWindow.isDestroyed()) {
+                mainWindow.setOpacity(1);
+            }
+
+            // 🟢 Force hide AI window and cure the 0-opacity lock bug!
+            if (aiWebWindow && !aiWebWindow.isDestroyed()) {
+                aiWebWindow.hide();
+                aiWebWindow.setOpacity(1);
+                aiWebWindow.setIgnoreMouseEvents(false);
+            }
+
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.hide();
+            }
+        }
+    });
+
     ipcMain.handle('quit-application', async event => {
         try {
             app.quit();
