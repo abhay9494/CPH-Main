@@ -608,11 +608,12 @@ export class CheatingDaddyApp extends LitElement {
         this.bgTransparency = parseFloat(e.target.value);
         await cheatingDaddy.storage.updatePreference('backgroundTransparency', this.bgTransparency);
         this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency);
-
-        // 🐛 FIX: Instantly sync the slider directly to the widget!
+        
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.invoke('sync-widget', { transparency: this.bgTransparency });
+            // 🟢 INSTANT RADIAL COLOR RE-SYNC
+            ipcRenderer.send('rebuild-radial-hud'); 
         }
         window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: this.bgTransparency } }));
     }

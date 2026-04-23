@@ -1590,21 +1590,24 @@ function setupGeneralIpcHandlers() {
             console.log("⚠️ Window destroyed. Respawning...");
             launchAIWindow();
             setTimeout(() => {
-                if (aiWebWindow && !aiWebWindow.isDestroyed()) aiWebWindow.show();
+                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
+                    aiWebWindow.setOpacity(1); 
+                    aiWebWindow.setIgnoreMouseEvents(false);
+                    aiWebWindow.show();
+                }
             }, 1000);
             return true;
         }
-
-        // 🐛 FIX: Use the exact requested state from the frontend!
+    
         const targetVisible = forceShow !== undefined ? forceShow : !aiWebWindow.isVisible();
-
         if (targetVisible) {
+            // 🟢 FIX: Cure the 0 Opacity lock caused by the Stealth Hide!
+            aiWebWindow.setOpacity(1);
+            aiWebWindow.setIgnoreMouseEvents(false);
             aiWebWindow.show();
-            // console.log('👁️ AI Window VISIBLE');
             return true;
         } else {
             aiWebWindow.hide();
-            // console.log('👻 AI Window HIDDEN');
             return false;
         }
     });

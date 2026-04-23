@@ -9,7 +9,6 @@ global.isOAModeActive = false;
 let windowResizing = false;
 let resizeAnimation = null;
 // let isOAModeActive = false; // 🟢 Tracks if Proctored OA is active
-let isClickThroughState = false; // 🟢 Tracks the exact Click-Through state
 const RESIZE_ANIMATION_DURATION = 500; // milliseconds
 
 // 🐛 FIX: Declare this globally so the export at the bottom can read it!
@@ -19,8 +18,9 @@ global.activeRadialLabels = Array(16).fill('—');
 
 function createWindow(sendToRenderer, geminiSessionRef) {
     // Get layout preference (default to 'normal')
-    let windowWidth = 900;
-    let windowHeight = 500;
+    const prefs = storage.getPreferences();
+    let windowWidth = Math.max(600, prefs.mainWindowWidth || 900);
+    let windowHeight = Math.max(400, prefs.mainWindowHeight || 500);
 
     const mainWindow = new BrowserWindow({
         width: windowWidth,
@@ -223,14 +223,12 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 });
             } else {
                 mainWindow.setOpacity(1);
-                
-                // 🟢 FIX: Restore the tracked click-through state instead of blindly setting it to false!
-                if (isClickThroughState) {
+                // 🟢 FIX: Read the GLOBAL backend state, not a dead local variable!
+                if (global.isClickThroughState) {
                     mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 } else {
                     mainWindow.setIgnoreMouseEvents(false);
                 }
-                
                 mainWindow.webContents.send('app-made-visible');
 
                 BrowserWindow.getAllWindows().forEach(w => {
@@ -340,42 +338,48 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 🟢 CREATE THE INDEPENDENT RADIAL WINDOW AS A PERMANENT MINIMAP
     global.createRadialWindow = () => {
         const { screen } = require('electron');
+        
+        // 🟢 Read Live Settings!
+        const prefs = storage.getPreferences();
+        const rs = prefs.radialSettings || { size: 400, offsetX: 0, offsetY: 0 };
+        const bgAlpha = prefs.backgroundTransparency ?? 0.8;
+        
         if (!global.radialHudWindow || global.radialHudWindow.isDestroyed()) {
             global.radialHudWindow = new BrowserWindow({
-                width: 400, height: 400,
+                width: rs.size, height: rs.size,
                 frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
                 webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
             global.radialHudWindow.setContentProtection(true);
-        // 🟢 DEFENSE 1: OS-Level Ghosting on creation
-        global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+            global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
 
-        // 🟢 DEFENSE 2: CSS-Level Ghosting (pointer-events: none !important;)
-        const htmlContent = `
-        <html><body style="margin:0; overflow:hidden; font-family:sans-serif; color:white; pointer-events:none !important;">
-        <div id="container" style="position:relative; width:400px; height:400px; border-radius:50%; background:rgba(10,10,10,0.85); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
+            const htmlContent = `
+            <html><body style="margin:0; overflow:hidden; font-family:sans-serif; color:white; pointer-events:none !important;">
+            <div id="container" style="position:relative; width:${rs.size}px; height:${rs.size}px; border-radius:50%; background:rgba(30,30,30,${bgAlpha}); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
                 <div id="highlight" style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; background:transparent; transition: 0.1s;"></div>
                 <div id="icons"></div>
-                <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:13px; font-weight:bold; color:#f14c4c; background:#111; padding:8px 12px; border-radius:8px; border:1px solid #f14c4c; width: 140px; text-transform:uppercase; transition: 0.2s;">RADIAL MINIMAP</div>
+                <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:${Math.max(10, rs.size/30)}px; font-weight:bold; color:#f14c4c; background:rgba(10,10,10,0.8); padding:8px 12px; border-radius:8px; border:1px solid #f14c4c; width: 35%; text-transform:uppercase; transition: 0.2s;">RADIAL MINIMAP</div>
             </div>
             <script>
             const { ipcRenderer } = require('electron');
             const highlight = document.getElementById('highlight');
             const centerText = document.getElementById('centerText');
             const iconsDiv = document.getElementById('icons');
+            const SIZE = ${rs.size};
+            const RADIUS = SIZE * 0.375; // 37.5% of total size
 
             for(let i=0; i<16; i++) {
                 let angle = i * 22.5 - 90;
                 let rad = angle * Math.PI / 180;
-                let x = 200 + 150 * Math.cos(rad);
-                let y = 200 + 150 * Math.sin(rad);
+                let x = (SIZE/2) + RADIUS * Math.cos(rad);
+                let y = (SIZE/2) + RADIUS * Math.sin(rad);
                 let el = document.createElement('div');
                 el.id = 'icon-'+i;
                 el.style.position = 'absolute';
                 el.style.left = x + 'px';
                 el.style.top = y + 'px';
                 el.style.transform = 'translate(-50%, -50%)';
-                el.style.fontSize = '22px';
+                el.style.fontSize = Math.max(14, SIZE/18) + 'px';
                 el.style.opacity = '0.4';
                 el.style.transition = '0.2s';
                 iconsDiv.appendChild(el);
@@ -383,8 +387,6 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
             ipcRenderer.on('update-hud', (e, data) => {
                 const { slice, labels, isActive } = data;
-
-                // 🟢 DYNAMIC COLORS: Red when Off, Green when Armed
                 if (isActive) {
                     centerText.style.color = '#00cc66'; 
                     centerText.style.borderColor = '#00cc66';
@@ -421,9 +423,14 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             </body></html>
             `;
             global.radialHudWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+            
+            // 🟢 Apply Physical Coordinates!
             const primaryDisplay = screen.getPrimaryDisplay();
             const { width, height } = primaryDisplay.workAreaSize;
-            global.radialHudWindow.setPosition(Math.floor((width - 400) / 2), height - 420);
+            // Base centered position at the bottom
+            let baseX = Math.floor((width - rs.size) / 2);
+            let baseY = height - (rs.size + 20); // 20px padding from bottom
+            global.radialHudWindow.setPosition(baseX + rs.offsetX, baseY + rs.offsetY);
         }
     };
 }
@@ -451,6 +458,67 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 labels: global.activeRadialLabels,
                 isActive: global.isRadialModeActive || false
             });
+        }
+    });
+
+    // 🟢 NEW: Live Preview Toggle for the Settings Menu
+    ipcMain.on('preview-radial-hud', (event, isPreview) => {
+        global.isPreviewingRadial = isPreview;
+        if (isPreview) {
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.destroy();
+                global.radialHudWindow = null;
+            }
+            global.createRadialWindow();
+            global.radialHudWindow.showInactive();
+            global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+            // Force it GREEN so you can easily see the edges while adjusting!
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true });
+        } else {
+            // Hide it if we leave the tab, unless we are actually in an active interview
+            if (!global.isLiveInterviewMode && global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.hide();
+            }
+        }
+    });
+
+    // 🟢 UPDATED: Rebuild now respects the Preview Mode flag
+    ipcMain.removeAllListeners('rebuild-radial-hud'); // Safety clear
+    ipcMain.on('rebuild-radial-hud', () => {
+        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+            global.radialHudWindow.destroy();
+            global.radialHudWindow = null;
+        }
+        if (global.isLiveInterviewMode || global.isPreviewingRadial) {
+            global.createRadialWindow();
+            global.radialHudWindow.showInactive();
+            global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+            global.radialHudWindow.webContents.send('update-hud', { 
+                slice: null, 
+                labels: global.activeRadialLabels, 
+                isActive: global.isPreviewingRadial 
+            });
+        }
+    });
+
+    // 🟢 NEW: Live Preview Engine for Main Display
+    ipcMain.on('live-resize-main-window', (event, { width, height }) => {
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            // 🟢 DEFENSE: Reject any live-resize requests that would squish the UI!
+            const safeWidth = Math.max(600, width);
+            const safeHeight = Math.max(400, height);
+
+            mainWindow.setResizable(true);
+            mainWindow.setSize(safeWidth, safeHeight);
+            
+            // Keep it perfectly centered at the top of the screen as it grows!
+            const { screen } = require('electron');
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const screenWidth = primaryDisplay.workAreaSize.width;
+            const x = Math.floor((screenWidth - safeWidth) / 2);
+            
+            mainWindow.setPosition(x, 0);
+            mainWindow.setResizable(false);
         }
     });
 
@@ -515,7 +583,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                         if (output === 'CTRL_DOWN') {
                             if (global.ctrlHoldTimer) clearTimeout(global.ctrlHoldTimer);
 
-                            // 🟢 THE EXACT 2-SECOND DELAY
+                            // 🟢 Read live delay from storage so changes take effect immediately!
+                            const prefs = require('../storage').getPreferences();
+                            const rs = prefs.radialSettings || {};
+                            const holdDelayMs = rs.holdDelay ?? 2000;
+
+                            // 🟢 THE CUSTOM DELAY
                             global.ctrlHoldTimer = setTimeout(() => {
                                 global.isRadialModeActive = true;
 
@@ -563,7 +636,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                         });
                                     }
                                 }, 30);
-                            }, 2000); // 2000ms = 2 Seconds
+                            }, holdDelayMs);
                         }
 
                         if (output === 'CTRL_UP') {

@@ -325,7 +325,8 @@ export class CustomizeView extends LitElement {
             { id: 'shortcuts', icon: '⌨️', label: 'Shortcuts' },
             { id: 'hotcorners', icon: '🖱️', label: 'Hot Corners' },
             { id: 'typercorners', icon: '🎯', label: 'Typer Corners' },
-            { id: 'interviewcorners', icon: '🕵️', label: 'Interview HUD' }, // 🟢 NEW
+            { id: 'interviewcorners', icon: '🕵️', label: 'Interview HUD' },
+            { id: 'minimap', icon: '🧭', label: 'Minimap Settings' },
             { id: 'search', icon: '🔍', label: 'Search' },
             { id: 'advanced', icon: '⚠️', label: 'Advanced' },  
         ];
@@ -382,6 +383,9 @@ export class CustomizeView extends LitElement {
         super.disconnectedCallback();
         window.removeEventListener('keydown', this.handleKeyDown);
         window.removeEventListener('sync-preference', this.syncListener);
+        if (window.require) {
+            window.require('electron').ipcRenderer.send('preview-radial-hud', false);
+        }
     }
 
     // 🐛 FIX: Custom Dropdown Handlers
@@ -650,31 +654,65 @@ export class CustomizeView extends LitElement {
                     </div> `;
             case 'appearance':
                 const themeOpts = [
-                    {value: 'dark', label: 'Dark'}, {value: 'light', label: 'Light'}, {value: 'midnight', label: 'Midnight Blue'},
-                    {value: 'sepia', label: 'Sepia'}, {value: 'nord', label: 'Nord'}, {value: 'dracula', label: 'Dracula'}, {value: 'abyss', label: 'Abyss'}
+                    {value: 'dark', label: 'Dark'},
+                    {value: 'light', label: 'Light'},
+                    {value: 'midnight', label: 'Midnight Blue'},
+                    {value: 'sepia', label: 'Sepia'},
+                    {value: 'nord', label: 'Nord'},
+                    {value: 'dracula', label: 'Dracula'},
+                    {value: 'abyss', label: 'Abyss'}
                 ];
                 const layoutOpts = [
-                    {value: 'normal', label: 'Normal'}, {value: 'compact', label: 'Compact'}
+                    {value: 'normal', label: 'Normal'},
+                    {value: 'compact', label: 'Compact'}
                 ];
+            
                 return html`
-                    <h2>Appearance</h2>
-                    <div class="form-group">
-                        <label>Theme</label>
-                        ${this.renderCustomDropdown('theme', themeOpts, this.prefs.theme, (val) => this.savePref('theme', val))}
-                    </div>
-                    <div class="form-group">
-                        <label>Layout Mode</label>
-                        ${this.renderCustomDropdown('layoutMode', layoutOpts, this.prefs.layoutMode, (val) => this.savePref('layoutMode', val))}
-                    </div>
-                    <div class="form-group">
-                        <label>Background Transparency (${Math.round(this.prefs.backgroundTransparency * 100)}%)</label>
-                        <input type="range" min="0" max="1" step="0.05" .value=${this.prefs.backgroundTransparency} @input=${(e) => this.savePref('backgroundTransparency', parseFloat(e.target.value))}>
-                    </div>
-                    <div class="form-group">
-                        <label>Response Font Size (${this.prefs.fontSize}px)</label>
-                        <input type="range" min="12" max="32" step="1" .value=${this.prefs.fontSize} @input=${(e) => this.savePref('fontSize', parseInt(e.target.value, 10))}>
+                    <div class="scrollable-tab">
+                        <h2>Appearance</h2>
+                        <div class="form-group">
+                            <label>Theme</label>
+                            ${this.renderCustomDropdown('theme', themeOpts, this.prefs.theme, (val) => this.savePref('theme', val))}
+                        </div>
+                        <div class="form-group">
+                            <label>Layout Mode</label>
+                            ${this.renderCustomDropdown('layoutMode', layoutOpts, this.prefs.layoutMode, (val) => this.savePref('layoutMode', val))}
+                        </div>
+                        <div class="form-group">
+                            <label>Background Transparency (${Math.round(this.prefs.backgroundTransparency * 100)}%)</label>
+                            <input type="range" min="0" max="1" step="0.05" .value=${this.prefs.backgroundTransparency} @input=${(e) => this.savePref('backgroundTransparency', parseFloat(e.target.value))}>
+                        </div>
+                        <div class="form-group">
+                            <label>Response Font Size (${this.prefs.fontSize}px)</label>
+                            <input type="range" min="12" max="32" step="1" .value=${this.prefs.fontSize} @input=${(e) => this.savePref('fontSize', parseInt(e.target.value, 10))}>
+                        </div>
+            
+                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 15px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 15px; color: #fff;">Main Display Geometry</h3>
+                            
+                            <div class="slider-row" style="margin-bottom: 15px;">
+                                <label style="font-size: 12px;"><span>Window Width</span> <span style="color: #4285f4;">${this.prefs.mainWindowWidth || 900}px</span></label>
+                                <input type="range" min="400" max="1920" step="10" .value=${this.prefs.mainWindowWidth || 900} 
+                                    @input=${(e) => {
+                                        const val = parseInt(e.target.value);
+                                        this.savePref('mainWindowWidth', val);
+                                        if (window.require) window.require('electron').ipcRenderer.send('live-resize-main-window', { width: val, height: this.prefs.mainWindowHeight || 500 });
+                                    }}>
+                            </div>
+                                
+                            <div class="slider-row" style="margin: 0;">
+                                <label style="font-size: 12px;"><span>Window Height</span> <span style="color: #00cc66;">${this.prefs.mainWindowHeight || 500}px</span></label>
+                                <input type="range" min="300" max="1080" step="10" .value=${this.prefs.mainWindowHeight || 500} 
+                                    @input=${(e) => {
+                                        const val = parseInt(e.target.value);
+                                        this.savePref('mainWindowHeight', val);
+                                        if (window.require) window.require('electron').ipcRenderer.send('live-resize-main-window', { width: this.prefs.mainWindowWidth || 900, height: val });
+                                    }}>
+                            </div>
+                        </div>
                     </div>
                 `;
+
             case 'audio':
                 const audioOpts = [
                     {value: 'speaker_only', label: 'Speaker Only (Interviewer)'},
@@ -1063,6 +1101,63 @@ export class CustomizeView extends LitElement {
                 `;
             }
 
+            case 'minimap':
+                const rs = this.prefs.radialSettings || { size: 400, offsetX: 0, offsetY: 0, holdDelay: 2000 };
+                return html`
+                    <div class="scrollable-tab">
+                        <h2 style="margin-bottom: 5px;">Radial Minimap Calibration</h2>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 0; margin-bottom: 25px;">
+                            Adjust the physical size and screen location of the Ghost Minimap. Changes are applied instantly.
+                        </p>
+
+                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 25px;">
+
+                            <div class="slider-row" style="margin: 0;">
+                                <label style="font-size: 13px;"><span>Ctrl Hold Delay (Activation Time)</span> <span style="color: #a142f4;">${(rs.holdDelay ?? 2000) / 1000}s</span></label>
+                                <input type="range" min="100" max="4000" step="100" .value=${rs.holdDelay ?? 2000} 
+                                    @input=${(e) => {
+                                        const newRs = { ...rs, holdDelay: parseInt(e.target.value) };
+                                        this.savePref('radialSettings', newRs);
+                                    }}>
+                                <p style="font-size: 10px; color: #888; margin-top: 5px;">How long you must hold the Ctrl key before the Minimap turns Green. (Min: 0.1s)</p>
+                            </div>
+                        
+                            <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); width: 100%; margin: 0;">
+
+                            <div class="slider-row" style="margin: 0;">
+                                <label style="font-size: 13px;"><span>Physical Size</span> <span style="color: #4285f4;">${rs.size}px</span></label>
+                                <input type="range" min="150" max="800" step="10" .value=${rs.size} 
+                                    @input=${(e) => {
+                                        const newRs = { ...rs, size: parseInt(e.target.value) };
+                                        this.savePref('radialSettings', newRs);
+                                        if (window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
+                                    }}>
+                            </div>
+
+                            <div class="slider-row" style="margin: 0;">
+                                <label style="font-size: 13px;"><span>X-Axis Offset (Left/Right)</span> <span style="color: #00cc66;">${rs.offsetX}px</span></label>
+                                <input type="range" min="-1500" max="1500" step="10" .value=${rs.offsetX} 
+                                    @input=${(e) => {
+                                        const newRs = { ...rs, offsetX: parseInt(e.target.value) };
+                                        this.savePref('radialSettings', newRs);
+                                        if (window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
+                                    }}>
+                            </div>
+
+                            <div class="slider-row" style="margin: 0;">
+                                <label style="font-size: 13px;"><span>Y-Axis Offset (Up/Down)</span> <span style="color: #f59e0b;">${rs.offsetY}px</span></label>
+                                <input type="range" min="-1500" max="500" step="10" .value=${rs.offsetY} 
+                                    @input=${(e) => {
+                                        const newRs = { ...rs, offsetY: parseInt(e.target.value) };
+                                        this.savePref('radialSettings', newRs);
+                                        if (window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
+                                    }}>
+                                <p style="font-size: 10px; color: #888; margin-top: 5px;">Negative values push the minimap UP the screen.</p>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
             case 'search':
                 return html`
                     <h2>Google Search</h2>
@@ -1095,8 +1190,18 @@ export class CustomizeView extends LitElement {
             <div class="settings-container">
                 <div class="sidebar">
                     ${this.tabs.map(tab => html`
-                        <button class="tab-btn ${this.activeTab === tab.id ? 'active' : ''}" @click=${() => { this.activeTab = tab.id; this.requestUpdate(); }}>
-                            <span style="font-size: 16px;">${tab.icon}</span> ${tab.label}
+                        <button class="tab-btn ${this.activeTab === tab.id ? 'active' : ''}" @click=${() => {
+                            this.activeTab = tab.id;
+
+                            // 🟢 LIVE PREVIEW: Tell backend to show/hide the minimap based on the active tab!
+                            if (window.require) {
+                                window.require('electron').ipcRenderer.send('preview-radial-hud', tab.id === 'minimap');
+                            }
+
+                            this.requestUpdate();
+                        }}>
+                            <span style="font-size: 16px;">${tab.icon}</span>
+                            ${tab.label}
                         </button>
                     `)}
                 </div>
