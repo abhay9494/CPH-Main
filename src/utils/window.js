@@ -192,73 +192,84 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     let isStealthHidden = false;
     let wasAiVisibleBeforeShortcut = false; // 🟢 NEW: Memory Variable
 
+    // register('toggleVisibility', keybinds.toggleVisibility, () => {
+    //     if (global.isOAModeActive) return; // 🟢 NUKE SHORTCUT IN OA MODE
+
+    //     if (mainWindow && !mainWindow.isDestroyed()) {
+    //         isStealthHidden = !isStealthHidden;
+    //         if (isStealthHidden) {
+    //             // 🟢 Record AI window state BEFORE hiding everything
+    //             let aiWin = BrowserWindow.getAllWindows().find(w => 
+    //                 !w.isDestroyed() && w !== mainWindow && 
+    //                 (w.webContents.getURL().includes('chatgpt') || w.webContents.getURL().includes('gemini') || w.webContents.getURL().includes('grok'))
+    //             );
+                
+    //             if (aiWin) {
+    //                 wasAiVisibleBeforeShortcut = aiWin.isVisible() && aiWin.getOpacity() !== 0;
+    //             } else {
+    //                 wasAiVisibleBeforeShortcut = false;
+    //             }
+
+    //             // 🟢 FIX: Opacity 0 + ClickThrough ensures ZERO OS-level focus steal!
+    //             mainWindow.setOpacity(0);
+    //             mainWindow.webContents.send('app-made-hidden');
+    //             mainWindow.setIgnoreMouseEvents(true, { forward: true });
+                
+    //             BrowserWindow.getAllWindows().forEach(w => {
+    //                 if (!w.isDestroyed() && w !== mainWindow && w.isVisible()) {
+    //                     w.setOpacity(0);
+    //                     w.setIgnoreMouseEvents(true, { forward: true });
+    //                 }
+    //             });
+    //         } else {
+    //             mainWindow.setOpacity(1);
+    //             // 🟢 FIX: Read the GLOBAL backend state, not a dead local variable!
+    //             if (global.isClickThroughState) {
+    //                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
+    //             } else {
+    //                 mainWindow.setIgnoreMouseEvents(false);
+    //             }
+    //             mainWindow.webContents.send('app-made-visible');
+
+    //             BrowserWindow.getAllWindows().forEach(w => {
+    //                 if (!w.isDestroyed() && w !== mainWindow) {
+    //                     const url = w.webContents.getURL() || "";
+    //                     // 🟢 FIX: Let the frontend exclusively manage the Widget visibility!
+    //                     if (url.includes('widget.html')) return; 
+
+    //                     const isAiWindow = url.includes('chatgpt') || url.includes('gemini') || url.includes('grok');
+    //                     if (isAiWindow) {
+    //                         if (wasAiVisibleBeforeShortcut) {
+    //                             w.setOpacity(1);
+    //                             w.setIgnoreMouseEvents(false);
+    //                         }
+    //                     } else {
+    //                         w.setOpacity(1);
+    //                         w.setIgnoreMouseEvents(false);
+    //                     }
+    //                 }
+    //             });
+    //             if (isStealthHidden) {
+    //                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
+    //             } else {
+    //                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+    //                     global.radialHudWindow.showInactive();
+    //                     // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
+    //                     global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+    //                 }
+    //             }
+    //         }
+    //     }
+    // });
+
+    // 🟢 FIX: Destroyed the duplicated local stealth variables!
+    
     register('toggleVisibility', keybinds.toggleVisibility, () => {
         if (global.isOAModeActive) return; // 🟢 NUKE SHORTCUT IN OA MODE
-
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            isStealthHidden = !isStealthHidden;
-            if (isStealthHidden) {
-                // 🟢 Record AI window state BEFORE hiding everything
-                let aiWin = BrowserWindow.getAllWindows().find(w => 
-                    !w.isDestroyed() && w !== mainWindow && 
-                    (w.webContents.getURL().includes('chatgpt') || w.webContents.getURL().includes('gemini') || w.webContents.getURL().includes('grok'))
-                );
-                
-                if (aiWin) {
-                    wasAiVisibleBeforeShortcut = aiWin.isVisible() && aiWin.getOpacity() !== 0;
-                } else {
-                    wasAiVisibleBeforeShortcut = false;
-                }
-
-                // 🟢 FIX: Opacity 0 + ClickThrough ensures ZERO OS-level focus steal!
-                mainWindow.setOpacity(0);
-                mainWindow.webContents.send('app-made-hidden');
-                mainWindow.setIgnoreMouseEvents(true, { forward: true });
-                
-                BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed() && w !== mainWindow && w.isVisible()) {
-                        w.setOpacity(0);
-                        w.setIgnoreMouseEvents(true, { forward: true });
-                    }
-                });
-            } else {
-                mainWindow.setOpacity(1);
-                // 🟢 FIX: Read the GLOBAL backend state, not a dead local variable!
-                if (global.isClickThroughState) {
-                    mainWindow.setIgnoreMouseEvents(true, { forward: true });
-                } else {
-                    mainWindow.setIgnoreMouseEvents(false);
-                }
-                mainWindow.webContents.send('app-made-visible');
-
-                BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed() && w !== mainWindow) {
-                        const url = w.webContents.getURL() || "";
-                        // 🟢 FIX: Let the frontend exclusively manage the Widget visibility!
-                        if (url.includes('widget.html')) return; 
-
-                        const isAiWindow = url.includes('chatgpt') || url.includes('gemini') || url.includes('grok');
-                        if (isAiWindow) {
-                            if (wasAiVisibleBeforeShortcut) {
-                                w.setOpacity(1);
-                                w.setIgnoreMouseEvents(false);
-                            }
-                        } else {
-                            w.setOpacity(1);
-                            w.setIgnoreMouseEvents(false);
-                        }
-                    }
-                });
-                if (isStealthHidden) {
-                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
-                } else {
-                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
-                        global.radialHudWindow.showInactive();
-                        // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
-                        global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                    }
-                }
-            }
+        
+        // 🟢 Route the keyboard shortcut directly to the Master Stealth Engine
+        if (global.toggleStealthMode) {
+            global.toggleStealthMode();
         }
     });
 

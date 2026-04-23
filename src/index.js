@@ -129,6 +129,7 @@ function launchAIWindow() {
         show: false, // CRITICAL: Forces it to start completely hidden to prevent the 1ms flash!
         skipTaskbar: true, 
         autoHideMenuBar: true,
+        alwaysOnTop: true,
         title: `Service: ${provider.name} | Profile: ${currentProfileIdx}`,
         webPreferences: {
             nodeIntegration: false, contextIsolation: true, backgroundThrottling: false,
@@ -139,6 +140,10 @@ function launchAIWindow() {
     aiWebWindow.setContentProtection(true);
     aiWebWindow.webContents.setAudioMuted(true);
     aiWebWindow.loadURL(provider.url);
+
+    if (process.platform === 'win32') {
+        aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+    }
 
     aiWebWindow.webContents.on('dom-ready', async () => {
         aiWebWindow.webContents.insertCSS('* { cursor: default !important; }');
@@ -1613,20 +1618,24 @@ function setupGeneralIpcHandlers() {
             launchAIWindow();
             setTimeout(() => {
                 if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    aiWebWindow.setOpacity(1); 
+                    aiWebWindow.setOpacity(1);
                     aiWebWindow.setIgnoreMouseEvents(false);
-                    aiWebWindow.show();
+                    aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    aiWebWindow.showInactive();
                 }
             }, 1000);
             return true;
         }
-    
-        const targetVisible = forceShow !== undefined ? forceShow : !aiWebWindow.isVisible();
+
+        // 🟢 FIX: Read actual physical state! If opacity is 0, it's effectively hidden.
+        const isEffectivelyVisible = aiWebWindow.isVisible() && aiWebWindow.getOpacity() !== 0;
+        const targetVisible = forceShow !== undefined ? forceShow : !isEffectivelyVisible;
+
         if (targetVisible) {
-            // 🟢 FIX: Cure the 0 Opacity lock caused by the Stealth Hide!
             aiWebWindow.setOpacity(1);
             aiWebWindow.setIgnoreMouseEvents(false);
-            aiWebWindow.show();
+            aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+            aiWebWindow.showInactive(); // showInactive prevents stealing typing focus from your IDE!
             return true;
         } else {
             aiWebWindow.hide();
@@ -1858,8 +1867,12 @@ function setupGeneralIpcHandlers() {
         spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', flashBacklightScript]);
     });
 
-    // 🟢 SAFE HIDE: Flawless OS-Level Stealth using Opacity to prevent Focus Stealing
-    ipcMain.handle('trigger-ghost-hide', () => {
+    // 🟢 SAFE HIDE VARIABLES
+    // let isGhostHidden = false;
+    // let wasAiVisibleBeforeGhost = false;
+
+    // 🟢 THE MASTER STEALTH TOGGLE (United for both Mouse and Keyboard!)
+    global.toggleStealthMode = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
             if (isGhostHidden) {
@@ -1899,8 +1912,13 @@ function setupGeneralIpcHandlers() {
                 // 🟢 RESTORE THE MINIMAP
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
                     global.radialHudWindow.showInactive();
+                    global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
                 }
             }
         }
+    };
+
+    ipcMain.handle('trigger-ghost-hide', () => {
+        global.toggleStealthMode();
     });
 }

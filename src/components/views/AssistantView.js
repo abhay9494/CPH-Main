@@ -1238,7 +1238,8 @@ export class AssistantView extends LitElement {
         if (Date.now() - this.lastHiddenTime < 500) return;
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
-            this.isAiVisible = await ipcRenderer.invoke('toggle-ai-visibility', !this.isAiVisible);
+            // 🟢 FIX: Send no arguments! Let the backend calculate visibility based on physical opacity!
+            this.isAiVisible = await ipcRenderer.invoke('toggle-ai-visibility');
             this.requestUpdate();
         }
     }
