@@ -28,6 +28,7 @@ const DEFAULT_PREFERENCES = {
     mainWindowWidth: 900,
     mainWindowHeight: 500,
     radialSettings: { size: 400, offsetX: 0, offsetY: 0, holdDelay: 2000 },
+    interviewStealthEdge: 'none',
     hotCorners: {
         top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',
         left_mid_top: 'refactor', right_mid_top: 'prev_resp',

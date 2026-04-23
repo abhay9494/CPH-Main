@@ -625,7 +625,7 @@ export class AssistantView extends LitElement {
 
             // 🎯 V2: DYNAMIC HOVER ROUTER (Custom Timers & Execution)
             ipcRenderer.on('hot-corner-hover', async (event, zone) => {
-                if (this.currentMode !== 'proctored_oa') return;
+                if (this.currentMode !== 'proctored_oa' && this.currentMode !== 'proctored_live_interview') return;
                 
                 if (this.hoverTimer) {
                     clearInterval(this.hoverTimer);
@@ -638,12 +638,25 @@ export class AssistantView extends LitElement {
 
                 if (!zone) return;
 
-                // 🟢 THE TRI-BRAIN SWITCH
-                let activeMap = this.hotCornersMap || {};
-                if (this.viewMode === 'typer') activeMap = this.typerHotCornersMap || {};
-                else if (this.activePage === 2) activeMap = this.hotCornersPage2Map || {};
+                let action = 'none';
+
+                if (this.currentMode === 'proctored_live_interview') {
+                    const stealthEdge = this.prefs.interviewStealthEdge || 'none';
+                    if (zone === stealthEdge && stealthEdge !== 'none') {
+                        action = 'hide_unhide';
+                    } else {
+                        return; // 🟢 Strict Filter: Ignore all other screen edges completely!
+                    }
+                } else {
+                    // Normal OA Routing
+                    let activeMap = this.hotCornersMap || {};
+                    if (this.viewMode === 'typer') activeMap = this.typerHotCornersMap || {};
+                    else if (this.activePage === 2) activeMap = this.hotCornersPage2Map || {};
+                    action = activeMap[zone];
+                }
 
                 const action = activeMap[zone];
+
                 if (!action || action === 'none') return;
 
                 // 🟢 NEW: Allow auto_type to punch through the hidden window so you can pause invisibly!

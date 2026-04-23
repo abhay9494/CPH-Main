@@ -1027,6 +1027,31 @@ export class CustomizeView extends LitElement {
 
                 return html`
                     <div class="scrollable-tab">
+                        
+                        <div style="background: rgba(241, 76, 76, 0.1); border: 1px solid #f14c4c; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #f14c4c;">🚨 Emergency Edge Stealth</h3>
+                            <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Pick a screen edge to instantly hide the app during an interview without using your keyboard. Unhide uses the delay slider below.</p>
+                            ${this.renderCustomDropdown('interviewStealthEdge', [
+                                {value: 'none', label: 'None (Disabled)'},
+                                {value: 'top_left', label: 'Top-Left Corner'},
+                                {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
+                                {value: 'top_center', label: 'Top-Center Edge'},
+                                {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
+                                {value: 'top_right', label: 'Top-Right Corner'},
+                                {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
+                                {value: 'right_mid_top', label: 'Right-Mid-Top Edge'},
+                                {value: 'middle_left', label: 'Middle-Left Edge'},
+                                {value: 'middle_right', label: 'Middle-Right Edge'},
+                                {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
+                                {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'},
+                                {value: 'bottom_left', label: 'Bottom-Left Corner'},
+                                {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'},
+                                {value: 'bottom_center', label: 'Bottom-Center Edge'},
+                                {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'},
+                                {value: 'bottom_right', label: 'Bottom-Right Corner'}
+                            ], this.prefs.interviewStealthEdge || 'none', (val) => this.savePref('interviewStealthEdge', val))}
+                        </div>
+
                         <h2 style="margin-bottom: 5px;">Live Interview Radial Map</h2>
                         <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
                             Map the 16 zones for your Wrist-Flick Radial HUD. The physical grid represents the 360-degree circle.

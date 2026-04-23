@@ -84,7 +84,7 @@ function createWindow(sendToRenderer, geminiSessionRef) {
     mainWindow.setPosition(x, y);
 
     if (process.platform === 'win32') {
-        mainWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+        mainWindow.setAlwaysOnTop(true, 'screen-saver', 2);
     }
 
     mainWindow.loadFile(path.join(__dirname, '../index.html'));
@@ -161,28 +161,28 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // ----------------------------------------------------
     const moveStep = 20;
     register('moveUp', keybinds.moveUp, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, y: bounds.y - moveStep });
         }
     });
     register('moveDown', keybinds.moveDown, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, y: bounds.y + moveStep });
         }
     });
     register('moveLeft', keybinds.moveLeft, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, x: bounds.x - moveStep });
         }
     });
     register('moveRight', keybinds.moveRight, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, x: bounds.x + moveStep });
@@ -192,80 +192,8 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     let isStealthHidden = false;
     let wasAiVisibleBeforeShortcut = false; // 🟢 NEW: Memory Variable
 
-    // register('toggleVisibility', keybinds.toggleVisibility, () => {
-    //     if (global.isOAModeActive) return; // 🟢 NUKE SHORTCUT IN OA MODE
-
-    //     if (mainWindow && !mainWindow.isDestroyed()) {
-    //         isStealthHidden = !isStealthHidden;
-    //         if (isStealthHidden) {
-    //             // 🟢 Record AI window state BEFORE hiding everything
-    //             let aiWin = BrowserWindow.getAllWindows().find(w => 
-    //                 !w.isDestroyed() && w !== mainWindow && 
-    //                 (w.webContents.getURL().includes('chatgpt') || w.webContents.getURL().includes('gemini') || w.webContents.getURL().includes('grok'))
-    //             );
-                
-    //             if (aiWin) {
-    //                 wasAiVisibleBeforeShortcut = aiWin.isVisible() && aiWin.getOpacity() !== 0;
-    //             } else {
-    //                 wasAiVisibleBeforeShortcut = false;
-    //             }
-
-    //             // 🟢 FIX: Opacity 0 + ClickThrough ensures ZERO OS-level focus steal!
-    //             mainWindow.setOpacity(0);
-    //             mainWindow.webContents.send('app-made-hidden');
-    //             mainWindow.setIgnoreMouseEvents(true, { forward: true });
-                
-    //             BrowserWindow.getAllWindows().forEach(w => {
-    //                 if (!w.isDestroyed() && w !== mainWindow && w.isVisible()) {
-    //                     w.setOpacity(0);
-    //                     w.setIgnoreMouseEvents(true, { forward: true });
-    //                 }
-    //             });
-    //         } else {
-    //             mainWindow.setOpacity(1);
-    //             // 🟢 FIX: Read the GLOBAL backend state, not a dead local variable!
-    //             if (global.isClickThroughState) {
-    //                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
-    //             } else {
-    //                 mainWindow.setIgnoreMouseEvents(false);
-    //             }
-    //             mainWindow.webContents.send('app-made-visible');
-
-    //             BrowserWindow.getAllWindows().forEach(w => {
-    //                 if (!w.isDestroyed() && w !== mainWindow) {
-    //                     const url = w.webContents.getURL() || "";
-    //                     // 🟢 FIX: Let the frontend exclusively manage the Widget visibility!
-    //                     if (url.includes('widget.html')) return; 
-
-    //                     const isAiWindow = url.includes('chatgpt') || url.includes('gemini') || url.includes('grok');
-    //                     if (isAiWindow) {
-    //                         if (wasAiVisibleBeforeShortcut) {
-    //                             w.setOpacity(1);
-    //                             w.setIgnoreMouseEvents(false);
-    //                         }
-    //                     } else {
-    //                         w.setOpacity(1);
-    //                         w.setIgnoreMouseEvents(false);
-    //                     }
-    //                 }
-    //             });
-    //             if (isStealthHidden) {
-    //                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
-    //             } else {
-    //                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
-    //                     global.radialHudWindow.showInactive();
-    //                     // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
-    //                     global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-    //                 }
-    //             }
-    //         }
-    //     }
-    // });
-
-    // 🟢 FIX: Destroyed the duplicated local stealth variables!
-    
     register('toggleVisibility', keybinds.toggleVisibility, () => {
-        if (global.isOAModeActive) return; // 🟢 NUKE SHORTCUT IN OA MODE
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 NUKE SHORTCUT IN OA MODE
         
         // 🟢 Route the keyboard shortcut directly to the Master Stealth Engine
         if (global.toggleStealthMode) {
@@ -275,7 +203,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
     let isClickThrough = false;
     register('toggleClickThrough', keybinds.toggleClickThrough, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             isClickThrough = !isClickThrough;
             mainWindow.setIgnoreMouseEvents(isClickThrough, { forward: true });
@@ -287,7 +215,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 3. AI ACTIONS (Capture Screenshot)
     // ----------------------------------------------------
     register('nextStep', keybinds.nextStep, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             // Tells the UI to trigger handleCaptureScreenshot()
             mainWindow.webContents.send('execute-widget-action', 'capture');
@@ -298,11 +226,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 4. NAVIGATION (Responses)
     // ----------------------------------------------------
     register('previousResponse', keybinds.previousResponse, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-previous-response');
     });
     register('nextResponse', keybinds.nextResponse, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-next-response');
     });
 
@@ -310,11 +238,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 5. SCROLLING
     // ----------------------------------------------------
     register('scrollUp', keybinds.scrollUp, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-up');
     });
     register('scrollDown', keybinds.scrollDown, () => {
-        if (global.isOAModeActive) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-down');
     });
 
@@ -364,20 +292,29 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             global.radialHudWindow.setContentProtection(true);
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
 
+            if (process.platform === 'win32') {
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 3);
+            }
+
             const htmlContent = `
             <html><body style="margin:0; overflow:hidden; font-family:sans-serif; color:white; pointer-events:none !important;">
-            <div id="container" style="position:relative; width:${rs.size}px; height:${rs.size}px; border-radius:50%; background:rgba(30,30,30,${bgAlpha}); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8);">
-                <div id="highlight" style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; background:transparent; transition: 0.1s;"></div>
-                <div id="icons"></div>
-                <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:${Math.max(10, rs.size/30)}px; font-weight:bold; color:#f14c4c; background:rgba(10,10,10,0.8); padding:8px 12px; border-radius:8px; border:1px solid #f14c4c; width: 35%; text-transform:uppercase; transition: 0.2s;">RADIAL MINIMAP</div>
+            <div id="wrapper" style="position:relative; width:${rs.size}px; height:${rs.size}px;">
+                <div id="container" style="position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(30,30,30,${bgAlpha}); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8); transition: opacity 0.2s;">
+                    <div id="highlight" style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; background:transparent; transition: 0.1s;"></div>
+                    <div id="icons"></div>
+                    <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:${Math.max(10, rs.size/30)}px; font-weight:bold; color:#f14c4c; background:rgba(10,10,10,0.8); padding:8px 12px; border-radius:8px; border:1px solid #f14c4c; width: 35%; text-transform:uppercase; transition: 0.2s;">RADIAL MINIMAP</div>
+                </div>
+                <div id="ghostDot" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:6px; height:6px; background-color:#f14c4c; border-radius:50%; opacity:0; transition: opacity 0.2s;"></div>
             </div>
             <script>
             const { ipcRenderer } = require('electron');
+            const container = document.getElementById('container');
+            const ghostDot = document.getElementById('ghostDot');
             const highlight = document.getElementById('highlight');
             const centerText = document.getElementById('centerText');
             const iconsDiv = document.getElementById('icons');
             const SIZE = ${rs.size};
-            const RADIUS = SIZE * 0.375; // 37.5% of total size
+            const RADIUS = SIZE * 0.375;
 
             for(let i=0; i<16; i++) {
                 let angle = i * 22.5 - 90;
@@ -397,7 +334,18 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             }
 
             ipcRenderer.on('update-hud', (e, data) => {
-                const { slice, labels, isActive } = data;
+                const { slice, labels, isActive, ghostMode } = data;
+
+                // 🟢 IF HIDDEN, STRIP ALL UI EXCEPT THE RED DOT
+                if (ghostMode) {
+                    container.style.opacity = '0';
+                    ghostDot.style.opacity = '1';
+                    return; 
+                } else {
+                    container.style.opacity = '1';
+                    ghostDot.style.opacity = '0';
+                }
+
                 if (isActive) {
                     centerText.style.color = '#00cc66'; 
                     centerText.style.borderColor = '#00cc66';
@@ -543,7 +491,8 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 global.radialHudWindow.showInactive();
                 // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
                 global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false });
+                // 🟢 FIX: Appended ghostMode: false
+                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
             }
 
             if (!bgmiTrackerProcess) {
@@ -614,10 +563,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                                     // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
                                     global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+                                    // 🟢 FIX: Appended ghostMode: false
                                     global.radialHudWindow.webContents.send('update-hud', {
                                         slice: null,
                                         labels: global.activeRadialLabels,
-                                        isActive: true
+                                        isActive: true,
+                                        ghostMode: false
                                     });
                                 }
 
@@ -640,10 +591,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                     }
 
                                     if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                        // 🟢 FIX: Appended ghostMode: false
                                         global.radialHudWindow.webContents.send('update-hud', {
                                             slice: currentRadialSlice,
                                             labels: global.activeRadialLabels,
-                                            isActive: true
+                                            isActive: true,
+                                            ghostMode: false
                                         });
                                     }
                                 }, 30);
@@ -675,10 +628,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
 
                                 // 🟢 Reset: Turn HUD text back to RED
                                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                    // 🟢 FIX: Appended ghostMode: false
                                     global.radialHudWindow.webContents.send('update-hud', { 
                                         slice: null, 
                                         labels: global.activeRadialLabels, 
-                                        isActive: false 
+                                        isActive: false,
+                                        ghostMode: false
                                     });
                                 }
                             }

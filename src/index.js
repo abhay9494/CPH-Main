@@ -142,7 +142,7 @@ function launchAIWindow() {
     aiWebWindow.loadURL(provider.url);
 
     if (process.platform === 'win32') {
-        aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+        aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
     }
 
     aiWebWindow.webContents.on('dom-ready', async () => {
@@ -1622,6 +1622,9 @@ function setupGeneralIpcHandlers() {
                     aiWebWindow.setIgnoreMouseEvents(false);
                     aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
                     aiWebWindow.showInactive();
+
+                    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
+                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
                 }
             }, 1000);
             return true;
@@ -1636,6 +1639,8 @@ function setupGeneralIpcHandlers() {
             aiWebWindow.setIgnoreMouseEvents(false);
             aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
             aiWebWindow.showInactive(); // showInactive prevents stealing typing focus from your IDE!
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
             return true;
         } else {
             aiWebWindow.hide();
@@ -1893,7 +1898,7 @@ function setupGeneralIpcHandlers() {
 
                 // 🟢 LINK THE MINIMAP TO STEALTH MODE
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                    global.radialHudWindow.hide();
+                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true });
                 }
 
             } else {
@@ -1913,6 +1918,7 @@ function setupGeneralIpcHandlers() {
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
                     global.radialHudWindow.showInactive();
                     global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
                 }
             }
         }
