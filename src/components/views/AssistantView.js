@@ -218,7 +218,8 @@ export class AssistantView extends LitElement {
         radialActive: { type: Boolean },
         radialX: { type: Number },
         radialY: { type: Number },
-        radialSlice: { type: Number }
+        radialSlice: { type: Number },
+        interviewStealthEdge: { type: String },
     };
 
     constructor() {
@@ -276,6 +277,7 @@ export class AssistantView extends LitElement {
         this.radialX = null;
         this.radialY = null;
         this.radialSlice = null;
+        this.interviewStealthEdge = 'none';
     }
 
     showToast(msg) {
@@ -327,6 +329,10 @@ export class AssistantView extends LitElement {
         }
         if (e.detail && e.detail.key === 'typerSelectionSpeed') { // 🟢 Sync the new slider
             this.typerSelectionSpeed = e.detail.value;
+            this.requestUpdate();
+        }
+        if (e.detail && e.detail.key === 'interviewStealthEdge') {
+            this.interviewStealthEdge = e.detail.value;
             this.requestUpdate();
         }
     }
@@ -444,6 +450,8 @@ export class AssistantView extends LitElement {
                     top_center: 'change_ai', bottom_center: 'fast_think',
                     middle_left: 'scroll_up', middle_right: 'scroll_down' 
                 };
+
+                this.interviewStealthEdge = prefs.interviewStealthEdge || 'none';
                 
                 this.typerHotCornersMap = prefs.typerHotCorners || {
                     top_left: 'trim_top', top_center: 'auto_type', top_right: 'hide_unhide',
@@ -626,25 +634,41 @@ export class AssistantView extends LitElement {
             // 🎯 V2: DYNAMIC HOVER ROUTER (Custom Timers & Execution)
             ipcRenderer.on('hot-corner-hover', async (event, zone) => {
                 if (this.currentMode !== 'proctored_oa' && this.currentMode !== 'proctored_live_interview') return;
-                
+            
                 if (this.hoverTimer) {
                     clearInterval(this.hoverTimer);
                     this.hoverTimer = null;
                 }
+            
+                // 🟢 PROXIMITY KILLER: Safely destroy the dot if the mouse leaves the zone
+                const killDot = () => {
+                    if (this._isHoveringStealthDot) {
+                        if (window.require) window.require('electron').ipcRenderer.send('set-ghost-dot', false);
+                        this._isHoveringStealthDot = false;
+                    }
+                };
+            
+                if (!zone || zone === 'none') {
+                    killDot();
+                    this.hoverZone = null;
+                    this.hoverProgress = 0;
+                    this.requestUpdate();
+                    return;
+                }
+            
                 this.hoverZone = zone;
                 this.hoverProgress = 0;
                 this.trimTick = 0; // Reset continuous hold
                 this.requestUpdate();
-
-                if (!zone) return;
-
+            
                 let action = 'none';
-
+            
                 if (this.currentMode === 'proctored_live_interview') {
-                    const stealthEdge = this.prefs.interviewStealthEdge || 'none';
+                    const stealthEdge = this.interviewStealthEdge || 'none';
                     if (zone === stealthEdge && stealthEdge !== 'none') {
                         action = 'hide_unhide';
                     } else {
+                        killDot();
                         return; // 🟢 Strict Filter: Ignore all other screen edges completely!
                     }
                 } else {
@@ -654,57 +678,66 @@ export class AssistantView extends LitElement {
                     else if (this.activePage === 2) activeMap = this.hotCornersPage2Map || {};
                     action = activeMap[zone];
                 }
-
-                const action = activeMap[zone];
-
-                if (!action || action === 'none') return;
-
+            
+                if (!action || action === 'none') {
+                    killDot();
+                    return;
+                }
+            
+                // 🟢 PROXIMITY ACTIVATOR: Show dot ONLY if app is hidden and we are hovering the unhide edge!
+                if (action === 'hide_unhide' && this._isGhostHidden) {
+                    if (!this._isHoveringStealthDot) {
+                        if (window.require) window.require('electron').ipcRenderer.send('set-ghost-dot', true);
+                        this._isHoveringStealthDot = true;
+                    }
+                } else {
+                    killDot();
+                }
+            
                 // 🟢 NEW: Allow auto_type to punch through the hidden window so you can pause invisibly!
                 if (this._isGhostHidden && action !== 'hide_unhide' && action !== 'auto_type') return;
-
+            
                 const lockedActions = ['change_ai', 'change_profile', 'refactor', 'send_ai', 'fast_think', 'language', 'fix_error', 'mic'];
                 if (this.isSolving && lockedActions.includes(action)) {
                     this.showToast('⏳ AI is busy...');
                     return;
                 }
-
+            
                 const bounds = this.hotCornerBounds || { dwellTime: 3, hideTime: 0 };
                 let targetTimeMs = (bounds.dwellTime || 3) * 1000;
-
+            
                 if (action === 'hide_unhide') targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
                 else if (action === 'auto_type') {
                     // 🟢 FIX: Ignore hover completely if it is counting down so it doesn't instantly cancel!
                     if (this.typingState === 'countdown') return;
                     // 🟢 FIX: Only trigger the 0-second instant pause if it is actively typing.
-                    if (this.typingState === 'typing') targetTimeMs = 0; 
+                    if (this.typingState === 'typing') targetTimeMs = 0;
                 }
-
+            
                 if (targetTimeMs === 0) {
                     this.hoverProgress = 100;
                     this.executeHotCorner(action);
                     return;
                 }
-
+            
                 this.hoverTimer = setInterval(() => {
                     this.hoverProgress += (50 / targetTimeMs) * 100;
                     this.requestUpdate();
-
+                
                     if (this.hoverProgress >= 100) {
-                        // 🟢 EXPANDED CONTINUOUS HOLD LOGIC (Now includes scroll, opacity, and text size)
+                        // 🟢 EXPANDED CONTINUOUS HOLD LOGIC
                         const continuousActions = ['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom', 'scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'];
                         
                         if (continuousActions.includes(action)) {
-                            this.hoverProgress = 100; 
+                            this.hoverProgress = 100;
                             this.trimTick++;
                             
-                            // 🟢 DYNAMIC SPEED MATH
-                            let ticksReq = 6; // Default 300ms for scrolling/opacity
+                            let ticksReq = 6; 
                             if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
-                                // 50ms per tick. If slider is 0.5s, ticksReq = 10.
-                                ticksReq = Math.max(1, Math.round((this.typerSelectionSpeed || 0.5) * 1000 / 50)); 
+                                ticksReq = Math.max(1, Math.round((this.typerSelectionSpeed || 0.5) * 1000 / 50));
                             }
-
-                            if (this.trimTick >= ticksReq) { 
+                        
+                            if (this.trimTick >= ticksReq) {
                                 this.executeHotCorner(action);
                                 this.trimTick = 0;
                             }

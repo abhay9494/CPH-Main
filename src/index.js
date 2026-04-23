@@ -1005,6 +1005,7 @@ function setupGeneralIpcHandlers() {
     ipcMain.on('view-changed', (event, view) => {
         if (view !== 'assistant') {
             isGhostHidden = false;
+            global.isGhostHidden = false;
             wasAiVisibleBeforeGhost = false;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
@@ -1823,6 +1824,7 @@ function setupGeneralIpcHandlers() {
 
     // 🟢 SAFE HIDE VARIABLES (Moved UP so the Ping system can read them!)
     let isGhostHidden = false;
+    global.isGhostHidden = false;
     let wasAiVisibleBeforeGhost = false;
 
     // 🟢 NEW: SILENT PING (ASUS Hardware WMI Backlight Flasher V2)
@@ -1872,14 +1874,11 @@ function setupGeneralIpcHandlers() {
         spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', flashBacklightScript]);
     });
 
-    // 🟢 SAFE HIDE VARIABLES
-    // let isGhostHidden = false;
-    // let wasAiVisibleBeforeGhost = false;
-
     // 🟢 THE MASTER STEALTH TOGGLE (United for both Mouse and Keyboard!)
     global.toggleStealthMode = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
+            global.isGhostHidden = isGhostHidden;
             if (isGhostHidden) {
                 mainWindow.webContents.send('app-made-hidden');
                 // 🟢 SYNC FRONTEND

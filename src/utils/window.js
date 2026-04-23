@@ -161,40 +161,39 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // ----------------------------------------------------
     const moveStep = 20;
     register('moveUp', keybinds.moveUp, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, y: bounds.y - moveStep });
         }
     });
     register('moveDown', keybinds.moveDown, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, y: bounds.y + moveStep });
         }
     });
     register('moveLeft', keybinds.moveLeft, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, x: bounds.x - moveStep });
         }
     });
     register('moveRight', keybinds.moveRight, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) {
             const bounds = mainWindow.getBounds();
             mainWindow.setBounds({ ...bounds, x: bounds.x + moveStep });
         }
     });
 
-    let isStealthHidden = false;
-    let wasAiVisibleBeforeShortcut = false; // 🟢 NEW: Memory Variable
+    // 🟢 FIX: Destroyed the duplicated local stealth variables!
 
     register('toggleVisibility', keybinds.toggleVisibility, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 NUKE SHORTCUT IN OA MODE
-        
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
+
         // 🟢 Route the keyboard shortcut directly to the Master Stealth Engine
         if (global.toggleStealthMode) {
             global.toggleStealthMode();
@@ -203,11 +202,10 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 
     let isClickThrough = false;
     register('toggleClickThrough', keybinds.toggleClickThrough, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) {
             isClickThrough = !isClickThrough;
             mainWindow.setIgnoreMouseEvents(isClickThrough, { forward: true });
-            // console.log(`Click-through mode: ${isClickThrough ? 'ON' : 'OFF'}`);
         }
     });
 
@@ -215,9 +213,8 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 3. AI ACTIONS (Capture Screenshot)
     // ----------------------------------------------------
     register('nextStep', keybinds.nextStep, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) {
-            // Tells the UI to trigger handleCaptureScreenshot()
             mainWindow.webContents.send('execute-widget-action', 'capture');
         }
     });
@@ -226,11 +223,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 4. NAVIGATION (Responses)
     // ----------------------------------------------------
     register('previousResponse', keybinds.previousResponse, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-previous-response');
     });
     register('nextResponse', keybinds.nextResponse, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-next-response');
     });
 
@@ -238,11 +235,11 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 5. SCROLLING
     // ----------------------------------------------------
     register('scrollUp', keybinds.scrollUp, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-up');
     });
     register('scrollDown', keybinds.scrollDown, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-down');
     });
 
@@ -250,28 +247,22 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     // 6. EMERGENCY ERASE (Nuke & Quit)
     // ----------------------------------------------------
     register('emergencyErase', keybinds.emergencyErase, async () => {
-        // console.log("🧨 EMERGENCY ERASE TRIGGERED!");
         try {
-            // 1. Wipe local config/storage files
             storage.clearAllData();
-            
-            // 2. Wipe Chromium cache, cookies, and AI logins globally
             await session.defaultSession.clearStorageData();
             for (let i = 1; i <= 20; i++) {
                 const part = session.fromPartition(`persist:ai_profile_${i}`);
                 await part.clearStorageData();
             }
-            
-            // 3. Instant kill process
             app.quit();
         } catch (e) {
-            app.quit(); // Force quit even if cleanup fails
+            app.quit();
         }
     });
 
     register('emergencyKill', keybinds.emergencyKill, () => {
         console.log("💀 EMERGENCY KILL TRIGGERED!");
-        app.exit(0); // 🟢 INSTANT KILL: Bypasses all teardown events and vanishes immediately.
+        app.exit(0);
     });
 
     // 🟢 CREATE THE INDEPENDENT RADIAL WINDOW AS A PERMANENT MINIMAP
@@ -339,7 +330,6 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 // 🟢 IF HIDDEN, STRIP ALL UI EXCEPT THE RED DOT
                 if (ghostMode) {
                     container.style.opacity = '0';
-                    ghostDot.style.opacity = '1';
                     return; 
                 } else {
                     container.style.opacity = '1';
@@ -377,6 +367,9 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                     highlight.style.background = 'transparent';
                     centerText.innerText = 'RADIAL MINIMAP';
                 }
+            });
+            ipcRenderer.on('set-ghost-dot', (e, isVisible) => {
+                ghostDot.style.opacity = isVisible ? '1' : '0';
             });
             </script>
             </body></html>
@@ -438,6 +431,13 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             if (!global.isLiveInterviewMode && global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                 global.radialHudWindow.hide();
             }
+        }
+    });
+
+    // 🟢 DOT PROXIMITY ROUTER
+    ipcMain.on('set-ghost-dot', (event, isVisible) => {
+        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+            global.radialHudWindow.webContents.send('set-ghost-dot', isVisible);
         }
     });
 
@@ -541,6 +541,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                         output = output.trim();
 
                         if (output === 'CTRL_DOWN') {
+                            if (global.isGhostHidden) continue;
                             if (global.ctrlHoldTimer) clearTimeout(global.ctrlHoldTimer);
 
                             // 🟢 Read live delay from storage so changes take effect immediately!
@@ -609,6 +610,8 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                 clearTimeout(global.ctrlHoldTimer);
                                 global.ctrlHoldTimer = null;
                             }
+
+                            if (global.isGhostHidden) continue;
 
                             // If the system was ARMED and GREEN, execute the pull!
                             if (global.isRadialModeActive) {
