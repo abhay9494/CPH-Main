@@ -233,13 +233,15 @@ export class CheatingDaddyApp extends LitElement {
 
     async _loadFromStorage() {
         try {
-            const prefs = await cheatingDaddy.storage.getPreferences();
+            const raw = await cheatingDaddy.storage.getPreferences();
+            const prefs = raw?.data || raw || {}; // 🟢 FIX: Properly unpack the IPC payload!
+            
             this.bgTransparency = prefs.backgroundTransparency ?? 0.8;
             this.fontSize = prefs.fontSize ?? 12;
-
+            
             this.applyBackgroundAppearance(prefs.backgroundColor ?? '#1e1e1e', this.bgTransparency);
             document.documentElement.style.setProperty('--response-font-size', `${this.fontSize}px`);
-
+            
             // ALWAYS boot to the main hub menu
             this.currentView = 'main';
             this.requestUpdate();

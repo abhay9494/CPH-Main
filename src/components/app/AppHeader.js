@@ -276,7 +276,8 @@ export class AppHeader extends LitElement {
     async checkSetupState() {
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
             const raw = await window.cheatingDaddy.storage.getPreferences();
-            const prefs = raw?.data || raw || {};
+            const prefs = raw?.data || raw || {}; // 🟢 FIX: Properly unpack the IPC payload!
+            
             const profiles = prefs.aiProfiles || [];
             this.missingAccount = profiles.length === 0;
             this.missingContext = !(prefs.customPrompt && prefs.customPrompt.trim().length > 0);
@@ -344,9 +345,6 @@ export class AppHeader extends LitElement {
                 ${isOA ? html`
                     <div class="ghost-badge ${this.isGhostActive ? 'active' : 'broken'}">
                         ${this.isGhostActive ? '👻 GHOST MODE ON' : '⚠️ GHOST BROKEN'}
-                    </div>
-                    <div class="ghost-badge ${this.isMicOn ? 'active' : 'broken'}" style="margin-right: 15px; border-color: ${this.isMicOn ? '#00cc66' : '#f14c4c'}; color: ${this.isMicOn ? '#00cc66' : '#f14c4c'}; background: ${this.isMicOn ? 'rgba(0, 204, 102, 0.15)' : 'rgba(241, 76, 76, 0.15)'};">
-                        🎙️ MIC: ${this.isMicOn ? 'ON' : 'OFF'}
                     </div>
                 ` : ''}
 

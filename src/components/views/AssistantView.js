@@ -503,7 +503,19 @@ export class AssistantView extends LitElement {
                     this.setGhostMode(true);
                 }
 
-                if (this.currentProfileId) await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
+                if (this.currentProfileId) {
+                    await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
+                    
+                    // 🟢 AUTO-START VOICE BRAIN: Wait 6 seconds for ChatGPT to load, then turn Mic ON!
+                    if (this.currentMode === 'proctored_live_interview') {
+                        setTimeout(() => {
+                            if (!this.isMicOn) {
+                                this.handleToggleMic();
+                                this.showToast('🎙️ Voice Brain Auto-Started');
+                            }
+                        }, 6000); 
+                    }
+                }
                 if (prefs.tacThinkMode !== undefined) {
                     this.tacThinkMode = prefs.tacThinkMode;
                     ipcRenderer.invoke('set-ai-brain-mode', this.tacThinkMode ? 'think' : 'fast', false);
@@ -1718,6 +1730,16 @@ export class AssistantView extends LitElement {
             this.requestUpdate();
             this.saveCurrentSession(); 
             await window.require('electron').ipcRenderer.invoke('new-chat');
+            
+            // 🟢 AUTO-START VOICE BRAIN AFTER RESET
+            if (this.currentMode === 'proctored_live_interview') {
+                setTimeout(() => {
+                    if (!this.isMicOn) {
+                        this.handleToggleMic();
+                        this.showToast('🎙️ Voice Brain Re-Engaged');
+                    }
+                }, 6000);
+            }
         }
     }
 
