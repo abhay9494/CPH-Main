@@ -550,6 +550,8 @@ export class CheatingDaddyApp extends LitElement {
             return;
         }
 
+        ipcRenderer.send('set-session-mode', destination);
+
         // 🟢 FIX: Turn off mouse sensors if we leave Proctored OA!
         if (destination !== 'proctored_oa') {
             ipcRenderer.send('stop-hot-corners');

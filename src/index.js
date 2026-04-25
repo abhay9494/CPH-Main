@@ -720,17 +720,84 @@ function setupGeneralIpcHandlers() {
         return true;
     });
 
+    ipcMain.on('set-session-mode', (event, mode) => {
+        global.currentSessionMode = mode;
+    });
+
     // ==========================================================
     // MANUAL MIC TOGGLE (Hardware Release Fix)
     // ==========================================================
     ipcMain.handle('toggle-ai-mic', async (event, isTurningOn) => {
         if (!voiceWebWindow || voiceWebWindow.isDestroyed()) return false;
         const script = isTurningOn ?
-            `try { const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); const mBtn = btns.find(b => { const aria = (b.getAttribute('aria-label') || '').toLowerCase(); const testid = (b.getAttribute('data-testid') || '').toLowerCase(); return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice'); }); if (mBtn) mBtn.click(); } catch(e) {}`
+            `(() => {
+                try { 
+                    const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
+                    const mBtn = btns.find(b => { 
+                        const aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
+                        const testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
+                        const text = (b.textContent || '').toLowerCase();
+                        return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice') || text.includes('start voice'); 
+                    }); 
+                    if (mBtn) { mBtn.click(); return true; }
+                    return false;
+                } catch(e) { return false; }
+            })()`
             :
-            `try { const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); const endBtn = btns.find(b => { const txt = (b.textContent || '').trim().toLowerCase(); const aria = (b.getAttribute('aria-label') || '').toLowerCase(); const testid = (b.getAttribute('data-testid') || '').toLowerCase(); return txt === 'stop' || txt === 'end' || txt.includes('end call') || txt.includes('leave') || txt.includes('stop voice') || aria === 'stop' || aria.includes('end') || aria.includes('leave') || testid.includes('end') || testid.includes('stop'); }); if (endBtn) endBtn.click(); } catch(e) {}`;
-        await voiceWebWindow.webContents.executeJavaScript(script);
-        return true;
+            `(() => {
+                try { 
+                    const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
+                    const endBtn = btns.find(b => { 
+                        const txt = (b.textContent || '').trim().toLowerCase(); 
+                        const aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
+                        const testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
+                        return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); 
+                    }); 
+                    if (endBtn) { endBtn.click(); return true; }
+                    return false;
+                } catch(e) { return false; }
+            })()`;
+            
+        try {
+            const result = await voiceWebWindow.webContents.executeJavaScript(script);
+            
+            // Restore DOM Scraping to update the overlay!
+            if (micSpyInterval) clearInterval(micSpyInterval);
+            micSpyInterval = setInterval(async () => {
+                if (!voiceWebWindow || voiceWebWindow.isDestroyed()) {
+                    clearInterval(micSpyInterval);
+                    return;
+                }
+                try {
+                    const isMicActive = await voiceWebWindow.webContents.executeJavaScript(`
+                        (() => {
+                            try {
+                                const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
+                                const activeBtn = btns.find(b => { 
+                                    const txt = (b.textContent || '').trim().toLowerCase(); 
+                                    const aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
+                                    const testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
+                                    return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); 
+                                });
+                                return !!activeBtn;
+                            } catch(e) { return false; }
+                        })();
+                    `);
+                    
+                    BrowserWindow.getAllWindows().forEach(w => {
+                        if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
+                            w.webContents.send('sync-mic-state', isMicActive);
+                        }
+                    });
+                } catch (err) {
+                    // Ignore errors if the page is navigating or destroyed
+                }
+            }, 1000);
+            
+            return result;
+        } catch (err) {
+            return false;
+        }
     });
 
     // ==========================================================
@@ -810,43 +877,59 @@ function setupGeneralIpcHandlers() {
     });
 
     // ==========================================================
-    // 50/50 SPLIT-SCREEN AI VISIBILITY
+    // SPLIT-SCREEN AI VISIBILITY (Mode Aware)
     // ==========================================================
     ipcMain.handle('toggle-ai-visibility', (event, forceShow) => {
-        if (!voiceWebWindow || !codeWebWindow) return false;
+        if (!codeWebWindow) return false;
 
-        const isVisible = voiceWebWindow.isVisible() && voiceWebWindow.getOpacity() !== 0;
+        const isVisible = codeWebWindow.isVisible() && codeWebWindow.getOpacity() !== 0;
         const targetVisible = forceShow !== undefined ? forceShow : !isVisible;
 
         if (targetVisible) {
             const { screen } = require('electron');
             const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-            const halfWidth = Math.floor(width / 2);
 
-            // Snap Code Engine to LEFT
-            if (!codeWebWindow.isDestroyed()) {
-                codeWebWindow.setOpacity(1);
-                codeWebWindow.setIgnoreMouseEvents(false);
-                codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-                codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
-                codeWebWindow.showInactive();
-            }
+            if (global.currentSessionMode === 'proctored_oa') {
+                // 🟢 SINGLE BRAIN (Centered)
+                const safeWidth = Math.max(800, Math.floor(width * 0.7));
+                const safeHeight = Math.max(600, Math.floor(height * 0.8));
+                const x = Math.floor((width - safeWidth) / 2);
+                const y = Math.floor((height - safeHeight) / 2);
 
-            // Snap Voice Engine to RIGHT
-            if (!voiceWebWindow.isDestroyed()) {
-                voiceWebWindow.setOpacity(1);
-                voiceWebWindow.setIgnoreMouseEvents(false);
-                voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-                voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
-                voiceWebWindow.showInactive();
+                if (!codeWebWindow.isDestroyed()) {
+                    codeWebWindow.setOpacity(1);
+                    codeWebWindow.setIgnoreMouseEvents(false);
+                    codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    codeWebWindow.setBounds({ x, y, width: safeWidth, height: safeHeight });
+                    codeWebWindow.showInactive();
+                }
+            } else {
+                // 🟢 DUAL BRAIN (50/50 Split)
+                const halfWidth = Math.floor(width / 2);
+                if (!codeWebWindow.isDestroyed()) {
+                    codeWebWindow.setOpacity(1);
+                    codeWebWindow.setIgnoreMouseEvents(false);
+                    codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
+                    codeWebWindow.showInactive();
+                }
+                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                    voiceWebWindow.setOpacity(1);
+                    voiceWebWindow.setIgnoreMouseEvents(false);
+                    voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
+                    voiceWebWindow.showInactive();
+                }
             }
 
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+                global.radialHudWindow.moveTop();
+            }
             return true;
         } else {
-            if (!codeWebWindow.isDestroyed()) codeWebWindow.hide();
-            if (!voiceWebWindow.isDestroyed()) voiceWebWindow.hide();
+            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.hide();
+            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.hide();
             return false;
         }
     });

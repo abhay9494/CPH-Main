@@ -66,35 +66,28 @@ export class MainView extends LitElement {
                 </div>
 
                 <div class="primary-grid">
-                    <div class="mode-card card-oa" @click=${() => this.onNavigate('oa')}>
-                        <div class="icon-wrapper">⚡</div>
-                        <div class="card-title">Online Assessment</div>
-                        <div class="card-desc">Capture your screen directly to instantly generate high-speed code solutions and algorithms.</div>
-                    </div>
-
                     <div class="mode-card card-oa" @click=${() => this.onNavigate('proctored_oa')} style="border-top-color: #f14c4c;">
                         <div class="icon-wrapper" style="color: #f14c4c; background: rgba(241, 76, 76, 0.15); border-color: rgba(241, 76, 76, 0.3);">
                             🎯
                         </div>
                         <div class="card-title">Proctored OA</div>
-                        <div class="card-desc">Zero-touch execution. Triggers AI captures and navigation via invisible mouse edge-dwells.</div>
+                        <div class="card-desc">Single-Brain execution. Triggers AI captures and navigation via invisible mouse edge-dwells.</div>
                     </div>
 
-                    <div class="mode-card card-interview" @click=${() => this.onNavigate('interview')}>
-                        <div class="icon-wrapper">🎤</div>
-                        <div class="card-title">Live Interview</div>
-                        <div class="card-desc">Real-time stealth audio bridging. Get instant, conversational AI prompts while you speak.</div>
+                    <div class="mode-card card-interview" @click=${() => this.onNavigate('proctored_live_interview')} style="border-top-color: #00cc66;">
+                        <div class="icon-wrapper" style="color: #00cc66; background: rgba(0, 204, 102, 0.15); border-color: rgba(0, 204, 102, 0.3);">
+                            🕵️
+                        </div>
+                        <div class="card-title">Proctored Live Interview</div>
+                        <div class="card-desc">Dual-Brain execution. Zero-click 16-zone radial wrist-flicks to execute commands silently.</div>
                     </div>
 
                     <div class="mode-card card-companion" @click=${() => this.onNavigate('companion')}>
-                        <div class="icon-wrapper">🤝</div>
+                        <div class="icon-wrapper">
+                            🤝
+                        </div>
                         <div class="card-title">Help a Friend</div>
                         <div class="card-desc">Connect to a peer's session via secure WebRTC to quietly push answers and code to their screen.</div>
-                    </div>
-                    <div class="mode-card card-interview" @click=${() => this.onNavigate('proctored_live_interview')} style="border-top-color: #00cc66;">
-                        <div class="icon-wrapper" style="color: #00cc66; background: rgba(0, 204, 102, 0.15); border-color: rgba(0, 204, 102, 0.3);">🕵️</div>
-                        <div class="card-title">Proctored Live Interview</div>
-                        <div class="card-desc">Dual-pane code & chat view. Zero-click 16-zone radial wrist-flicks to execute commands silently.</div>
                     </div>
                 </div>
 

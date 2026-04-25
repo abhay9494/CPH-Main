@@ -506,14 +506,23 @@ export class AssistantView extends LitElement {
                 if (this.currentProfileId) {
                     await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
                     
-                    // 🟢 AUTO-START VOICE BRAIN: Wait 6 seconds for ChatGPT to load, then turn Mic ON!
+                    // 🟢 SMART AUTO-START VOICE BRAIN
                     if (this.currentMode === 'proctored_live_interview') {
-                        setTimeout(() => {
-                            if (!this.isMicOn) {
-                                this.handleToggleMic();
-                                this.showToast('🎙️ Voice Brain Auto-Started');
+                        let attempts = 0;
+                        const tryMic = setInterval(async () => {
+                            attempts++;
+                            if (this.isMicOn || attempts > 15) { // Stop after 15 seconds
+                                clearInterval(tryMic);
+                                return;
                             }
-                        }, 6000); 
+                            const success = await ipcRenderer.invoke('toggle-ai-mic', true);
+                            if (success) {
+                                this.isMicOn = true;
+                                this.showToast('🎙️ Voice Brain Auto-Started');
+                                this.requestUpdate();
+                                clearInterval(tryMic);
+                            }
+                        }, 1000); // Try to click it every 1 second until it works
                     }
                 }
                 if (prefs.tacThinkMode !== undefined) {
@@ -599,7 +608,7 @@ export class AssistantView extends LitElement {
                         this.typerEndLine = this.typerCodeLines.length - 1;
                         this.typingCurrentLineIndex = 0;
 
-                        if (window.require && this.currentMode !== 'proctored_oa') {
+                        if (window.require && this.currentMode !== 'proctored_oa' && this.currentMode !== 'proctored_live_interview') {
                             window.require('electron').ipcRenderer.invoke('show-widget');
                         }
                     } else if (this.typingState === 'typing') {
