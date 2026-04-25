@@ -585,54 +585,90 @@ export class CustomizeView extends LitElement {
 
                 return html`
                     <div class="scrollable-tab">
-                    <h2>AI Accounts & Profiles</h2>
-                    <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 25px;">
-                        <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px;">Add / Update Profile Login</h3>
-                        <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
-                            <input type="text" placeholder="Nickname (e.g. John)" 
-                                .value=${this.newProfileName} 
-                                @input=${e => this.newProfileName = e.target.value}
-                                style="flex: 1; min-width: 150px; background: #000; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px;">
-                            
-                            ${this.renderCustomDropdown('newProfileAI', accountOptions, this.newProfileAI, (val) => this.newProfileAI = val, '120px')}
+                        <h2>AI Accounts & Profiles</h2>
+                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 25px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px;">Add / Update Profile Login</h3>
+                            <div style="display: flex; gap: 10px; align-items: center; flex-wrap: wrap;">
+                                <input type="text" placeholder="Nickname (e.g. John)" 
+                                    .value=${this.newProfileName} 
+                                    @input=${e => this.newProfileName = e.target.value}
+                                    style="flex: 1; min-width: 150px; background: #000; color: #fff; border: 1px solid #444; padding: 8px; border-radius: 4px;">
+                                
+                                ${this.renderCustomDropdown('newProfileAI', accountOptions, this.newProfileAI, (val) => this.newProfileAI = val, '120px')}
 
-                            <button @click=${this.handleLoginAndSave} style="background: #4285f4; color: white; border: none; padding: 10px 15px; border-radius: 4px; font-weight: bold;">
-                                Login & Save
-                            </button>
+                                <button @click=${this.handleLoginAndSave} style="background: #4285f4; color: white; border: none; padding: 10px 15px; border-radius: 4px; font-weight: bold;">
+                                    Login & Save
+                                </button>
+                            </div>
                         </div>
-                    </div>
 
-                    <h3 style="font-size: 14px; margin-bottom: 10px;">Saved Profiles</h3>
-                    ${profiles.length === 0 ? html`<p style="color: #888; font-size: 13px;">No profiles added yet.</p>` : html`
-                        <div style="border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
-                            <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; background: var(--bg-tertiary);">
-                                <thead>
-                                    <tr style="background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border-color);">
-                                        <th style="padding: 12px 15px; font-weight: 600; color: var(--text-secondary);">Nickname</th>
-                                        <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">ChatGPT</th>
-                                        <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">Gemini</th>
-                                        <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">Grok</th>
-                                        <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    ${profiles.map((p, index) => html`
-                                        <tr style="border-bottom: ${index === profiles.length - 1 ? 'none' : '1px solid var(--border-color)'};">
-                                            <td style="padding: 12px 15px; font-weight: bold; color: var(--text-color);">👤 ${p.name}</td>
-                                            <td style="padding: 12px 15px; text-align: center;">${p.loggedAIs.includes(0) ? html`<span style="color: #00cc66;">✅</span>` : html`<span style="color: #444;">❌</span>`}</td>
-                                            <td style="padding: 12px 15px; text-align: center;">${p.loggedAIs.includes(1) ? html`<span style="color: #00cc66;">✅</span>` : html`<span style="color: #444;">❌</span>`}</td>
-                                            <td style="padding: 12px 15px; text-align: center;">${p.loggedAIs.includes(2) ? html`<span style="color: #00cc66;">✅</span>` : html`<span style="color: #444;">❌</span>`}</td>
-                                            <td style="padding: 12px 15px; text-align: center;">
-                                                <button @click=${() => this.handleDeleteProfile(p.id)} style="background: rgba(241, 76, 76, 0.1); color: #f14c4c; border: 1px solid #f14c4c; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold;">Delete</button>
-                                            </td>
+                        <h3 style="font-size: 14px; margin-bottom: 10px;">Saved Profiles</h3>
+                        ${profiles.length === 0 ? html`<p style="color: #888; font-size: 13px;">No profiles added yet.</p>` : html`
+                            <div style="border: 1px solid var(--border-color); border-radius: 6px; overflow: hidden;">
+                                <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; background: var(--bg-tertiary);">
+                                    <thead>
+                                        <tr style="background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border-color);">
+                                            <th style="padding: 12px 15px; font-weight: 600; color: var(--text-secondary);">Nickname</th>
+                                            <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">ChatGPT</th>
+                                            <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">Gemini</th>
+                                            <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">Grok</th>
+                                            <th style="padding: 12px 15px; text-align: center; font-weight: 600; color: var(--text-secondary);">Actions</th>
                                         </tr>
-                                    `)}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        ${profiles.map((p, index) => html`
+                                            <tr style="border-bottom: ${index === profiles.length - 1 ? 'none' : '1px solid var(--border-color)'};">
+                                                <td style="padding: 12px 15px; font-weight: bold; color: var(--text-color);">👤 ${p.name}</td>
+                                                <td style="padding: 12px 15px; text-align: center;">${p.loggedAIs.includes(0) ? html`<span style="color: #00cc66;">✅</span>` : html`<span style="color: #444;">❌</span>`}</td>
+                                                <td style="padding: 12px 15px; text-align: center;">${p.loggedAIs.includes(1) ? html`<span style="color: #00cc66;">✅</span>` : html`<span style="color: #444;">❌</span>`}</td>
+                                                <td style="padding: 12px 15px; text-align: center;">${p.loggedAIs.includes(2) ? html`<span style="color: #00cc66;">✅</span>` : html`<span style="color: #444;">❌</span>`}</td>
+                                                <td style="padding: 12px 15px; text-align: center;">
+                                                    <button @click=${() => this.handleDeleteProfile(p.id)} style="background: rgba(241, 76, 76, 0.1); color: #f14c4c; border: 1px solid #f14c4c; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold;">Delete</button>
+                                                </td>
+                                            </tr>
+                                        `)}
+                                    </tbody>
+                                </table>
+                            </div>
+                        `}
+
+                        <div style="background: rgba(161, 66, 244, 0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(161, 66, 244, 0.3); margin-top: 25px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 5px; color: #a142f4;">🧠 Dual-Brain Loadouts (Live Interview)</h3>
+                            <p style="font-size: 11px; color: #ccc; margin-bottom: 15px;">Configure which AI engine and profile handles Audio (Fast) and which handles Vision/Code (Thinking).</p>
+                            
+                            <div style="display: flex; gap: 15px;">
+                                <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🗣️ Voice Brain</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('voiceEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine || 0, (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
+                                            if(!l[0]) l[0] = {}; l[0].voiceEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                        })}
+                                        ${this.renderCustomDropdown('voiceProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfileId || '', (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
+                                            if(!l[0]) l[0] = {}; l[0].voiceProfileId = val; this.savePref('dualBrainLoadouts', l);
+                                        })}
+                                    </div>
+                                </div>
+                                <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('codeEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine || 1, (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
+                                            if(!l[0]) l[0] = {}; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                        })}
+                                        ${this.renderCustomDropdown('codeProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.codeProfileId || '', (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
+                                            if(!l[0]) l[0] = {}; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l);
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
                         </div>
-                    `}
+
                     </div>
                 `;
+
             case 'profile':
                 return html`
                     <div class="scrollable-tab">
@@ -1001,17 +1037,27 @@ export class CustomizeView extends LitElement {
 
             case 'interviewcorners': {
                 const interviewActions = [
-                    {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
-                    {value: 'regenerate', label: '🔄 Regenerate Response'}, {value: 'abort_oa', label: '🚪 Abort Interview & Exit'},
-                    {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
-                    {value: 'change_ai', label: '🤖 Change AI Model'}, {value: 'change_profile', label: '👤 Switch Profile'},
-                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'language', label: '💻 Change Language'},
-                    {value: 'mic', label: '🎙️ Mic ON/OFF'}, {value: 'reset', label: '✨ Reset Session'}, 
-                    {value: 'text_inc', label: 'A+ Text Size'}, {value: 'text_dec', label: 'A- Text Size'}, 
-                    {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
+                    {value: 'none', label: 'None (Disabled)'}, 
+                    {value: 'capture', label: '📸 Capture Screen'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, 
+                    {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'regenerate', label: '🔄 Regenerate Response'}, 
+                    {value: 'abort_oa', label: '🚪 Abort Interview & Exit'},
+                    {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, 
+                    {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, 
+                    {value: 'scroll_down', label: '⬇️ Scroll Down'},
+                    {value: 'prev_resp', label: '◀ Previous Response'}, 
+                    {value: 'next_resp', label: '▶ Next Response'},
+                    {value: 'change_ai', label: '🤖 Change AI Model'}, 
+                    {value: 'change_profile', label: '👤 Switch Profile'},
+                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, 
+                    {value: 'language', label: '💻 Change Language'},
+                    {value: 'reset', label: '✨ Reset Session'}, 
+                    {value: 'text_inc', label: 'A+ Text Size'}, 
+                    {value: 'text_dec', label: 'A- Text Size'}, 
+                    {value: 'bg_inc', label: '⬛ Opacity +'}, 
+                    {value: 'bg_dec', label: '⬜ Opacity -'},
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'}
                 ];
                 this.editingPage = this.editingPage || 1;

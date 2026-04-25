@@ -1,10 +1,10 @@
 // ==========================================================
-// 🎯 SILENT SNIPER PROMPTS (Blind Execution Payloads)
+// 🎯 DUAL-BRAIN SNIPER PROMPTS
 // ==========================================================
 
 const PROMPTS = {
-    // 1. STANDARD OA AUTOMATION
-    OA_AUTOMATION: (language) => `Output ONLY raw, functional code in ${language || 'c++'}. CRITICAL RULES:
+    // 💻 CODE ENGINE PROMPTS
+    OA_AUTOMATION: (language) => `Output ONLY functional code in ${language || 'c++'}. CRITICAL RULES:
 - Do NOT output any greetings, explanations, or comments.
 - Use single letter variable names.
 - Give me code with a main function so that I can run locally.
@@ -13,27 +13,27 @@ const PROMPTS = {
 test case1
 input
 expected output
-- YOU MUST WRAP YOUR ENTIRE RESPONSE INSIDE <FULL_CODE> AND </FULL_CODE> TAGS!`,
+- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
 
-    // 2. CODE REFACTORING
-    REFACTOR: `Refactor the above code. Output ONLY raw, functional code. CRITICAL RULES:
+    REFACTOR: `Refactor the above code. Output ONLY functional code. CRITICAL RULES:
 - Do NOT output any greetings, explanations, or comments.
 - If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.
-- Break large functions into smaller helper functions, or combine small snippet functions.
-- If specific independent tasks happen in a sequence (e.g., initializing variables A, B, and C), change the order of initialization if it doesn't affect the output.
-- Most code uses nested if statements to check for valid conditions. You can structurally invert this by checking for invalid conditions and returning early. This "flattens" the code, removing deep indentation.
-- You can often replace a long switch statement or if-else chain with a Map (Dictionary) or an Array lookup. This removes the conditional logic entirely from the code structure.
-- Algorithms often iterate forward (0 to N). Changing this to backward iteration (N to 0) or using recursion changes the code signature significantly.
-- If the original code has a complex condition inside an if statement, extract those conditions into variables with semantic names. This changes the line-by-line structure.
-- If the original code uses a loop to solve a problem (like calculating a sum or searching a tree), rewriting it as a recursive function (a function that calls itself) completely changes the syntax tree.
-- Do not use classes
-- YOU MUST WRAP YOUR ENTIRE RESPONSE INSIDE <FULL_CODE> AND </FULL_CODE> TAGS!`,
+- Break large functions into smaller helper functions.
+- If specific independent tasks happen in a sequence, change the order of initialization if it doesn't affect the output.
+- Structurally invert nested if statements by checking for invalid conditions and returning early.
+- Replace long switch statements or if-else chains with a Map (Dictionary) or Array lookup.
+- Algorithms often iterate forward (0 to N). Change this to backward iteration (N to 0) or use recursion.
+- Extract complex conditions into variables with semantic names.
+- Do not use classes.
+- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
 
-    // 3. FIX ERROR
     FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. CRITICAL RULES:
-- Output ONLY the fully corrected raw, functional code.
+- Output ONLY the fully corrected functional code.
 - Do NOT output any greetings, general explanations, or extra text.
-- YOU MUST WRAP YOUR ENTIRE RESPONSE INSIDE <FULL_CODE> AND </FULL_CODE> TAGS!`
+- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
+
+    // 🗣️ VOICE ENGINE PROMPTS
+    VOICE_CONTEXT: `Read the attached problem or code. Do NOT output the solution or read it out loud. Just ingest the context silently. Be prepared to answer verbal questions about its logic, approach, or time complexity if I ask you through the microphone. Reply with a short confirmation that you understand.`
 };
 
 module.exports = PROMPTS;

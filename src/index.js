@@ -30,7 +30,9 @@ const { spawn } = require('child_process'); // 🐛 NEW: Needed for the ghost ty
 const PROMPTS = require('./utils/prompts');
 let mainWindow = null;
 let widgetWindow = null;
-let aiWebWindow = null; 
+let voiceWebWindow = null;
+let codeWebWindow = null;
+let activeLoadout = { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
 let accumulatedScreenshots = [];
 let scrapingInterval = null;
 let micSpyInterval = null;
@@ -44,413 +46,162 @@ let isAppQuitting = false;
 const AI_CONFIGS = [
     { name: 'ChatGPT', url: 'https://chatgpt.com', msgSelector: 'div[data-message-author-role="assistant"]' },
     { name: 'Gemini', url: 'https://gemini.google.com/app', msgSelector: 'model-response' },
-    // 🐛 FIX: Tailwind's '.prose' class strictly isolates Grok's Markdown response without catching user prompts or fragmenting!
     { name: 'Grok', url: 'https://grok.com', msgSelector: '.prose' }
 ];
 
-let currentProviderIdx = 0; // 0 = ChatGPT, 1 = Gemini, 2 = Grok
-let currentProfileIdx = 1;  // Profile 1 to 20
-let currentBrainMode = 'fast';
-
 function startUniversalAIBridge() {
-    // console.log('🚀 Universal AI Bridge ACTIVE');
-    launchAIWindow();
+    launchDualBrains();
 }
 
-// ==========================================================
-// ZERO-TOUCH STEALTH RADIO (Open Jitsi Audio Tunnel)
-// ==========================================================
-function startStealthRadio() {
-    const SECRET_ROOM_NAME = "StealthDaddyRadio9988"; 
-
-    const radioWindow = new BrowserWindow({
-        width: 800, height: 600,
-        show: true,           
-        opacity: 0,           
-        x: -10000, y: -10000, 
-        skipTaskbar: true,    
-        webPreferences: {
-            nodeIntegration: false,
-            contextIsolation: true,
-            backgroundThrottling: false
-        }
-    });
-
-    // OPEN SERVER BYPASS: Using meet.ffmuc.net instead of meet.jit.si to bypass forced logins
-    // config.prejoinPageEnabled=false -> Skips the lobby completely
-    // config.startAudioOnly=true -> Disables video transmission
-    // config.disableAEC, disableNS, disableAGC -> Turns OFF echo & noise cancellation to hear laptop speakers
-    const broadcastUrl = `https://meet.ffmuc.net/${SECRET_ROOM_NAME}#config.prejoinPageEnabled=false&config.startAudioOnly=true&config.disableAEC=true&config.disableNS=true&config.disableAGC=true`;
-    
-    radioWindow.loadURL(broadcastUrl);
-    
-    // AGGRESSIVE AUTO-CLICKER: Hunts for any "Join" or "Accept Terms" buttons on the open server
-    radioWindow.webContents.on('did-finish-load', () => {
-        radioWindow.webContents.executeJavaScript(`
-            setInterval(() => {
-                const elements = Array.from(document.querySelectorAll('div[role="button"], button, a'));
-                const targetBtn = elements.find(btn => {
-                    const text = (btn.innerText || "").toLowerCase();
-                    return text.includes('join meeting') || text.includes('accept') || text.includes('agree');
-                });
-                if (targetBtn) {
-                    targetBtn.click();
-                    console.log("🖱️ Jitsi button auto-clicked!");
-                }
-            }, 2000);
-        `);
-    });
-
-    console.log('\n==================================================');
-    console.log('📻 JITSI AUTO-RADIO IS LIVE IN THE BACKGROUND!');
-    console.log(`Text this permanent link to your friend:`);
-    console.log(`https://meet.ffmuc.net/${SECRET_ROOM_NAME}`);
-    console.log(`(Tell them to click "Join" and instantly mute their mic!)`);
-    console.log('==================================================\n');
-}
-
-function launchAIWindow() {
+function launchDualBrains() {
     const { BrowserWindow } = require('electron');
-    const provider = AI_CONFIGS[currentProviderIdx];
-    const partitionId = `persist:ai_profile_${currentProfileIdx}`;
+    const storage = require('./storage');
+    const prefs = storage.getPreferences();
+    const loadouts = prefs.dualBrainLoadouts || [];
+    activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || 
+                    { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
 
-    let shouldShow = false; // ALWAYS default to hidden for stealth
-    if (aiWebWindow) {
-        // 🐛 FIX: Safely check if the window was manually closed before touching it!
-        if (!aiWebWindow.isDestroyed()) {
-            shouldShow = aiWebWindow.isVisible();
-            aiWebWindow.destroy();
-        }
-        aiWebWindow = null; // Clear the ghost reference
-    }
+    const voiceProvider = AI_CONFIGS[activeLoadout.voiceEngine];
+    const codeProvider = AI_CONFIGS[activeLoadout.codeEngine];
 
-    aiWebWindow = new BrowserWindow({
-        width: 1000, height: 800, 
-        show: false, // CRITICAL: Forces it to start completely hidden to prevent the 1ms flash!
-        skipTaskbar: true, 
-        autoHideMenuBar: true,
-        alwaysOnTop: true,
-        title: `Service: ${provider.name} | Profile: ${currentProfileIdx}`,
-        webPreferences: {
-            nodeIntegration: false, contextIsolation: true, backgroundThrottling: false,
-            partition: partitionId
-        }
+    // --- 🗣️ 1. VOICE BRAIN ---
+    if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.destroy();
+    voiceWebWindow = new BrowserWindow({
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        title: `🗣️ Voice Brain: ${voiceProvider.name}`,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfileId}` }
     });
-
-    aiWebWindow.setContentProtection(true);
-    aiWebWindow.webContents.setAudioMuted(true);
-    aiWebWindow.loadURL(provider.url);
-
-    if (process.platform === 'win32') {
-        aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
-    }
-
-    aiWebWindow.webContents.on('dom-ready', async () => {
-        aiWebWindow.webContents.insertCSS('* { cursor: default !important; }');
-        
+    voiceWebWindow.setContentProtection(true);
+    if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
+    voiceWebWindow.loadURL(voiceProvider.url);
+    
+    // Voice WebRTC Injection (Keeps Mic Alive)
+    voiceWebWindow.webContents.on('dom-ready', async () => {
+        voiceWebWindow.webContents.insertCSS('* { cursor: default !important; }');
         try {
-            // Grab the native OS Screen ID from the backend
             const { desktopCapturer } = require('electron');
             const sources = await desktopCapturer.getSources({ types: ['screen'] });
             if (!sources || sources.length === 0) return;
             const screenSourceId = sources[0].id;
-
-            // 🟢 THE WEBRTC HIJACK V3: Native Electron Loopback Bypass
             const hijackScript = `
                 if (!window.__micHijacked) {
                     window.__micHijacked = true;
-                    
                     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
                     navigator.mediaDevices.getUserMedia = async (constraints) => {
                         if (constraints && constraints.audio) {
-                            try {
-                                console.log("🕵️‍♂️ Hardware Mic Blocked. Routing System Audio directly...");
-                                
-                                // Use Electron's native desktop source to bypass the "User Gesture" block!
-                                const stream = await originalGetUserMedia({
-                                    audio: {
-                                        mandatory: { chromeMediaSource: 'desktop' }
-                                    },
-                                    video: {
-                                        mandatory: { 
-                                            chromeMediaSource: 'desktop',
-                                            chromeMediaSourceId: '${screenSourceId}'
-                                        }
-                                    }
-                                });
-                                
-                                const audioTrack = stream.getAudioTracks()[0];
-                                const videoTrack = stream.getVideoTracks()[0];
-                                if (videoTrack) videoTrack.stop(); // Destroy the video feed
-                                
-                                return new MediaStream([audioTrack]);
-                            } catch (e) {
-                                console.error('🔥 Loopback Hijack Failed:', e);
-                                // 🛑 ABSOLUTE SECURITY OVERRIDE: 
-                                // Return DEAD AIR. Mathematically guarantee the physical mic is never leaked!
-                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                const dest = ctx.createMediaStreamDestination();
-                                return dest.stream; 
-                            }
+                            const stream = await originalGetUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } } });
+                            const audioTrack = stream.getAudioTracks()[0];
+                            return new MediaStream([audioTrack]);
                         }
                         return originalGetUserMedia(constraints);
                     };
                 }
                 true;
             `;
-            
-            await aiWebWindow.webContents.executeJavaScript(hijackScript);
-        } catch (err) {
-            console.error('Failed to inject WebRTC Hijack:', err);
-        }
+            await voiceWebWindow.webContents.executeJavaScript(hijackScript);
+        } catch (err) {}
     });
 
-    // 🐛 FIX: Only prevent closing if the app isn't actually trying to quit!
-    aiWebWindow.on('close', (event) => {
-        if (!isAppQuitting) {
-            event.preventDefault(); 
-            aiWebWindow.hide();     
-        }
+    // --- 💻 2. CODE BRAIN ---
+    if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.destroy();
+    codeWebWindow = new BrowserWindow({
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        title: `💻 Code Brain: ${codeProvider.name}`,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.codeProfileId}` }
+    });
+    codeWebWindow.setContentProtection(true);
+    codeWebWindow.webContents.setAudioMuted(true); // 🟢 STRICTLY MUTED
+    if (process.platform === 'win32') codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
+    codeWebWindow.loadURL(codeProvider.url);
+    codeWebWindow.webContents.on('dom-ready', async () => {
+        codeWebWindow.webContents.insertCSS('* { cursor: default !important; }');
+        // 🟢 HARD BLOCK MIC FOR CODE ENGINE
+        await codeWebWindow.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked"));`);
     });
 
-    // 🐛 FIX 2: Universal Sync! No matter HOW the window hides (X button, clicking outside, or Ctrl+\), update the UI!
-    aiWebWindow.on('hide', () => {
-        // console.log('👻 AI Window officially HIDDEN');
-        BrowserWindow.getAllWindows().forEach(w => {
-            if (!w.isDestroyed() && w !== aiWebWindow) {
-                w.webContents.send('ai-window-hidden');
-            }
+    // Prevent deaths
+    const preventDeath = (win) => {
+        win.on('close', (event) => {
+            if (!isAppQuitting) { event.preventDefault(); win.hide(); }
         });
-    });
+    };
+    preventDeath(voiceWebWindow);
+    preventDeath(codeWebWindow);
 
-    // Only show the window AFTER it fully renders, AND only if it was already visible before switching
-    aiWebWindow.once('ready-to-show', () => {
-        if (shouldShow) aiWebWindow.show();
-    });
+    startDualScrapers(voiceProvider, codeProvider);
+}
 
-    // 🐛 FIX: Kill the old scraping loop before starting a new one!
-    if (scrapingInterval) {
-        clearInterval(scrapingInterval);
-    }
-    if (micSpyInterval) clearInterval(micSpyInterval);
+function startDualScrapers(voiceProvider, codeProvider) {
+    if (scrapingInterval) clearInterval(scrapingInterval);
+    
+    let lastVoiceMsg = { count: 0, text: "" };
+    let lastCodeMsg = { count: 0, text: "" };
 
-    let lastMsgCount = 0;
-    let lastExtractedText = "";
-    let lastMicState = false;
-
-    // ==========================================================
-    // 🎙️ THE BACKGROUND MIC SPY (Auto-Syncs Gemini's Mic)
-    // ==========================================================
-    micSpyInterval = setInterval(async () => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed() || aiWebWindow.webContents.isLoading()) return;
-        try {
-            const isListening = await aiWebWindow.webContents.executeJavaScript(`
-                (() => {
-                    try {
-                        let active = false;
-                        
-                        // 🐛 FIX 1: Gemini stores these status messages in the 'data-placeholder' attribute!
-                        const editor = document.querySelector('textarea, [contenteditable="true"], .ql-editor');
-                        if (editor) {
-                            const ph = (editor.getAttribute('data-placeholder') || editor.getAttribute('placeholder') || '').toLowerCase().trim();
-                            
-                            // Look exactly for "listening" (NO DOTS!) just like in your screenshot
-                            if (ph === 'listening' || ph.includes('listening')) active = true;
-                            
-                            // If it timed out ("Didn't catch that"), it's definitely OFF
-                            if (ph.includes("didn't catch that")) active = false;
-                        }
-
-                        // 🐛 FIX 2: Backup check for the actual Stop button's aria-label
-                        if (!active) {
-                            const buttons = Array.from(document.querySelectorAll('button, [role="button"]'));
-                            active = buttons.some(b => {
-                                const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                                return aria.includes('stop listening') || aria.includes('stop recording');
-                            });
-                        }
-                        
-                        // 🐛 FIX 3: Catch any rogue element that just says "Listening" without dots
-                        if (!active) {
-                            const spans = Array.from(document.querySelectorAll('span, div, p'));
-                            active = spans.some(s => {
-                                const text = (s.textContent || '').trim().toLowerCase();
-                                return text === 'listening'; 
-                            });
-                        }
-
-                        return active;
-                    } catch(e) { return false; }
-                })()
-            `);
-            
-            if (isListening !== lastMicState) {
-                lastMicState = isListening;
-                console.log("🎙️ AI Mic Auto-State Changed to:", isListening ? "ON" : "OFF");
-                const { BrowserWindow } = require('electron');
-                BrowserWindow.getAllWindows().forEach(w => {
-                    // Send the update to the React/Lit frontend!
-                    if (!w.isDestroyed() && w !== aiWebWindow) {
-                        w.webContents.send('sync-mic-state', isListening);
-                    }
-                });
-            }
-        } catch (e) {}
-    }, 800);
-
-    // 🐛 FIX: The Ultimate Scraper - Now mathematically eliminates User Chat Bubbles using Layout Detection!
     scrapingInterval = setInterval(async () => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) return;
-        try {
-            const data = await aiWebWindow.webContents.executeJavaScript(`
+        const scrape = async (win, provider) => {
+            if (!win || win.isDestroyed()) return null;
+            return await win.webContents.executeJavaScript(`
                 (() => {
                     try {
-                        if (!document.body) return null; 
-                        
-                        const msgs = Array.from(document.querySelectorAll('${provider.msgSelector}'))
-                                          .filter(el => {
-                                              // 1. Standard explicit user message blockers
-                                              if (el.closest('[data-testid="user-message"]') || 
-                                                  el.closest('[data-message-author-role="user"]') || 
-                                                  el.closest('.user-message')) {
-                                                  return false;
-                                              }
-                                              
-                                              // 2. 🐛 FIX: Tailwind UI User Bubble Blocker (For Grok)
-                                              // User bubbles are universally right-aligned. We check the parent wrappers
-                                              // for flex-end layout classes to permanently blind the scraper to your prompts!
-                                              let isUser = false;
-                                              let parent = el.parentElement;
-                                              let depth = 0;
-                                              while (parent && depth < 6) {
-                                                  const cls = (parent.className || '').toString();
-                                                  if (cls.includes('justify-end') || cls.includes('items-end') || cls.includes('self-end')) {
-                                                      isUser = true;
-                                                      break;
-                                                  }
-                                                  parent = parent.parentElement;
-                                                  depth++;
-                                              }
-                                              if (isUser) return false;
-
-                                              return (el.innerText || el.textContent || '').trim().length > 0;
-                                          });
-                                          
+                        const msgs = Array.from(document.querySelectorAll('${provider.msgSelector}')).filter(el => {
+                            if (el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message')) return false;
+                            return (el.innerText || el.textContent || '').trim().length > 0;
+                        });
                         if (msgs.length === 0) return null;
-                        
-                        const clone = msgs[msgs.length - 1].cloneNode(true);
-                        
-                        const wrapper = document.createElement('div');
-                        wrapper.style.position = 'fixed';
-                        wrapper.style.left = '-10000px';
-                        wrapper.style.top = '0px';
-                        wrapper.style.width = '800px';
-                        wrapper.style.height = 'auto'; 
-                        wrapper.style.opacity = '0'; 
-                        wrapper.style.pointerEvents = 'none';
-                        wrapper.appendChild(clone);
-                        document.body.appendChild(wrapper);
-                        
-                        // Destroy stray garbage buttons
-                        const garbage = clone.querySelectorAll('button, [role="button"], svg, .copy-button');
-                        garbage.forEach(g => g.remove());
-                        
-                        // Convert HTML Tables into perfect Markdown Tables
-                        const tables = clone.querySelectorAll('table');
-                        tables.forEach(table => {
-                            let mdTable = '\\n\\n';
-                            const rows = table.querySelectorAll('tr');
-                            rows.forEach((row, rowIndex) => {
-                                const cells = row.querySelectorAll('th, td');
-                                let mdRow = '|';
-                                cells.forEach(cell => {
-                                    mdRow += ' ' + (cell.innerText || cell.textContent || '').trim().replace(/\\n/g, ' ') + ' |';
-                                });
-                                mdTable += mdRow + '\\n';
-                                
-                                if (rowIndex === 0) {
-                                    mdTable += '|';
-                                    cells.forEach(() => { mdTable += '---|'; });
-                                    mdTable += '\\n';
-                                }
-                            });
-                            mdTable += '\\n';
-                            
-                            const mdWrapper = document.createElement('div');
-                            mdWrapper.style.whiteSpace = 'pre-wrap';
-                            mdWrapper.textContent = mdTable;
-                            table.parentNode.replaceChild(mdWrapper, table);
-                        });
-                        
-                        // Process Code Blocks perfectly
-                        const preBlocks = clone.querySelectorAll('pre');
-                        preBlocks.forEach(pre => {
-                            const codeEl = pre.querySelector('code');
-                            
-                            let lang = '';
-                            const header = pre.querySelector('.flex span, .bg-gray-800 span, .text-xs, [class*="language-"]');
-                            if (header) {
-                                lang = (header.innerText || '').trim().toLowerCase();
-                                if(lang === 'copy code' || lang === 'run') lang = '';
-                            }
-                            if (!lang && codeEl) {
-                                const match = codeEl.className.match(/language-(\\w+)/);
-                                if (match) lang = match[1];
-                            }
-                            
-                            let codeText = '';
-                            if (codeEl) {
-                                codeText = codeEl.innerText || codeEl.textContent || '';
-                            } else {
-                                codeText = pre.innerText || pre.textContent || '';
-                            }
-                            
-                            const cleanPre = document.createElement('pre');
-                            cleanPre.innerText = '\\n\\n\`\`\`' + lang.replace('pythonrun', 'python') + '\\n' + codeText.trim() + '\\n\`\`\`\\n\\n';
-                            
-                            pre.parentNode.replaceChild(cleanPre, pre);
-                        });
-                        
-                        // Process inline code snippets
-                        const inlineCodes = clone.querySelectorAll('code');
-                        inlineCodes.forEach(code => {
-                            const text = code.innerText || code.textContent || '';
-                            code.innerText = '\`' + text.trim() + '\`';
-                        });
-                        
-                        // Final Safe Extraction
-                        let text = clone.innerText || clone.textContent || '';
-                        document.body.removeChild(wrapper); 
-                        
-                        text = text.replace(/^[\\s\\S]*?Gemini said\\n/i, '').replace(/^[\\s\\S]*?Show thinking\\n/i, '').trim();
-                        text = text.replace(/^Python\\nRun\\n/i, ''); 
-                        
-                        return { count: msgs.length, text: text };
-                    } catch (err) {
-                        return { error: err.toString() }; 
-                    }
-                })()
+                        return { count: msgs.length, text: (msgs[msgs.length - 1].innerText || msgs[msgs.length - 1].textContent || '').trim() };
+                    } catch(e) { return null; }
+                })();
             `);
-            
-            if (data) {
-                if (data.error) {
-                    console.error('🔥 AI Scraper Error:', data.error);
-                    return;
-                }
-                if (data.text) {
-                    if (data.count !== lastMsgCount) {
-                        lastMsgCount = data.count;
-                        lastExtractedText = data.text;
-                        BrowserWindow.getAllWindows().forEach(w => w.webContents.send('ai-new-message', data.text));
-                    } 
-                    else if (data.text !== lastExtractedText) {
-                        lastExtractedText = data.text;
-                        BrowserWindow.getAllWindows().forEach(w => w.webContents.send('ai-update-message', data.text));
-                    }
-                }
+        };
+
+        const vData = await scrape(voiceWebWindow, voiceProvider);
+        if (vData) {
+            if (vData.count !== lastVoiceMsg.count || vData.text !== lastVoiceMsg.text) {
+                lastVoiceMsg = vData;
+                BrowserWindow.getAllWindows().forEach(w => w.webContents.send('voice-new-message', vData.text));
             }
-        } catch (e) {}
+        }
+
+        const cData = await scrape(codeWebWindow, codeProvider);
+        if (cData) {
+            if (cData.count !== lastCodeMsg.count || cData.text !== lastCodeMsg.text) {
+                lastCodeMsg = cData;
+                BrowserWindow.getAllWindows().forEach(w => w.webContents.send('code-new-message', cData.text));
+            }
+        }
     }, 1000);
+}
+
+// 🟢 ASYNC DOM HELPER FOR SENDING MESSAGES
+async function sendPayloadToWindow(win, customText, images = []) {
+    if (!win || win.isDestroyed()) return;
+    const { clipboard, nativeImage } = require('electron');
+    
+    for (let imgData of images) {
+        const img = nativeImage.createFromDataURL(imgData);
+        clipboard.writeImage(img);
+        await win.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
+        win.webContents.paste();
+        await new Promise(r => setTimeout(r, 400));
+    }
+    
+    if (customText) {
+        clipboard.writeText(customText);
+        await win.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
+        win.webContents.paste();
+    }
+
+    const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
+    let isReady = false;
+    let attempts = 0;
+    while (!isReady && attempts < 40) {
+        isReady = await win.webContents.executeJavaScript(`(() => { const btn = document.querySelector('${sendBtnSelector}'); return btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'; })()`);
+        if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
+    }
+    
+    await new Promise(r => setTimeout(r, 200));
+    await win.webContents.executeJavaScript(`try { document.querySelector('${sendBtnSelector}')?.click(); } catch(e) {}`);
+    setTimeout(() => { if (!win.isDestroyed()) win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); }, 200);
 }
 
 // ==========================================================
@@ -613,11 +364,12 @@ async function applyDropdownBrainMode() {
 
 function createMainWindow() {
     mainWindow = createWindow(null, null);
+
     mainWindow.on('hide', () => {
-        if (aiWebWindow && !aiWebWindow.isDestroyed() && aiWebWindow.isVisible()) {
-            aiWebWindow.hide();
-        }
+        if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) voiceWebWindow.hide();
+        if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) codeWebWindow.hide();
     });
+
     mainWindow.on('show', () => {
         let m = mainWindow;
         m.focus();
@@ -1012,11 +764,16 @@ function setupGeneralIpcHandlers() {
                 mainWindow.setOpacity(1);
             }
 
-            // 🟢 Force hide AI window and cure the 0-opacity lock bug!
-            if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                aiWebWindow.hide();
-                aiWebWindow.setOpacity(1);
-                aiWebWindow.setIgnoreMouseEvents(false);
+            // 🟢 DUAL BRAIN FIX: Hide BOTH AI windows and cure the 0-opacity lock bug!
+            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                voiceWebWindow.hide();
+                voiceWebWindow.setOpacity(1);
+                voiceWebWindow.setIgnoreMouseEvents(false);
+            }
+            if (codeWebWindow && !codeWebWindow.isDestroyed()) {
+                codeWebWindow.hide();
+                codeWebWindow.setOpacity(1);
+                codeWebWindow.setIgnoreMouseEvents(false);
             }
 
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
@@ -1096,62 +853,18 @@ function setupGeneralIpcHandlers() {
     });
 
     ipcMain.handle('send-screenshots-to-ai', async (event, customPrompt) => {
-        if (accumulatedScreenshots.length === 0 || !aiWebWindow) return false;
+        if (accumulatedScreenshots.length === 0) return false;
+        const codePrompt = customPrompt || PROMPTS.OA_AUTOMATION('C++');
+        const voicePrompt = PROMPTS.VOICE_CONTEXT;
+
+        // Fire to Code Brain
+        await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
         
-        if (aiWebWindow.isDestroyed()) {
-            launchAIWindow();
-            await new Promise(r => setTimeout(r, 4000));
-            await applyDropdownBrainMode(); 
-        }
-
-        // 🐛 FIX: Removed the /thinking injection from here!
-
-        for (let i = 0; i < accumulatedScreenshots.length; i++) {
-            const img = nativeImage.createFromDataURL(accumulatedScreenshots[i]);
-            clipboard.writeImage(img);
-            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-            aiWebWindow.webContents.paste();
-            await new Promise(r => setTimeout(r, 200)); 
-        }
-        
-        const promptToUse = customPrompt || "Please solve the problem shown in these images step-by-step.";
-        clipboard.writeText(promptToUse);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-        aiWebWindow.webContents.paste();
-        
-        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-
-        console.log("⏳ Waiting for network to finish uploading images...");
-        let isReady = false; let attempts = 0;
-        while (!isReady && attempts < 120) {
-            isReady = await aiWebWindow.webContents.executeJavaScript(`
-                (() => {
-                    const btn = document.querySelector('${sendBtnSelector}');
-                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
-                    return false;
-                })()
-            `);
-            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-        }
-
-        if (isReady) {
-            console.log(`✅ Upload finished! Clicking the Send button now.`);
-            await new Promise(r => setTimeout(r, 300)); 
-            await aiWebWindow.webContents.executeJavaScript(`
-                try {
-                    const btn = document.querySelector('${sendBtnSelector}');
-                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
-                } catch(e) {}
-            `);
-        }
-        setTimeout(() => {
-            if(!aiWebWindow.isDestroyed()){
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            }
-        }, 200);
-
-        accumulatedScreenshots = [];
+        // 1-Second Throttle to protect CPU/Rate limits, then Fire to Voice Brain
+        setTimeout(async () => {
+            await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots);
+            accumulatedScreenshots = [];
+        }, 1500);
         return true;
     });
 
@@ -1159,10 +872,8 @@ function setupGeneralIpcHandlers() {
     // ZERO-TOUCH NEW CHAT (Silent Background Wipe)
     // ==========================================================
     ipcMain.handle('new-chat', async () => {
-        if (!aiWebWindow) return false;
-        // console.log("✨ Silent wipe: Starting fresh chat...");
-        // CRITICAL FIX: Reloads the CURRENT AI, instead of hardcoding Gemini!
-        aiWebWindow.loadURL(AI_CONFIGS[currentProviderIdx].url);
+        if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.loadURL(AI_CONFIGS[activeLoadout.voiceEngine].url);
+        if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.loadURL(AI_CONFIGS[activeLoadout.codeEngine].url);
         return true;
     });
 
@@ -1170,46 +881,12 @@ function setupGeneralIpcHandlers() {
     // MANUAL MIC TOGGLE (Hardware Release Fix)
     // ==========================================================
     ipcMain.handle('toggle-ai-mic', async (event, isTurningOn) => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) return false;
-        
-        if (isTurningOn) {
-            // Start Voice Chat
-            await aiWebWindow.webContents.executeJavaScript(`
-                try {
-                    const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                    const micBtn = buttons.find(b => {
-                        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                        const testid = (b.getAttribute('data-testid') || '').toLowerCase();
-                        return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice');
-                    });
-                    if (micBtn) micBtn.click();
-                } catch(e) {}
-            `);
-        } else {
-            // 🐛 FIX: Deep-DOM hunt for the 'Stop' or 'End' button (Crucial for Grok!)
-            await aiWebWindow.webContents.executeJavaScript(`
-                try {
-                    const buttons = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                    
-                    const endBtn = buttons.find(b => {
-                        // Use textContent to penetrate nested <span> tags used by Grok
-                        const txt = (b.textContent || '').trim().toLowerCase();
-                        const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                        const testid = (b.getAttribute('data-testid') || '').toLowerCase();
-                        
-                        // Look specifically for the exact word 'stop' or 'end'
-                        return txt === 'stop' || txt === 'end' || txt.includes('end call') || 
-                               txt.includes('leave') || txt.includes('stop voice') || 
-                               aria === 'stop' || aria.includes('end') || aria.includes('leave') || 
-                               testid.includes('end') || testid.includes('stop');
-                    });
-                    
-                    if (endBtn) {
-                        endBtn.click();
-                    }
-                } catch(e) {}
-            `);
-        }
+        if (!voiceWebWindow || voiceWebWindow.isDestroyed()) return false;
+        const script = isTurningOn ?
+            `try { const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); const mBtn = btns.find(b => { const aria = (b.getAttribute('aria-label') || '').toLowerCase(); const testid = (b.getAttribute('data-testid') || '').toLowerCase(); return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice'); }); if (mBtn) mBtn.click(); } catch(e) {}`
+            :
+            `try { const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); const endBtn = btns.find(b => { const txt = (b.textContent || '').trim().toLowerCase(); const aria = (b.getAttribute('aria-label') || '').toLowerCase(); const testid = (b.getAttribute('data-testid') || '').toLowerCase(); return txt === 'stop' || txt === 'end' || txt.includes('end call') || txt.includes('leave') || txt.includes('stop voice') || aria === 'stop' || aria.includes('end') || aria.includes('leave') || testid.includes('end') || testid.includes('stop'); }); if (endBtn) endBtn.click(); } catch(e) {}`;
+        await voiceWebWindow.webContents.executeJavaScript(script);
         return true;
     });
 
@@ -1217,303 +894,63 @@ function setupGeneralIpcHandlers() {
     // EXPLICIT ENGINE SWITCHER (ChatGPT=0, Gemini=1, Grok=2)
     // ==========================================================
     ipcMain.handle('set-ai-provider', async (event, targetIdx) => {
-        // 🐛 FIX: If the window is destroyed, we MUST allow it to respawn here!
-        if (currentProviderIdx !== targetIdx || !aiWebWindow || aiWebWindow.isDestroyed()) {
-            // console.log(`🔄 Switching/Respawning AI Engine to: ${AI_CONFIGS[targetIdx].name}`);
-            currentProviderIdx = targetIdx;
-            launchAIWindow(); 
-        }
-        return AI_CONFIGS[currentProviderIdx].name;
+        return AI_CONFIGS[targetIdx].name;
     });
 
     ipcMain.handle('check-active-ai', () => {
-        // 🐛 FIX: Safely return the current state even if the window was closed
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) {
-            return { name: AI_CONFIGS[currentProviderIdx].name, url: "" };
+        if (!voiceWebWindow || voiceWebWindow.isDestroyed()) {
+            return { name: AI_CONFIGS[activeLoadout.voiceEngine].name, url: "" };
         }
-        return {
-            name: AI_CONFIGS[currentProviderIdx].name,
-            url: aiWebWindow.webContents.getURL()
-        };
+        return {name: AI_CONFIGS[activeLoadout.voiceEngine].name, url: voiceWebWindow.webContents.getURL() };
     });
 
     ipcMain.handle('send-oa-automation', async (event, language) => {
-        if (accumulatedScreenshots.length === 0 || !aiWebWindow) return false;
-
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) {
-            launchAIWindow();
-            await new Promise(r => setTimeout(r, 4000)); 
-            await applyDropdownBrainMode();
-        }
-
-        for (let i = 0; i < accumulatedScreenshots.length; i++) {
-            const img = nativeImage.createFromDataURL(accumulatedScreenshots[i]);
-            clipboard.writeImage(img);
-            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-            aiWebWindow.webContents.paste();
-            await new Promise(r => setTimeout(r, 800)); 
-        }
-        
-        // 🟢 FIX: Use Centralized Prompt
-        const dynamicPrompt = PROMPTS.OA_AUTOMATION(language);
-
-        clipboard.writeText(dynamicPrompt);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-        aiWebWindow.webContents.paste();
-        
-        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-
-        let isReady = false; let attempts = 0;
-        while (!isReady && attempts < 120) {
-            if (aiWebWindow.webContents.isLoading()) {
-                await new Promise(r => setTimeout(r, 500)); 
-                continue; 
-            }
-            isReady = await aiWebWindow.webContents.executeJavaScript(`
-                (() => {
-                    const btn = document.querySelector('${sendBtnSelector}');
-                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
-                    return false;
-                })()
-            `);
-            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-        }
-        await new Promise(r => setTimeout(r, 500));
-        await aiWebWindow.webContents.executeJavaScript(`
-            try {
-                const btn = document.querySelector('${sendBtnSelector}');
-                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
-            } catch(e) {}
-        `);
-        setTimeout(() => {
-            if(!aiWebWindow.isDestroyed()){
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            }
-        }, 200);
-
-        accumulatedScreenshots = [];
+        if (accumulatedScreenshots.length === 0) return false;
+        const codePrompt = PROMPTS.OA_AUTOMATION(language);
+        const voicePrompt = PROMPTS.VOICE_CONTEXT;
+        await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
+        setTimeout(async () => {
+            await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots);
+            accumulatedScreenshots = [];
+        }, 1500);
         return true;
     });
 
     ipcMain.handle('send-oa-refactor', async () => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) return false;
-        
-        // 🐛 FIX: Removed the /thinking injection from here!
-
-        clipboard.writeText(PROMPTS.REFACTOR);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-        aiWebWindow.webContents.paste();
-
-        await new Promise(r => setTimeout(r, 500));
-        
-        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-        
-        let isReady = false; let attempts = 0;
-        while (!isReady && attempts < 120) {
-            if (aiWebWindow.webContents.isLoading()) {
-                await new Promise(r => setTimeout(r, 500)); 
-                continue; 
-            }
-            isReady = await aiWebWindow.webContents.executeJavaScript(`
-                (() => {
-                    const btn = document.querySelector('${sendBtnSelector}');
-                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
-                    return false;
-                })()
-            `);
-            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-        }
-        await new Promise(r => setTimeout(r, 500));
-        
-        await aiWebWindow.webContents.executeJavaScript(`
-            try {
-                const btn = document.querySelector('${sendBtnSelector}');
-                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
-            } catch(e) {}
-        `);
-        setTimeout(() => {
-            if(!aiWebWindow.isDestroyed()){
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            }
-        }, 200);
-
+        await sendPayloadToWindow(codeWebWindow, PROMPTS.REFACTOR, []);
+        setTimeout(async () => {
+            await sendPayloadToWindow(voiceWebWindow, PROMPTS.VOICE_CONTEXT, []);
+        }, 1500);
         return true;
     });
 
     ipcMain.handle('send-oa-fix-error', async () => {
-        if (accumulatedScreenshots.length === 0 || !aiWebWindow) return false;
+        if (accumulatedScreenshots.length === 0) return false;
+        await sendPayloadToWindow(codeWebWindow, PROMPTS.FIX_ERROR, accumulatedScreenshots);
+        setTimeout(async () => {
+            await sendPayloadToWindow(voiceWebWindow, PROMPTS.VOICE_CONTEXT, accumulatedScreenshots);
+            accumulatedScreenshots = [];
+        }, 1500);
+        return true;
+    });
 
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) {
-            launchAIWindow();
-            await new Promise(r => setTimeout(r, 4000)); 
-            await applyDropdownBrainMode();
-        }
-
-        for (let i = 0; i < accumulatedScreenshots.length; i++) {
-            const img = nativeImage.createFromDataURL(accumulatedScreenshots[i]);
-            clipboard.writeImage(img);
-            await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-            aiWebWindow.webContents.paste();
-            await new Promise(r => setTimeout(r, 800)); 
-        }
-        
-        const dynamicPrompt = PROMPTS.FIX_ERROR;
-        clipboard.writeText(dynamicPrompt);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-        aiWebWindow.webContents.paste();
-        
-        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-
-        let isReady = false; let attempts = 0;
-        while (!isReady && attempts < 120) {
-            if (aiWebWindow.webContents.isLoading()) {
-                await new Promise(r => setTimeout(r, 500)); 
-                continue; 
-            }
-            isReady = await aiWebWindow.webContents.executeJavaScript(`
-                (() => {
-                    const btn = document.querySelector('${sendBtnSelector}');
-                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
-                    return false;
-                })()
-            `);
-            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-        }
-        await new Promise(r => setTimeout(r, 500));
-        await aiWebWindow.webContents.executeJavaScript(`
-            try {
-                const btn = document.querySelector('${sendBtnSelector}');
-                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
-            } catch(e) {}
-        `);
-        setTimeout(() => {
-            if(!aiWebWindow.isDestroyed()){
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            }
-        }, 200);
-
-        accumulatedScreenshots = [];
+    ipcMain.handle('send-oa-regenerate', async () => {
+        const script = `(() => { const btn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent||'').toLowerCase().includes('regenerate') || (b.getAttribute('aria-label')||'').toLowerCase().includes('regenerate')); if(btn) btn.click(); })();`;
+        if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.webContents.executeJavaScript(script);
+        if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.webContents.executeJavaScript(script);
         return true;
     });
 
     ipcMain.handle('send-manual-text', async (event, text) => {
-        if (!aiWebWindow || !text) return;
-
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) {
-            launchAIWindow();
-            await new Promise(r => setTimeout(r, 4000));
-            await applyDropdownBrainMode();
-        }
-
-        // 🐛 FIX: Removed the /thinking injection from here!
-
-        clipboard.writeText(text);
-        await aiWebWindow.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
-        aiWebWindow.webContents.paste();
-        await new Promise(r => setTimeout(r, 500));
-        
-        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-        
-        let isReady = false; let attempts = 0;
-        while (!isReady && attempts < 120) {
-            if (aiWebWindow.webContents.isLoading()) {
-                await new Promise(r => setTimeout(r, 500)); 
-                continue; 
-            }
-            isReady = await aiWebWindow.webContents.executeJavaScript(`
-                (() => {
-                    const btn = document.querySelector('${sendBtnSelector}');
-                    if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') return true;
-                    return false;
-                })()
-            `);
-            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-        }
-        await new Promise(r => setTimeout(r, 500));
-        
-        await aiWebWindow.webContents.executeJavaScript(`
-            try {
-                const btn = document.querySelector('${sendBtnSelector}');
-                if (btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true') btn.click();
-            } catch(e) {}
-        `);
-        setTimeout(() => {
-            if(!aiWebWindow.isDestroyed()){
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            }
-        }, 200);
+        if (!text) return;
+        await sendPayloadToWindow(voiceWebWindow, text, []);
     });
 
     // ==========================================================
     // DYNAMIC MODEL SWITCHER (Fast vs. Think)
     // ==========================================================
     ipcMain.handle('set-ai-brain-mode', async (event, mode, isManualClick = false) => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) return false;
-        
-        currentBrainMode = mode; 
-        // console.log(`🧠 AI switched to: ${mode.toUpperCase()} mode (Manual Click: ${isManualClick})`);
-        
-        if (currentProviderIdx === 0) {
-            if (isManualClick) {
-                // console.log("🧠 Triggering ChatGPT /thinking command from UI toggle...");
-                
-                // 🐛 FIX 1: Wrap in IIFE `(() => { ... })()` so 'const' doesn't crash on multiple clicks!
-                await aiWebWindow.webContents.executeJavaScript(`
-                    (() => {
-                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"], .ql-editor');
-                        if (editor) {
-                            editor.focus();
-                            if (editor.tagName === 'TEXTAREA') editor.value = '';
-                            else {
-                                editor.innerHTML = '';
-                                editor.innerText = '';
-                            }
-                            // Force React to recognize the box is empty
-                            editor.dispatchEvent(new Event('input', { bubbles: true })); 
-                        }
-                    })();
-                `);
-                
-                await new Promise(r => setTimeout(r, 200));
-                
-                // 🐛 FIX 2: Physically type it out letter-by-letter so the Slash Menu actually pops up!
-                const cmd = '/thinking';
-                for (const char of cmd) {
-                    aiWebWindow.webContents.sendInputEvent({ type: 'char', keyCode: char });
-                    await new Promise(r => setTimeout(r, 30)); // 30ms per keystroke
-                }
-                
-                // ⏳ Wait 800ms for ChatGPT's UI to render the dropdown menu
-                await new Promise(r => setTimeout(r, 800));
-                
-                // Hit Enter to SELECT the mode from the menu (instead of sending a message)
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                aiWebWindow.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-
-                // Failsafe: Clear the input box again just in case the text got left behind
-                await new Promise(r => setTimeout(r, 300));
-                await aiWebWindow.webContents.executeJavaScript(`
-                    (() => {
-                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"], .ql-editor');
-                        if (editor) {
-                            if (editor.tagName === 'TEXTAREA') editor.value = '';
-                            else {
-                                editor.innerHTML = '';
-                                editor.innerText = '';
-                            }
-                            editor.dispatchEvent(new Event('input', { bubbles: true }));
-                        }
-                    })();
-                `);
-            }
-        } else {
-            // Grok and Gemini handling
-            await applyDropdownBrainMode();
-        }
+        currentBrainMode = mode;
         return true;
     });
 
@@ -1521,130 +958,52 @@ function setupGeneralIpcHandlers() {
     // BACKGROUND SPY: READ THE ACTUAL BROWSER STATE
     // ==========================================================
     ipcMain.handle('get-current-ai-mode', async () => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) return null;
-        
-        const injectedSpyScript = `
-            (() => {
-                try {
-                    // 🤖 GEMINI SPY
-                    if (${currentProviderIdx} === 1) {
-                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
-                        if (!editor) return null;
-                        let container = editor;
-                        for(let i=0; i<10 && container.parentElement; i++) container = container.parentElement;
-                        
-                        const buttons = Array.from(container.querySelectorAll('button, [role="button"], [role="combobox"], [aria-haspopup]'));
-                        for (const btn of buttons) {
-                            const text = (btn.textContent || '').replace(/\\s+/g, ' ').trim();
-                            const firstWord = text.split(' ')[0];
-                            if (['Pro', 'Thinking'].includes(firstWord)) return 'think';
-                            if (['Fast'].includes(firstWord)) return 'fast';
-                        }
-                    } 
-                    // 🐺 GROK SPY
-                    else if (${currentProviderIdx} === 2) {
-                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
-                        if (!editor) return null;
-                        let container = editor;
-                        for(let i=0; i<10 && container.parentElement; i++) container = container.parentElement;
-                        
-                        const buttons = Array.from(container.querySelectorAll('button, [role="button"], [aria-haspopup]'));
-                        for (const btn of buttons) {
-                            const text = (btn.textContent || '').replace(/\\s+/g, ' ').trim();
-                            const firstWord = text.split(' ')[0];
-                            if (['Expert', 'Heavy'].includes(firstWord)) return 'think';
-                            if (['Fast', 'Auto'].includes(firstWord)) return 'fast';
-                        }
-                    } 
-                    // 🧠 CHATGPT SPY (Updated for the new UI!)
-                    else { 
-                        const editor = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
-                        if (!editor) return null;
-                        
-                        // Walk up to grab the input area container
-                        let container = editor;
-                        for(let i=0; i<8 && container.parentElement; i++) container = container.parentElement;
-
-                        // Hunt for the little blue "Think" pill button near the text area
-                        const elements = Array.from(container.querySelectorAll('button, [role="button"], div, span'));
-                        let isThinkOn = false;
-
-                        for (const el of elements) {
-                            // Safety Check: DO NOT read the text area itself, otherwise if the user types the word "Think" it will trigger!
-                            if (el.tagName === 'TEXTAREA' || el.hasAttribute('contenteditable')) continue;
-
-                            const text = (el.textContent || '').trim();
-                            
-                            // Check if the exact text is "Think" (based on your screenshot)
-                            if (text === 'Think' || text === 'Reasoning') {
-                                const rect = el.getBoundingClientRect();
-                                // Ensure it's a visible UI button element, not an invisible piece of code
-                                if (rect.height > 10 && rect.width > 10) {
-                                    isThinkOn = true;
-                                    break;
-                                }
-                            }
-                        }
-
-                        // If the "Think" pill exists, we are in Think mode. If it vanished, we are in Fast mode.
-                        return isThinkOn ? 'think' : 'fast';
-                    }
-                } catch(e) {}
-                return null;
-            })();
-        `;
-        
-        try {
-            const realMode = await aiWebWindow.webContents.executeJavaScript(injectedSpyScript);
-            return realMode; 
-        } catch(e) {
-            return null;
-        }
+        return currentBrainMode;
     });
 
     ipcMain.handle('switch-ai-profile', async (event, targetProfileId) => {
-        if (targetProfileId) {
-            currentProfileIdx = targetProfileId; // Now accepts specific string IDs!
-        }
-        launchAIWindow();
-        return currentProfileIdx;
+        launchDualBrains();
+        return targetProfileId;
     });
 
     // ==========================================================
-    // TOGGLE AI VISIBILITY (Crash-Proof)
+    // 50/50 SPLIT-SCREEN AI VISIBILITY
     // ==========================================================
     ipcMain.handle('toggle-ai-visibility', (event, forceShow) => {
-        if (!aiWebWindow || aiWebWindow.isDestroyed()) {
-            console.log("⚠️ Window destroyed. Respawning...");
-            launchAIWindow();
-            setTimeout(() => {
-                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    aiWebWindow.setOpacity(1);
-                    aiWebWindow.setIgnoreMouseEvents(false);
-                    aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-                    aiWebWindow.showInactive();
+        if (!voiceWebWindow || !codeWebWindow) return false;
 
-                    if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
-                }
-            }, 1000);
-            return true;
-        }
-
-        // 🟢 FIX: Read actual physical state! If opacity is 0, it's effectively hidden.
-        const isEffectivelyVisible = aiWebWindow.isVisible() && aiWebWindow.getOpacity() !== 0;
-        const targetVisible = forceShow !== undefined ? forceShow : !isEffectivelyVisible;
+        const isVisible = voiceWebWindow.isVisible() && voiceWebWindow.getOpacity() !== 0;
+        const targetVisible = forceShow !== undefined ? forceShow : !isVisible;
 
         if (targetVisible) {
-            aiWebWindow.setOpacity(1);
-            aiWebWindow.setIgnoreMouseEvents(false);
-            aiWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-            aiWebWindow.showInactive(); // showInactive prevents stealing typing focus from your IDE!
+            const { screen } = require('electron');
+            const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+            const halfWidth = Math.floor(width / 2);
+
+            // Snap Code Engine to LEFT
+            if (!codeWebWindow.isDestroyed()) {
+                codeWebWindow.setOpacity(1);
+                codeWebWindow.setIgnoreMouseEvents(false);
+                codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
+                codeWebWindow.showInactive();
+            }
+
+            // Snap Voice Engine to RIGHT
+            if (!voiceWebWindow.isDestroyed()) {
+                voiceWebWindow.setOpacity(1);
+                voiceWebWindow.setIgnoreMouseEvents(false);
+                voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
+                voiceWebWindow.showInactive();
+            }
+
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
             return true;
         } else {
-            aiWebWindow.hide();
+            if (!codeWebWindow.isDestroyed()) codeWebWindow.hide();
+            if (!voiceWebWindow.isDestroyed()) voiceWebWindow.hide();
             return false;
         }
     });
@@ -1717,15 +1076,20 @@ function setupGeneralIpcHandlers() {
     // ==========================================================
     ipcMain.handle('hide-all-overlays', () => {
         BrowserWindow.getAllWindows().forEach(w => {
-            if (!w.isDestroyed() && w !== aiWebWindow) {
+            if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
                 w.setOpacity(0);
                 w.setIgnoreMouseEvents(true, { forward: true });
             }
         });
-        
-        if (aiWebWindow && !aiWebWindow.isDestroyed() && aiWebWindow.isVisible()) {
-            aiWebWindow.setOpacity(0);
-            aiWebWindow.setIgnoreMouseEvents(true, { forward: true });
+
+        // 🟢 DUAL BRAIN FIX
+        if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) {
+            voiceWebWindow.setOpacity(0);
+            voiceWebWindow.setIgnoreMouseEvents(true, { forward: true });
+        }
+        if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) {
+            codeWebWindow.setOpacity(0);
+            codeWebWindow.setIgnoreMouseEvents(true, { forward: true });
         }
     });
 
@@ -1733,17 +1097,17 @@ function setupGeneralIpcHandlers() {
     ipcMain.on('widget-action', (event, action) => {
         if (action === 'hide-app') {
             BrowserWindow.getAllWindows().forEach(w => {
-                if (!w.isDestroyed() && w !== aiWebWindow) w.hide();
+                if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) w.hide();
             });
+
+            // 🟢 DUAL BRAIN FIX
+            if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) voiceWebWindow.hide();
+            if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) codeWebWindow.hide();
             
-            // 🐛 FIX 4: The Widget "hide" action also explicitly hides the AI window!
-            if (aiWebWindow && !aiWebWindow.isDestroyed() && aiWebWindow.isVisible()) {
-                aiWebWindow.hide();
-            }
         } else {
             // Tell the main React/Lit window to trigger the capture/clear/send functions
             BrowserWindow.getAllWindows().forEach(w => {
-                if (!w.isDestroyed() && w !== widgetWindow && w !== aiWebWindow) {
+                if (!w.isDestroyed() && w !== widgetWindow && w !== voiceWebWindow && w !== codeWebWindow) {
                     w.webContents.send('execute-widget-action', action);
                 }
             });
@@ -1879,47 +1243,66 @@ function setupGeneralIpcHandlers() {
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
             global.isGhostHidden = isGhostHidden;
+
             if (isGhostHidden) {
                 mainWindow.webContents.send('app-made-hidden');
-                // 🟢 SYNC FRONTEND
-                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    wasAiVisibleBeforeGhost = aiWebWindow.isVisible() && aiWebWindow.getOpacity() !== 0;
-                } else {
-                    wasAiVisibleBeforeGhost = false;
-                }
+                
+                // 🟢 SYNC FRONTEND: Check if EITHER brain was visible
+                wasAiVisibleBeforeGhost = (voiceWebWindow && voiceWebWindow.isVisible() && voiceWebWindow.getOpacity() !== 0) || 
+                                          (codeWebWindow && codeWebWindow.isVisible() && codeWebWindow.getOpacity() !== 0);
+
                 mainWindow.setOpacity(0);
                 mainWindow.setIgnoreMouseEvents(true, { forward: true });
-
-                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    aiWebWindow.setOpacity(0);
-                    aiWebWindow.setIgnoreMouseEvents(true, { forward: true });
+                
+                // 🟢 DUAL BRAIN FIX
+                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                    voiceWebWindow.setOpacity(0);
+                    voiceWebWindow.setIgnoreMouseEvents(true, { forward: true });
                 }
-
+                if (codeWebWindow && !codeWebWindow.isDestroyed()) {
+                    codeWebWindow.setOpacity(0);
+                    codeWebWindow.setIgnoreMouseEvents(true, { forward: true });
+                }
+                
                 // 🟢 LINK THE MINIMAP TO STEALTH MODE
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                     global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true });
                 }
-
+                
             } else {
-                mainWindow.webContents.send('app-made-visible');
-                // 🟢 SYNC FRONTEND
-                mainWindow.setOpacity(1);
-                mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
-
-                if (aiWebWindow && !aiWebWindow.isDestroyed()) {
-                    if (wasAiVisibleBeforeGhost) {
-                        aiWebWindow.setOpacity(1);
-                        aiWebWindow.setIgnoreMouseEvents(false);
-                    }
+            mainWindow.webContents.send('app-made-visible');
+            
+            // 🟢 SYNC FRONTEND
+            mainWindow.setOpacity(1);
+            mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
+            
+            if (wasAiVisibleBeforeGhost) {
+                // 🟢 DUAL BRAIN FIX
+                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                    voiceWebWindow.setOpacity(1);
+                    voiceWebWindow.setIgnoreMouseEvents(false);
                 }
-
-                // 🟢 RESTORE THE MINIMAP
-                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
-                    global.radialHudWindow.showInactive();
-                    global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
+                if (codeWebWindow && !codeWebWindow.isDestroyed()) {
+                    codeWebWindow.setOpacity(1);
+                    codeWebWindow.setIgnoreMouseEvents(false);
                 }
             }
+            
+            // 🟢 RESTORE THE MINIMAP
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+                global.radialHudWindow.showInactive();
+                global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
+            }
+
+            // 🟢 THE Z-INDEX RESTACKER (Ensures Minimap sits ON TOP of Transparent Dark Panes)
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+                setTimeout(() => {
+                    if (!global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
+                }, 50); // 50ms delay guarantees the OS finishes painting the MainWindow first
+            }
+        }
         }
     };
 

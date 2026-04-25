@@ -39,7 +39,6 @@
         "@electron-forge/plugin-auto-unpack-natives": "^7.8.1",
         "@electron-forge/plugin-fuses": "^7.8.1",
         "@electron/fuses": "^1.8.0",
-        "@playwright/test": "^1.59.1",
         "@reforged/maker-appimage": "^5.0.0",
         "electron": "^30.0.5"
     }

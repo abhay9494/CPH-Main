@@ -220,6 +220,11 @@ export class AssistantView extends LitElement {
         radialY: { type: Number },
         radialSlice: { type: Number },
         interviewStealthEdge: { type: String },
+        codeChatHistory: { type: Array },
+        voiceChatHistory: { type: Array },
+        codeChatIndex: { type: Number },
+        voiceChatIndex: { type: Number },
+        paneHoverState: { type: String }
     };
 
     constructor() {
@@ -278,6 +283,11 @@ export class AssistantView extends LitElement {
         this.radialY = null;
         this.radialSlice = null;
         this.interviewStealthEdge = 'none';
+        this.codeChatHistory = [];
+        this.voiceChatHistory = [];
+        this.codeChatIndex = 0;
+        this.voiceChatIndex = 0;
+        this.paneHoverState = 'code';
     }
 
     showToast(msg) {
@@ -402,6 +412,35 @@ export class AssistantView extends LitElement {
                     const action = activeMap[clockWiseGrid[sliceIndex]];
                     if (action && action !== 'none') this.executeHotCorner(action);
                 }
+            });
+
+            // 🟢 NEW: CONTINUOUS RADIAL SCROLLING/RESIZING
+            ipcRenderer.on('radial-continuous-hold', (event, sliceIndex) => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
+                const activeMap = this.activePage === 2 ? this.interviewCornersPage2Map : this.interviewCornersMap;
+                const action = activeMap[clockWiseGrid[sliceIndex]];
+                
+                if (['scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'].includes(action)) {
+                    this.executeHotCorner(action);
+                }
+            });
+
+            // 🟢 NEW: DUAL-BRAIN TEXT STREAMS
+            ipcRenderer.on('voice-new-message', (event, text) => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                this.markAiActive();
+                this.voiceChatHistory = [...this.voiceChatHistory, text];
+                this.voiceChatIndex = this.voiceChatHistory.length - 1;
+                this.requestUpdate();
+            });
+
+            ipcRenderer.on('code-new-message', (event, text) => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                this.markAiActive();
+                this.codeChatHistory = [...this.codeChatHistory, text];
+                this.codeChatIndex = this.codeChatHistory.length - 1;
+                this.requestUpdate();
             });
         }
 
@@ -824,6 +863,10 @@ export class AssistantView extends LitElement {
             case 'scroll_up':
                 if (this.viewMode === 'typer') {
                     this.shadowRoot.querySelector('.typer-code-container')?.scrollBy({top: -150, behavior: 'smooth'});
+                } else if (this.currentMode === 'proctored_live_interview') {
+                    // 🟢 Route scroll based on mouse hover
+                    const paneId = this.paneHoverState === 'voice' ? '#chat-pane' : '#code-pane';
+                    this.shadowRoot.querySelector(paneId)?.scrollBy({top: -150, behavior: 'smooth'});
                 } else {
                     this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: -200, behavior: 'smooth'});
                 }
@@ -831,12 +874,33 @@ export class AssistantView extends LitElement {
             case 'scroll_down':
                 if (this.viewMode === 'typer') {
                     this.shadowRoot.querySelector('.typer-code-container')?.scrollBy({top: 150, behavior: 'smooth'});
+                } else if (this.currentMode === 'proctored_live_interview') {
+                    const paneId = this.paneHoverState === 'voice' ? '#chat-pane' : '#code-pane';
+                    this.shadowRoot.querySelector(paneId)?.scrollBy({top: 150, behavior: 'smooth'});
                 } else {
                     this.shadowRoot.querySelector('.markdown-body')?.scrollBy({top: 200, behavior: 'smooth'});
                 }
                 break;
-            case 'prev_resp': this.showToast('◀ Previous Response'); this.navigateToPreviousResponse(); break;
-            case 'next_resp': this.showToast('▶ Next Response'); this.navigateToNextResponse(); break;
+            case 'prev_resp':
+                this.showToast('◀ Previous');
+                if (this.currentMode === 'proctored_live_interview') {
+                    if (this.paneHoverState === 'voice' && this.voiceChatIndex > 0) this.voiceChatIndex--;
+                    else if (this.paneHoverState === 'code' && this.codeChatIndex > 0) this.codeChatIndex--;
+                    this.requestUpdate();
+                } else {
+                    this.navigateToPreviousResponse();
+                }
+                break;
+            case 'next_resp':
+                this.showToast('▶ Next');
+                if (this.currentMode === 'proctored_live_interview') {
+                    if (this.paneHoverState === 'voice' && this.voiceChatIndex < this.voiceChatHistory.length - 1) this.voiceChatIndex++;
+                    else if (this.paneHoverState === 'code' && this.codeChatIndex < this.codeChatHistory.length - 1) this.codeChatIndex++;
+                    this.requestUpdate();
+                } else {
+                    this.navigateToNextResponse();
+                }
+                break;
 
             // Add this inside the switch(action) block:
             case 'auto_type':
@@ -925,11 +989,6 @@ export class AssistantView extends LitElement {
                 this.requestUpdate();
                 break;
 
-            case 'mic': 
-                this.handleToggleMic(); 
-                this.showToast(`🎙️ Mic: ${!this.isMicOn ? 'ON' : 'OFF'}`); 
-                break;
-
             case 'language':
                 const langs = ['Auto / Text', 'C++', 'Python', 'Java', 'JavaScript'];
                 let currIdx = langs.indexOf(this.programmingLanguage);
@@ -939,24 +998,23 @@ export class AssistantView extends LitElement {
                 this.showToast(`💻 ${langs[nextIdx]}`);
                 break;
             
-            case 'reset': 
+            case 'reset':
                 if (!this.resetArmed) {
                     this.resetArmed = true;
                     this.showToast('⚠️ RESET ARMED (5s)');
                     if (this.resetArmTimer) clearTimeout(this.resetArmTimer);
-                    this.resetArmTimer = setTimeout(() => {
-                        this.resetArmed = false;
-                        this.requestUpdate();
-                    }, 5000);
-                    this.requestUpdate();
+                    this.resetArmTimer = setTimeout(() => { this.resetArmed = false; this.requestUpdate(); }, 5000);
                 } else {
                     if (this.resetArmTimer) clearTimeout(this.resetArmTimer);
-                    if (this.solvingTimeout) clearTimeout(this.solvingTimeout); // 🟢 Kill stream tracker
+                    if (this.solvingTimeout) clearTimeout(this.solvingTimeout);
                     this.resetArmed = false;
-                    this.isSolving = false; // ⚡ Emergency Circuit Breaker
+                    this.isSolving = false;
                     this.capturedCount = 0;
                     this.showToast('🛑 Session Reset');
-                    this.handleNewChat(); 
+                    // 🟢 Wipe both memories
+                    this.codeChatHistory = []; this.voiceChatHistory = [];
+                    this.codeChatIndex = 0; this.voiceChatIndex = 0;
+                    this.handleNewChat();
                 }
                 break;
 
@@ -970,12 +1028,21 @@ export class AssistantView extends LitElement {
                 let nextAiIdx = (this.currentProviderName === 'ChatGPT' ? 1 : (this.currentProviderName === 'Gemini' ? 2 : 0));
                 this.showToast('🤖 Switched AI Engine'); this.handleSetEngine(nextAiIdx); break;
             case 'change_profile':
-                if (this.aiProfiles.length > 0) {
-                    const cIdx = this.aiProfiles.findIndex(p => p.id === this.currentProfileId);
-                    const nIdx = (cIdx + 1) % this.aiProfiles.length;
-                    this.showToast('👤 Profile Switched');
-                    this.handleProfileChange({target: {value: this.aiProfiles[nIdx].id}});
-                } break;
+                if (this.currentMode === 'proctored_live_interview') {
+                    this.showToast('👤 Swapped Loadout');
+                    // Reverse the active loadout visually
+                    let temp = this.paneHoverState;
+                    this.paneHoverState = temp === 'code' ? 'voice' : 'code';
+                    this.requestUpdate();
+                } else {
+                    if (this.aiProfiles.length > 0) {
+                        const cIdx = this.aiProfiles.findIndex(p => p.id === this.currentProfileId);
+                        const nIdx = (cIdx + 1) % this.aiProfiles.length;
+                        this.showToast('👤 Profile Switched');
+                        this.handleProfileChange({target: {value: this.aiProfiles[nIdx].id}});
+                    }
+                }
+                break;
             
             // 🟢 GLOBALLY SYNCED UI ACTIONS
             case 'text_inc': 
@@ -1604,19 +1671,20 @@ export class AssistantView extends LitElement {
                 return;
             }
 
-            // 🟢 THE STRICT XML INJECTION PAYLOAD
+            // 🟢 THE STRICT XML + MARKDOWN INJECTION PAYLOAD
             let payload = `[SYSTEM DIRECTIVE: Act as an expert candidate interviewing for the role of "${prefs.interviewRole || 'Candidate'}" taking a live coding interview.]\n`;
             payload += `[CRITICAL RULE 1: You are the candidate. ALWAYS use FIRST-PERSON pronouns ("I", "my", "we"). NEVER refer to the candidate in the third person.]\n`;
             payload += `[CRITICAL RULE 2: STRICT XML RESPONSE FORMATTING. You MUST format your ENTIRE response using ONLY the following XML tags:]\n\n`;
             
             payload += `<CHAT>\nPut all normal conversation, logic explanations, complexity analysis, and greeting acknowledgments here.\n</CHAT>\n\n`;
-            payload += `<FULL_CODE>\nPut ONLY the raw, complete, functional code here. No markdown formatting, no explanations inside this tag. Just the code.\n</FULL_CODE>\n\n`;
-            payload += `<MINOR_FIX>\nIf I ask for a small syntax fix or point out a bug, put the short corrected snippet here.\n</MINOR_FIX>\n\n`;
+            payload += `<FULL_CODE>\nPut ONLY the complete, functional code here. You MUST wrap the code inside standard Markdown code blocks (e.g., \`\`\`cpp ... \`\`\`) so it formats correctly on my screen!\n</FULL_CODE>\n\n`;
+            payload += `<MINOR_FIX>\nIf I ask for a small syntax fix or point out a bug, put the short corrected snippet here. You MUST wrap the code inside standard Markdown code blocks (e.g., \`\`\`cpp ... \`\`\`)!\n</MINOR_FIX>\n\n`;
             
             payload += `[CANDIDATE BACKGROUND/RESUME DATA:\n${prefs.customPrompt}]\n\n`;
-            payload += `Please acknowledge that you have received this resume and understand the strict XML rules. Keep it brief. Respond ONLY using the <CHAT> tag.`;
+            payload += `Please acknowledge that you have received this resume and understand the strict XML + Markdown formatting rules. Keep it brief. Respond ONLY using the <CHAT> tag.`;
 
             this.lastUserPrompt = "📄 Sent Profile Context & XML Formatting Rules to AI";
+
             this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ingesting context & rules...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
@@ -1897,71 +1965,58 @@ export class AssistantView extends LitElement {
         let leftContent = "";
         let rightContent = "";
 
-        if (this.localChatHistory.length === 0) {
-            leftContent = "🟢 **Code Window**\nAwaiting `<FULL_CODE>` blocks...";
-            rightContent = "🟢 **Live Feed**\nAwaiting chat & minor fixes...";
+        if (this.codeChatHistory.length === 0 && this.voiceChatHistory.length === 0) {
+            leftContent = "🟢 **Code Engine Online**\nAwaiting screenshot captures...";
+            rightContent = "🟢 **Voice Engine Online**\nListening to microphone feed...";
         } else {
-            // 🟢 1. Target the EXACT page using the Pagination Index
-            const currentMsg = this.localChatHistory[this.localChatIndex];
-
-            // 🟢 2. Split User/System actions from the AI's response
-            const parts = currentMsg.split('🤖 AI:');
-            let userAndSystemPart = parts[0] ? parts[0].trim() : '';
-            let aiPart = parts[1] ? parts[1].trim() : '';
-
-            // This ensures Screenshots, manual prompts, and system statuses are visible on the right pane!
-            if (userAndSystemPart) {
-                rightContent += `${userAndSystemPart}\n\n`;
-            }
-
-            // 🟢 3. SMART CODE ANCHORING (Sticky Left Pane)
-            // Scans backward from the current page to find the most recent FULL_CODE.
-            // If page 3 is just a chat, the left pane will still reliably display Page 1's code!
-            let latestFullCode = null;
-            for (let i = this.localChatIndex; i >= 0; i--) {
-                const pastMsg = this.localChatHistory[i];
-                const pastAiPart = pastMsg.includes('🤖 AI:') ? pastMsg.split('🤖 AI:')[1] : pastMsg;
-                const pastCodes = pastAiPart ? pastAiPart.match(/<FULL_CODE>([\s\S]*?)<\/FULL_CODE>/g) : null;
-                
-                if (pastCodes) {
-                    latestFullCode = pastCodes.map(c => c.replace(/<\/?FULL_CODE>/g, '').trim()).join('\n\n');
-                    break;
-                }
-            }
-
-            if (latestFullCode) {
-                leftContent = latestFullCode;
-            } else {
-                leftContent = "🟢 **Code Window**\nAwaiting `<FULL_CODE>` blocks...";
-            }
-
-            // 🟢 4. Render the specific AI elements for the CURRENT page on the Right Pane
-            if (aiPart) {
-                const minorFixes = aiPart.match(/<MINOR_FIX>([\s\S]*?)<\/MINOR_FIX>/g);
-                const chats = aiPart.match(/<CHAT>([\s\S]*?)<\/CHAT>/g);
-
-                if (minorFixes) {
-                    minorFixes.forEach(c => rightContent += `**🔧 Minor Fix:**\n${c.replace(/<\/?MINOR_FIX>/g, '').trim()}\n\n`);
-                }
-                if (chats) {
-                    chats.forEach(c => rightContent += `**💬 Chat:**\n${c.replace(/<\/?CHAT>/g, '').trim()}\n\n`);
-                }
-
-                // Fallbacks for missing tags or system processing states
-                if (/^\(.*\)$/.test(aiPart.trim())) {
-                    // Catches system events like (Thinking...), (Solving...), (Refactoring...)
-                    rightContent += `🤖 AI:\n*${aiPart.trim()}*\n\n`;
-                } else if (!minorFixes && !chats && !aiPart.includes('<FULL_CODE>')) {
-                    // If the AI forgot to use tags entirely, dump it on the right so you don't lose the data
-                    rightContent += `🤖 AI:\n${aiPart.trim()}\n\n`;
-                }
-            }
+            leftContent = this.codeChatHistory.length > 0 ? this.codeChatHistory[this.codeChatIndex] : "🟢 **Code Engine Online**\nAwaiting screenshot captures...";
+            rightContent = this.voiceChatHistory.length > 0 ? this.voiceChatHistory[this.voiceChatIndex] : "🟢 **Voice Engine Online**\nListening to microphone feed...";
         }
 
+        // 🟢 THE NEW STICKY HEADERS (Glassy, Obeys BG slider!)
+        const codeHeader = html`
+            <div style="position: sticky; top: -15px; background: var(--bg-tertiary); backdrop-filter: blur(5px); padding: 8px 10px; margin: -15px -10px 10px -10px; border-bottom: 1px solid var(--border-color); z-index: 10; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 11px; font-weight: bold; color: #4285f4; text-transform: uppercase;">💻 Code Brain</span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <span style="font-size: 11px; color: ${this.tacThinkMode ? '#f59e0b' : '#00cc66'};">${this.tacThinkMode ? '🧠 Think' : '⚡ Fast'}</span>
+                    <span style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">${this.codeChatHistory.length ? `${this.codeChatIndex + 1}/${this.codeChatHistory.length}` : '0/0'}</span>
+                </div>
+            </div>
+        `;
+
+        // 🟢 MIC BUTTON INJECTED HERE!
+        const voiceHeader = html`
+            <div style="position: sticky; top: -15px; background: var(--bg-tertiary); backdrop-filter: blur(5px); padding: 8px 10px; margin: -15px -10px 10px -10px; border-bottom: 1px solid var(--border-color); z-index: 10; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0;">
+                <span style="font-size: 11px; font-weight: bold; color: #a142f4; text-transform: uppercase;">🗣️ Voice Brain</span>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button @click=${this.handleToggleMic} style="background: ${this.isMicOn ? 'rgba(0, 204, 102, 0.15)' : 'rgba(241, 76, 76, 0.15)'}; color: ${this.isMicOn ? '#00cc66' : '#f14c4c'}; border: 1px solid ${this.isMicOn ? 'rgba(0, 204, 102, 0.4)' : 'rgba(241, 76, 76, 0.4)'}; padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; transition: 0.2s; cursor: pointer !important;">
+                        🎙️ MIC: ${this.isMicOn ? 'ON' : 'OFF'}
+                    </button>
+                    <span style="font-size: 11px; color: #00cc66;">⚡ Fast</span>
+                    <span style="font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px;">${this.voiceChatHistory.length ? `${this.voiceChatIndex + 1}/${this.voiceChatHistory.length}` : '0/0'}</span>
+                </div>
+            </div>
+        `;
+
         return html`
-            <div style="display: flex; width: 100%; height: 100%; background: transparent; position: relative;">
-                <div id="code-pane" class="markdown-body" style="flex: 1; border-right: 1px solid rgba(255,255,255,0.1); overflow-y: auto; padding-right: 10px;" .innerHTML=${this.renderMarkdown(leftContent)}></div>
-                <div id="chat-pane" class="markdown-body" style="flex: 1; overflow-y: auto; padding-left: 10px;" .innerHTML=${this.renderMarkdown(rightContent)}></div>
+            <div style="display: flex; width: 100%; height: 100%; background: transparent; position: relative; gap: 10px; padding-bottom: 10px;">
+                
+                <div id="code-pane" 
+                     class="markdown-body" 
+                     @mouseenter=${() => this.paneHoverState = 'code'}
+                     style="flex: 1; border: 1px solid ${this.paneHoverState === 'code' ? '#4285f4' : 'var(--border-color)'}; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s;">
+                    ${codeHeader}
+                    <div @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(leftContent)}></div>
+                </div>
+
+                <div id="chat-pane" 
+                     class="markdown-body" 
+                     @mouseenter=${() => this.paneHoverState = 'voice'}
+                     style="flex: 1; border: 1px solid ${this.paneHoverState === 'voice' ? '#a142f4' : 'var(--border-color)'}; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s;">
+                    ${voiceHeader}
+                    <div @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(rightContent)}></div>
+                </div>
+
             </div>
         `;
     }

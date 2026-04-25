@@ -600,6 +600,11 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                             ghostMode: false
                                         });
                                     }
+
+                                    const mainAppWindow = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
+                                    if (mainAppWindow && !mainAppWindow.isDestroyed() && currentRadialSlice !== null) {
+                                        mainAppWindow.webContents.send('radial-continuous-hold', currentRadialSlice);
+                                    }
                                 }, 30);
                             }, holdDelayMs);
                         }

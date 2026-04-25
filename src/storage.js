@@ -25,6 +25,11 @@ const DEFAULT_PREFERENCES = {
     backgroundTransparency: 0.8,
     googleSearchEnabled: false,
     aiProfiles: [],
+    dualBrainLoadouts: [
+        { id: 'loadout_1', name: 'Primary (ChatGPT 🗣️ | Gemini 💻)', voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' },
+        { id: 'loadout_2', name: 'Fallback (Grok 🗣️ | ChatGPT 💻)', voiceEngine: 2, voiceProfileId: '3', codeEngine: 0, codeProfileId: '4' }
+    ],
+    activeLoadoutId: 'loadout_1',
     mainWindowWidth: 900,
     mainWindowHeight: 500,
     radialSettings: { size: 400, offsetX: 0, offsetY: 0, holdDelay: 2000 },
