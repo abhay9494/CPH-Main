@@ -72,11 +72,11 @@ const DEFAULT_PREFERENCES = {
 };
 
 const DEFAULT_KEYBINDS = {
-    toggleRadial: 'Ctrl+Space' // 🟢 NEW: Default Radial trigger
+    toggleRadial: 'Ctrl+Space' 
 };
 
 const DEFAULT_LIMITS = {
-    data: [] // Array of { date: 'YYYY-MM-DD', flash: { count }, flashLite: { count }, groq: { 'qwen3-32b': { chars, limit }, 'gpt-oss-120b': { chars, limit }, 'gpt-oss-20b': { chars, limit } }, gemini: { 'gemma-3-27b-it': { chars } } }
+    data: [] 
 };
 
 // Get the config directory path based on OS

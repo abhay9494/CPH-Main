@@ -1,6 +1,6 @@
 import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
 
-export class CustomizeView extends LitElement {
+export class SettingsView extends LitElement {
     static styles = css`
         * {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
@@ -1289,4 +1289,4 @@ export class CustomizeView extends LitElement {
         `;
     }
 }
-customElements.define('customize-view', CustomizeView);
+customElements.define('settings-view', SettingsView);

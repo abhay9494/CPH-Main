@@ -1,12 +1,11 @@
 import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
 
-export class MainView extends LitElement {
+export class MainHub extends LitElement {
     static styles = css`
         :host {
             display: flex; flex-direction: column; align-items: center; justify-content: center;
             height: 100%; width: 100%; color: var(--text-color); background: transparent; 
-            overflow-y: auto; /* 🟢 FIX: Allows smooth scrolling for the extra cards */
-            padding: 20px 0;
+            overflow-y: auto; padding: 20px 0;
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; cursor: default !important;
         }
         .hub-wrapper {
@@ -18,21 +17,32 @@ export class MainView extends LitElement {
             to { opacity: 1; transform: translateY(0); }
         }
         .hub-title { font-size: 24px; font-weight: 700; margin-bottom: 4px; letter-spacing: -0.5px; }
-        .hub-subtitle { font-size: 13px; color: var(--text-muted, #888); margin-bottom: 15px; }
+        .hub-subtitle { font-size: 13px; color: var(--text-muted, #888); margin-bottom: 25px; }
+
+        .setup-warning {
+            background: rgba(241, 76, 76, 0.1); border: 1px solid #f14c4c; border-radius: 8px;
+            padding: 15px 20px; margin-bottom: 25px; width: 100%; max-width: 800px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .setup-warning-text { color: #f14c4c; font-size: 13px; font-weight: bold; }
+        .setup-btn {
+            background: #f14c4c; color: white; border: none; padding: 8px 16px; 
+            border-radius: 4px; font-weight: bold; font-size: 12px; transition: 0.2s;
+        }
+        .setup-btn:hover { background: #ff6b6b; }
 
         .primary-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 12px;
-            width: 100%;
-            max-width: 800px;
-            margin-bottom: 20px;
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 12px; width: 100%; max-width: 800px; margin-bottom: 20px;
         }
         .mode-card {
             background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px;
             padding: 12px 15px; display: flex; flex-direction: column; align-items: flex-start;
-            position: relative; overflow: hidden; text-align: left;
+            position: relative; overflow: hidden; text-align: left; transition: 0.2s;
         }
+        .mode-card:not(.disabled):hover { transform: translateY(-2px); border-color: #888; }
+        .mode-card.disabled { opacity: 0.4; filter: grayscale(100%); pointer-events: none; }
+        
         .mode-card::before { content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px; background: transparent; }
 
         .card-oa::before { background: rgba(161, 66, 244, var(--bg-alpha, 1)); }
@@ -49,15 +59,20 @@ export class MainView extends LitElement {
         .secondary-actions { display: flex; gap: 10px; justify-content: center; width: 100%; }
         .utility-btn {
             background: var(--bg-secondary); color: var(--text-secondary, #ccc); border: 1px solid var(--border-color);
-            padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px;
+            padding: 6px 15px; border-radius: 20px; font-size: 12px; font-weight: 500; display: flex; align-items: center; gap: 6px; transition: 0.2s;
         }
+        .utility-btn:hover { background: var(--hover-background); color: #fff; }
     `;
 
     static properties = {
         onNavigate: { type: Function },
+        missingAccount: { type: Boolean },
+        missingContext: { type: Boolean }
     };
 
     render() {
+        const isSetupIncomplete = this.missingAccount || this.missingContext;
+
         return html`
             <div class="hub-wrapper">
                 <div style="text-align: center;">
@@ -65,27 +80,32 @@ export class MainView extends LitElement {
                     <div class="hub-subtitle">Choose how you want the AI to assist you in this session.</div>
                 </div>
 
-                <div class="primary-grid">
-                    <div class="mode-card card-oa" @click=${() => this.onNavigate('proctored_oa')} style="border-top-color: #f14c4c;">
-                        <div class="icon-wrapper" style="color: #f14c4c; background: rgba(241, 76, 76, 0.15); border-color: rgba(241, 76, 76, 0.3);">
-                            🎯
+                ${isSetupIncomplete ? html`
+                    <div class="setup-warning">
+                        <div class="setup-warning-text">
+                            ⚠️ SETUP REQUIRED: ${this.missingAccount ? 'Log in to an AI Account.' : ''} 
+                            ${this.missingAccount && this.missingContext ? ' | ' : ''} 
+                            ${this.missingContext ? 'Add your Resume Context.' : ''}
                         </div>
+                        <button class="setup-btn" @click=${() => this.onNavigate('settings')}>Complete Setup →</button>
+                    </div>
+                ` : ''}
+
+                <div class="primary-grid">
+                    <div class="mode-card card-oa ${isSetupIncomplete ? 'disabled' : ''}" @click=${() => !isSetupIncomplete && this.onNavigate('proctored_oa')}>
+                        <div class="icon-wrapper">🎯</div>
                         <div class="card-title">Proctored OA</div>
                         <div class="card-desc">Single-Brain execution. Triggers AI captures and navigation via invisible mouse edge-dwells.</div>
                     </div>
 
-                    <div class="mode-card card-interview" @click=${() => this.onNavigate('proctored_live_interview')} style="border-top-color: #00cc66;">
-                        <div class="icon-wrapper" style="color: #00cc66; background: rgba(0, 204, 102, 0.15); border-color: rgba(0, 204, 102, 0.3);">
-                            🕵️
-                        </div>
+                    <div class="mode-card card-interview ${isSetupIncomplete ? 'disabled' : ''}" @click=${() => !isSetupIncomplete && this.onNavigate('proctored_live_interview')}>
+                        <div class="icon-wrapper">🕵️</div>
                         <div class="card-title">Proctored Live Interview</div>
                         <div class="card-desc">Dual-Brain execution. Zero-click 16-zone radial wrist-flicks to execute commands silently.</div>
                     </div>
 
                     <div class="mode-card card-companion" @click=${() => this.onNavigate('companion')}>
-                        <div class="icon-wrapper">
-                            🤝
-                        </div>
+                        <div class="icon-wrapper">🤝</div>
                         <div class="card-title">Help a Friend</div>
                         <div class="card-desc">Connect to a peer's session via secure WebRTC to quietly push answers and code to their screen.</div>
                     </div>
@@ -93,11 +113,11 @@ export class MainView extends LitElement {
 
                 <div class="secondary-actions">
                     <button class="utility-btn" @click=${() => this.onNavigate('history')}><span>📜</span> Chat Vault</button>
-                    <button class="utility-btn" @click=${() => this.onNavigate('customize')}><span>⚙️</span> Preferences</button>
+                    <button class="utility-btn" @click=${() => this.onNavigate('settings')}><span>⚙️</span> Preferences</button>
                     <button class="utility-btn" @click=${() => this.onNavigate('help')}><span>❓</span> Help & Guides</button>
                 </div>
             </div>
         `;
     }
 }
-customElements.define('main-view', MainView);
+customElements.define('main-hub', MainHub);

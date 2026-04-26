@@ -3,7 +3,7 @@
     "productName": "Intel Audio Service",
     "version": "0.5.0",
     "description": "Intel Audio Service Module",
-    "main": "src/index.js",
+    "main": "src/backend/main.js",
     "scripts": {
         "start": "electron-forge start",
         "package": "electron-forge package",

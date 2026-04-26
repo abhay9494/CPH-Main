@@ -1,7 +1,6 @@
 <!doctype html>
 <html>
     <head>
-        <!-- <meta http-equiv="content-security-policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'self' 'unsafe-inline' https: http:;" /> -->
          <meta http-equiv="content-security-policy" content="default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob: https: http: ws: wss:; script-src 'self' 'unsafe-inline' 'unsafe-eval' https: http:; style-src 'self' 'unsafe-inline' https: http:;" />
         <title>Screen and Audio Capture</title>
         <style>
@@ -45,34 +44,6 @@
                 --scrollbar-thumb: #3c3c3c;
                 --scrollbar-thumb-hover: #4a4a4a;
                 --scrollbar-background: #1e1e1e;
-
-                /* Legacy/misc */
-                --preview-video-background: #1e1e1e;
-                --preview-video-border: #3c3c3c;
-                --option-label-color: #e5e5e5;
-                --screen-option-background: #252526;
-                --screen-option-hover-background: #2d2d2d;
-                --screen-option-selected-background: #323232;
-                --screen-option-text: #a0a0a0;
-
-                /* Buttons */
-                --start-button-background: #ffffff;
-                --start-button-color: #1e1e1e;
-                --start-button-border: #ffffff;
-                --start-button-hover-background: #e0e0e0;
-                --start-button-hover-border: #e0e0e0;
-                --text-input-button-background: #ffffff;
-                --text-input-button-hover: #e0e0e0;
-
-                /* Links - neutral */
-                --link-color: #e5e5e5;
-                --key-background: #2d2d2d;
-
-                /* Status colors */
-                --success-color: #4ec9b0;
-                --warning-color: #dcdcaa;
-                --error-color: #f14c4c;
-                --danger-color: #f14c4c;
 
                 /* Layout-specific variables */
                 --header-padding: 8px 16px;
@@ -124,7 +95,8 @@
                 box-sizing: border-box;
             }
 
-            cheating-daddy-app {
+            /* 🟢 FIX: This was targeting the old tag! */
+            root-app {
                 display: block;
                 width: 100%;
                 height: 100%;
@@ -143,30 +115,23 @@
             window.cheatingDaddy = window.cheatingDaddy || {};
             
             window.cheatingDaddy.storage = {
-                // Config
                 getConfig: () => ipcRenderer.invoke('storage:get-config'),
                 setConfig: (d) => ipcRenderer.invoke('storage:set-config', d),
                 updateConfig: (k, v) => ipcRenderer.invoke('storage:update-config', k, v),
-                // Credentials
                 getCredentials: () => ipcRenderer.invoke('storage:get-credentials'),
                 setCredentials: (d) => ipcRenderer.invoke('storage:set-credentials', d),
-                // Preferences
                 getPreferences: () => ipcRenderer.invoke('storage:get-preferences'),
                 setPreferences: (d) => ipcRenderer.invoke('storage:set-preferences', d),
                 updatePreference: (k, v) => ipcRenderer.invoke('storage:update-preference', k, v),
-                // Keybinds
                 getKeybinds: () => ipcRenderer.invoke('storage:get-keybinds'),
                 setKeybinds: (d) => ipcRenderer.invoke('storage:set-keybinds', d),
-                // History & Sessions (Fixes the HistoryView crash!)
                 getAllSessions: () => ipcRenderer.invoke('storage:get-all-sessions'),
                 getSession: (id) => ipcRenderer.invoke('storage:get-session', id),
                 saveSession: (id, d) => ipcRenderer.invoke('storage:save-session', id, d),
                 deleteSession: (id) => ipcRenderer.invoke('storage:delete-session', id),
                 deleteAllSessions: () => ipcRenderer.invoke('storage:delete-all-sessions'),
-                // Limits & Wipes
                 getTodayLimits: () => ipcRenderer.invoke('storage:get-today-limits'),
                 clearAllData: () => ipcRenderer.invoke('storage:clear-all'),
-                
                 getApiKey: async () => "bypass-key-123"
             };
 
@@ -175,10 +140,10 @@
             window.cheatingDaddy.stopCapture = () => {};
             window.cheatingDaddy.sendTextMessage = async () => ({ success: true });
         }
-    </script>
+        </script>
 
-        <script type="module" src="components/app/CheatingDaddyApp.js"></script>
+        <script type="module" src="frontend/RootApp.js"></script>
 
-        <cheating-daddy-app id="cheatingDaddy"></cheating-daddy-app>
+        <root-app id="cheatingDaddy"></root-app>
     </body>
 </html>
