@@ -311,6 +311,10 @@ export class CheatingDaddyApp extends LitElement {
     connectedCallback() {
         super.connectedCallback();
         this.updateLayoutMode();
+
+        // 🟢 FIX: Global navigation hook for the Abort button!
+        this.returnToHubHandler = () => this.handleHubNavigation('main');
+        window.addEventListener('return-to-main', this.returnToHubHandler);
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.on('new-response', (_, response) => {
@@ -363,16 +367,13 @@ export class CheatingDaddyApp extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
-        if (window.require) {
-            const { ipcRenderer } = window.require('electron');
-            ipcRenderer.removeAllListeners('new-response');
-            ipcRenderer.removeAllListeners('update-response');
-            ipcRenderer.removeAllListeners('update-status');
-            ipcRenderer.removeAllListeners('click-through-toggled');
-            ipcRenderer.removeAllListeners('reconnect-failed');
-            ipcRenderer.removeAllListeners('app-made-visible'); // 🟢 NEW Cleanup
-        }
-        window.removeEventListener('sync-preference', this.syncListener);
+        if (this.syncInterval) clearInterval(this.syncInterval);
+        window.removeEventListener('typing-state-changed', this.typingStateHandler);
+        window.removeEventListener('typer-mode-toggled', this.typerModeHandler);
+        window.removeEventListener('help-mode-toggled', this.helpModeHandler);
+        window.removeEventListener('helper-status-changed', this.helperStatusHandler);
+        window.removeEventListener('update-pin-display', this.pinHandler);
+        window.removeEventListener('return-to-main', this.returnToHubHandler); // 🟢 FIX: Cleanup listener
     }
 
     setStatus(text) {
@@ -552,8 +553,8 @@ export class CheatingDaddyApp extends LitElement {
 
         ipcRenderer.send('set-session-mode', destination);
 
-        // 🟢 FIX: Turn off mouse sensors if we leave Proctored OA!
-        if (destination !== 'proctored_oa') {
+        // 🟢 FIX: Turn off mouse sensors if we leave a Proctored mode!
+        if (destination !== 'proctored_oa' && destination !== 'proctored_live_interview') {
             ipcRenderer.send('stop-hot-corners');
         }
 
@@ -565,9 +566,10 @@ export class CheatingDaddyApp extends LitElement {
             return;
         }
 
-        if (destination === 'oa' || destination === 'interview' || destination === 'companion' || destination === 'proctored_oa' || destination === 'proctored_live_interview') {
-            this.sessionMode = destination === 'interview' ? 'interview' : destination;
-            const targetEngine = (destination === 'oa' || destination === 'proctored_oa') ? 1 : 0;
+        // 🟢 STRICT MODE ROUTER (Only 3 Modes Allowed)
+        if (destination === 'companion' || destination === 'proctored_oa' || destination === 'proctored_live_interview') {
+            this.sessionMode = destination;
+            const targetEngine = destination === 'proctored_oa' ? 1 : 0;
             await ipcRenderer.invoke('set-ai-provider', targetEngine);
 
             if (destination === 'proctored_oa') {
@@ -576,20 +578,16 @@ export class CheatingDaddyApp extends LitElement {
                 ipcRenderer.send('start-hot-corners', bounds);
                 ipcRenderer.invoke('hide-widget'); 
                 ipcRenderer.send('set-ignore-mouse-events', true); 
+                ipcRenderer.send('toggle-radial-permanent', false); // 🟢 KILL MINIMAP
             } else if (destination === 'proctored_live_interview') {
-                // 🟢 PROCTORED LIVE INTERVIEW LOCKS
                 const raw = await window.cheatingDaddy.storage.getPreferences();
                 const bounds = (raw?.data || raw || {}).hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
-                ipcRenderer.send('start-hot-corners', bounds); // 🟢 Re-enable Edge Triggers!
+                ipcRenderer.send('start-hot-corners', bounds);
                 ipcRenderer.invoke('hide-widget'); 
                 ipcRenderer.send('set-ignore-mouse-events', true); 
-                ipcRenderer.send('toggle-radial-permanent', true); // 🟢 Show permanent Minimap HUD
+                ipcRenderer.send('toggle-radial-permanent', true); // 🟢 ENABLE MINIMAP
             } else {
                 ipcRenderer.send('set-ignore-mouse-events', false); 
-            }
-            
-            // Turn off the HUD if we leave the mode
-            if (destination !== 'proctored_live_interview') {
                 ipcRenderer.send('toggle-radial-permanent', false);
             }
 
@@ -602,7 +600,7 @@ export class CheatingDaddyApp extends LitElement {
                 setTimeout(() => window.dispatchEvent(new CustomEvent('help-mode-toggled', { detail: false })), 100);
             }
         } else {
-            ipcRenderer.send('set-ignore-mouse-events', false); // Always restore clicks if returning to Hub
+            ipcRenderer.send('set-ignore-mouse-events', false);
             this.currentView = destination; 
         }
         this.requestUpdate();

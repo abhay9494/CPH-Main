@@ -295,7 +295,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                     <div id="icons"></div>
                     <div id="centerText" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:${Math.max(10, rs.size/30)}px; font-weight:bold; color:#f14c4c; background:rgba(10,10,10,0.8); padding:8px 12px; border-radius:8px; border:1px solid #f14c4c; width: 35%; text-transform:uppercase; transition: 0.2s;">RADIAL MINIMAP</div>
                 </div>
-                <div id="ghostDot" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:6px; height:6px; background-color:#f14c4c; border-radius:50%; opacity:0; transition: opacity 0.2s;"></div>
+                <div id="ghostDot" style="position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:14px; height:14px; background-color:#f14c4c; border-radius:50%; opacity:0; transition: opacity 0.2s; box-shadow: 0 0 12px #f14c4c, 0 0 24px rgba(241,76,76,0.5); z-index:999;"></div>
             </div>
             <script>
             const { ipcRenderer } = require('electron');
@@ -327,13 +327,13 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             ipcRenderer.on('update-hud', (e, data) => {
                 const { slice, labels, isActive, ghostMode } = data;
 
-                // 🟢 IF HIDDEN, STRIP ALL UI EXCEPT THE RED DOT
+                // 🐛 FIX: When hidden (ghostMode), hide ONLY the container ring, NOT the ghostDot!
                 if (ghostMode) {
                     container.style.opacity = '0';
                     return; 
                 } else {
                     container.style.opacity = '1';
-                    ghostDot.style.opacity = '0';
+                    ghostDot.style.opacity = '0'; // Hide dot when container is fully visible
                 }
 
                 if (isActive) {
@@ -493,6 +493,13 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
                 // 🟢 FIX: Appended ghostMode: false
                 global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
+                // 🐛 BUG 3 FIX: Force z-order above overlay after showing
+                setTimeout(() => {
+                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                        global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 3);
+                        global.radialHudWindow.moveTop();
+                    }
+                }, 200);
             }
 
             if (!bgmiTrackerProcess) {
@@ -508,10 +515,15 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                     'public class KeyH {',
                     '    [DllImport("user32.dll")]',
                     '    public static extern short GetAsyncKeyState(int vKey);',
+                    '    [DllImport("user32.dll")]',
+                    '    public static extern bool GetCursorPos(out POINT lpPoint);',
+                    '    [StructLayout(LayoutKind.Sequential)]',
+                    '    public struct POINT { public int X; public int Y; }',
                     '}',
                     '"@',
                     'Add-Type -TypeDefinition $code',
                     '$ctrlDown = $false',
+                    '$lastScrollCheck = [DateTime]::Now',
                     'while ($true) {',
                     '    $state = [KeyH]::GetAsyncKeyState(0x11)',
                     '    $isDown = ($state -band 0x8000) -ne 0',
@@ -523,6 +535,17 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                     '        } else { ',
                     '            [Console]::WriteLine("CTRL_UP")',
                     '            [Console]::Out.Flush()',
+                    '        }',
+                    '    }',
+                    '    # Feature 5: Ctrl+Scroll detection via mouse position delta',
+                    '    if ($ctrlDown) {',
+                    '        $now = [DateTime]::Now',
+                    '        if (($now - $lastScrollCheck).TotalMilliseconds -ge 100) {',
+                    '            $pt = New-Object KeyH+POINT',
+                    '            [KeyH]::GetCursorPos([ref]$pt) | Out-Null',
+                    '            [Console]::WriteLine("MOUSE_POS_" + $pt.X + "_" + $pt.Y)',
+                    '            [Console]::Out.Flush()',
+                    '            $lastScrollCheck = $now',
                     '        }',
                     '    }',
                     '    Start-Sleep -Milliseconds 15',
@@ -646,6 +669,20 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                 }
                             }
                         }
+
+                        // 🆕 Feature 5: Track mouse position while Ctrl held (for scroll pane targeting)
+                        if (output.startsWith('MOUSE_POS_')) {
+                            // Send mouse position to renderer so it knows which pane cursor is over
+                            const parts = output.split('_');
+                            const mouseX = parseInt(parts[2]);
+                            const mouseY = parseInt(parts[3]);
+                            if (!isNaN(mouseX) && !isNaN(mouseY)) {
+                                const mainAppWindow = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
+                                if (mainAppWindow && !mainAppWindow.isDestroyed()) {
+                                    mainAppWindow.webContents.send('ctrl-mouse-position', { x: mouseX, y: mouseY });
+                                }
+                            }
+                        }
                     }
                 });
 
@@ -654,8 +691,11 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 });
             }
         } else {
-            // Mode Cleanup
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
+            // 🐛 BUG 3+6 FIX: Full cleanup — destroy radial, kill tracker
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.destroy();
+                global.radialHudWindow = null;
+            }
             if (bgmiTrackerProcess) {
                 bgmiTrackerProcess.kill();
                 bgmiTrackerProcess = null;
@@ -663,6 +703,11 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             if (radialTelemetryLoop) {
                 clearInterval(radialTelemetryLoop);
                 radialTelemetryLoop = null;
+            }
+            global.isRadialModeActive = false;
+            if (global.ctrlHoldTimer) {
+                clearTimeout(global.ctrlHoldTimer);
+                global.ctrlHoldTimer = null;
             }
         }
     });

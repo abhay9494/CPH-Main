@@ -73,34 +73,64 @@ function launchDualBrains() {
         webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfileId}` }
     });
     voiceWebWindow.setContentProtection(true);
+    voiceWebWindow.webContents.setAudioMuted(true);
+
     if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
     voiceWebWindow.loadURL(voiceProvider.url);
     
     // Voice WebRTC Injection (Keeps Mic Alive)
+    // Voice WebRTC Injection (Keeps Mic Alive & Captures System Audio)
     voiceWebWindow.webContents.on('dom-ready', async () => {
         voiceWebWindow.webContents.insertCSS('* { cursor: default !important; }');
+        
         try {
+            // Grab the native OS Screen ID from the backend
             const { desktopCapturer } = require('electron');
             const sources = await desktopCapturer.getSources({ types: ['screen'] });
             if (!sources || sources.length === 0) return;
             const screenSourceId = sources[0].id;
+
+            // 🟢 THE WEBRTC HIJACK V3: Native Electron Loopback Bypass
             const hijackScript = `
                 if (!window.__micHijacked) {
                     window.__micHijacked = true;
+                    
                     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
                     navigator.mediaDevices.getUserMedia = async (constraints) => {
                         if (constraints && constraints.audio) {
-                            const stream = await originalGetUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } } });
-                            const audioTrack = stream.getAudioTracks()[0];
-                            return new MediaStream([audioTrack]);
+                            try {
+                                console.log("🕵️‍♂️ Hardware Mic Blocked. Routing System Audio directly...");
+                                
+                                // Use Electron's native desktop source to bypass the "User Gesture" block!
+                                const stream = await originalGetUserMedia({
+                                    audio: { mandatory: { chromeMediaSource: 'desktop' } },
+                                    video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } }
+                                });
+                                
+                                const audioTrack = stream.getAudioTracks()[0];
+                                const videoTrack = stream.getVideoTracks()[0];
+                                if (videoTrack) videoTrack.stop(); // Destroy the video feed
+                                
+                                return new MediaStream([audioTrack]);
+                            } catch (e) {
+                                console.error('🔥 Loopback Hijack Failed:', e);
+                                // 🛑 ABSOLUTE SECURITY OVERRIDE: 
+                                // Return DEAD AIR. Mathematically guarantee the physical mic is never leaked!
+                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                const dest = ctx.createMediaStreamDestination();
+                                return dest.stream; 
+                            }
                         }
                         return originalGetUserMedia(constraints);
                     };
                 }
                 true;
             `;
+            
             await voiceWebWindow.webContents.executeJavaScript(hijackScript);
-        } catch (err) {}
+        } catch (err) {
+            console.error('Failed to inject WebRTC Hijack:', err);
+        }
     });
 
     // --- 💻 2. CODE BRAIN ---
@@ -137,6 +167,8 @@ function startDualScrapers(voiceProvider, codeProvider) {
     
     let lastVoiceMsg = { count: 0, text: "" };
     let lastCodeMsg = { count: 0, text: "" };
+    let lastMicState = null; // 🟢 RESTORED: Track Mic Truth
+    let lastVoiceTranscript = ''; // 🆕 Feature 6.5: Track last interviewer transcription
 
     scrapingInterval = setInterval(async () => {
         const scrape = async (win, provider) => {
@@ -155,40 +187,126 @@ function startDualScrapers(voiceProvider, codeProvider) {
             `);
         };
 
-        const vData = await scrape(voiceWebWindow, voiceProvider);
-        if (vData) {
-            if (vData.count !== lastVoiceMsg.count || vData.text !== lastVoiceMsg.text) {
-                lastVoiceMsg = vData;
-                BrowserWindow.getAllWindows().forEach(w => w.webContents.send('voice-new-message', vData.text));
+        // 🟢 VOICE BRAIN ROUTER (Splits "New" vs "Update")
+        const vData = await scrape(voiceWebWindow, voiceProvider).catch(() => null);
+        if (vData && typeof vData.text === 'string') {
+            const safeVText = String(vData.text);
+            if (vData.count > lastVoiceMsg.count) {
+                BrowserWindow.getAllWindows().forEach(w => {
+                    if (!w.isDestroyed()) try { w.webContents.send('voice-new-message', safeVText); } catch(e) {}
+                });
+            } else if (vData.count === lastVoiceMsg.count && safeVText !== lastVoiceMsg.text) {
+                BrowserWindow.getAllWindows().forEach(w => {
+                    if (!w.isDestroyed()) try { w.webContents.send('voice-update-message', safeVText); } catch(e) {}
+                });
             }
+            lastVoiceMsg = { count: vData.count, text: safeVText };
         }
 
-        const cData = await scrape(codeWebWindow, codeProvider);
-        if (cData) {
-            if (cData.count !== lastCodeMsg.count || cData.text !== lastCodeMsg.text) {
-                lastCodeMsg = cData;
-                BrowserWindow.getAllWindows().forEach(w => w.webContents.send('code-new-message', cData.text));
+        // 🟢 CODE BRAIN ROUTER (Splits "New" vs "Update")
+        const cData = await scrape(codeWebWindow, codeProvider).catch(() => null);
+        if (cData && typeof cData.text === 'string') {
+            const safeCText = String(cData.text);
+            if (cData.count > lastCodeMsg.count) {
+                BrowserWindow.getAllWindows().forEach(w => {
+                    if (!w.isDestroyed()) try { w.webContents.send('code-new-message', safeCText); } catch(e) {}
+                });
+            } else if (cData.count === lastCodeMsg.count && safeCText !== lastCodeMsg.text) {
+                BrowserWindow.getAllWindows().forEach(w => {
+                    if (!w.isDestroyed()) try { w.webContents.send('code-update-message', safeCText); } catch(e) {}
+                });
             }
+            lastCodeMsg = { count: cData.count, text: safeCText };
+        }
+
+        // 🟢 CONTINUOUS DOM MIC SPY
+        if (voiceWebWindow && !voiceWebWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+            const spyScript = `
+                (function() {
+                    try {
+                        var btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
+                        var activeBtn = btns.find(function(b) { 
+                            var txt = (b.textContent || '').trim().toLowerCase(); 
+                            var aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
+                            var testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
+                            return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); 
+                        });
+                        return !!activeBtn;
+                    } catch(e) { return false; }
+                })();
+            `;
+            
+            voiceWebWindow.webContents.executeJavaScript(spyScript)
+                .then((isMicActive) => {
+                    if (isMicActive !== lastMicState) {
+                        lastMicState = isMicActive;
+                        BrowserWindow.getAllWindows().forEach(w => {
+                            if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
+                                w.webContents.send('sync-mic-state', !!isMicActive);
+                            }
+                        });
+                    }
+                })
+                .catch(() => { /* Ignore errors silently */ });
+
+            // 🆕 Feature 6.5: Scrape interviewer transcription (user-turn messages)
+            const transcriptScript = `
+                (function() {
+                    try {
+                        var userMsgs = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
+                        if (userMsgs.length === 0) return '';
+                        var lastMsg = userMsgs[userMsgs.length - 1];
+                        return (lastMsg.innerText || lastMsg.textContent || '').trim().substring(0, 500);
+                    } catch(e) { return ''; }
+                })();
+            `;
+            voiceWebWindow.webContents.executeJavaScript(transcriptScript)
+                .then((transcript) => {
+                    if (typeof transcript === 'string' && transcript.length > 0 && transcript !== lastVoiceTranscript) {
+                        lastVoiceTranscript = transcript;
+                        BrowserWindow.getAllWindows().forEach(w => {
+                            if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
+                                try { w.webContents.send('voice-transcription-update', String(transcript)); } catch(e) {}
+                            }
+                        });
+                    }
+                })
+                .catch(() => {});
         }
     }, 1000);
 }
 
-// 🟢 ASYNC DOM HELPER FOR SENDING MESSAGES
+// 🟢 ASYNC DOM HELPER FOR SENDING MESSAGES (Crash-Proof)
 async function sendPayloadToWindow(win, customText, images = []) {
     if (!win || win.isDestroyed()) return;
     const { clipboard, nativeImage } = require('electron');
     
+    // 🟢 PREVENT REACT CRASH: Check if the textbox actually exists and is visible before pasting!
+    const isBoxReady = await win.webContents.executeJavaScript(`(() => { 
+        try {
+            const el = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); 
+            if (el && el.offsetParent !== null) { 
+                el.focus(); 
+                return true; 
+            }
+            return false;
+        } catch(e) { return false; }
+    })()`);
+    
+    if (!isBoxReady) {
+        console.log("🛑 Aborted Paste: Textbox is hidden (AI is currently in Voice Mode).");
+        return;
+    }
+    
     for (let imgData of images) {
         const img = nativeImage.createFromDataURL(imgData);
         clipboard.writeImage(img);
-        await win.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         win.webContents.paste();
         await new Promise(r => setTimeout(r, 400));
     }
     
     if (customText) {
         clipboard.writeText(customText);
-        await win.webContents.executeJavaScript(`document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor')?.focus();`);
         win.webContents.paste();
     }
 
@@ -196,12 +314,13 @@ async function sendPayloadToWindow(win, customText, images = []) {
     let isReady = false;
     let attempts = 0;
     while (!isReady && attempts < 40) {
-        isReady = await win.webContents.executeJavaScript(`(() => { const btn = document.querySelector('${sendBtnSelector}'); return btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'; })()`);
+        // 🟢 FIX: Strict boolean return prevents "Object cannot be cloned" IPC crashes
+        isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
         if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
     }
     
     await new Promise(r => setTimeout(r, 200));
-    await win.webContents.executeJavaScript(`try { document.querySelector('${sendBtnSelector}')?.click(); } catch(e) {}`);
+    await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) btn.click(); return true; } catch(e) { return false; } })()`);
     setTimeout(() => { if (!win.isDestroyed()) win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); }, 200);
 }
 
@@ -599,12 +718,18 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.on('view-changed', (event, view) => {
         if (view !== 'assistant') {
+            // 🟢 FIX: Bulletproof backend state reset!
+            global.currentSessionMode = 'main';
+            global.isLiveInterviewMode = false;
+            global.isClickThroughState = false; // 🐛 BUG 4 FIX: Force click-through OFF
+            
             isGhostHidden = false;
             global.isGhostHidden = false;
             wasAiVisibleBeforeGhost = false;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.setOpacity(1);
+                mainWindow.setIgnoreMouseEvents(false); // 🐛 BUG 4 FIX: Explicit reset
             }
 
             // 🟢 DUAL BRAIN FIX: Hide BOTH AI windows and cure the 0-opacity lock bug!
@@ -619,9 +744,14 @@ function setupGeneralIpcHandlers() {
                 codeWebWindow.setIgnoreMouseEvents(false);
             }
 
+            // 🐛 BUG 6 FIX: Destroy radial HUD completely when leaving assistant
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                global.radialHudWindow.hide();
+                global.radialHudWindow.destroy();
+                global.radialHudWindow = null;
             }
+        } else if (!mainWindow.isDestroyed()) {
+            // Restore clicks if we enter the assistant naturally
+            mainWindow.setIgnoreMouseEvents(false);
         }
     });
 
@@ -725,76 +855,36 @@ function setupGeneralIpcHandlers() {
     });
 
     // ==========================================================
-    // MANUAL MIC TOGGLE (Hardware Release Fix)
+    // MANUAL MIC TOGGLE (Crash-Proof DOM Sniper)
     // ==========================================================
     ipcMain.handle('toggle-ai-mic', async (event, isTurningOn) => {
         if (!voiceWebWindow || voiceWebWindow.isDestroyed()) return false;
-        const script = isTurningOn ?
-            `(() => {
+        
+        // 🟢 STRICT ES5 IIFE: Returns ONLY a primitive boolean to prevent "Object cannot be cloned" IPC crash!
+        const script = `
+            (function() {
                 try { 
-                    const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
-                    const mBtn = btns.find(b => { 
-                        const aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
-                        const testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
-                        const text = (b.textContent || '').toLowerCase();
-                        return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice') || text.includes('start voice'); 
+                    var btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
+                    var targetBtn = btns.find(function(b) { 
+                        var txt = (b.textContent || '').trim().toLowerCase(); 
+                        var aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
+                        var testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
+                        var isTurnOn = ${isTurningOn};
+                        if (isTurnOn) {
+                            return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice') || txt.includes('start voice');
+                        } else {
+                            return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop');
+                        }
                     }); 
-                    if (mBtn) { mBtn.click(); return true; }
+                    if (targetBtn) { targetBtn.click(); return true; }
                     return false;
                 } catch(e) { return false; }
-            })()`
-            :
-            `(() => {
-                try { 
-                    const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
-                    const endBtn = btns.find(b => { 
-                        const txt = (b.textContent || '').trim().toLowerCase(); 
-                        const aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
-                        const testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
-                        return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); 
-                    }); 
-                    if (endBtn) { endBtn.click(); return true; }
-                    return false;
-                } catch(e) { return false; }
-            })()`;
+            })();
+        `;
             
         try {
             const result = await voiceWebWindow.webContents.executeJavaScript(script);
-            
-            // Restore DOM Scraping to update the overlay!
-            if (micSpyInterval) clearInterval(micSpyInterval);
-            micSpyInterval = setInterval(async () => {
-                if (!voiceWebWindow || voiceWebWindow.isDestroyed()) {
-                    clearInterval(micSpyInterval);
-                    return;
-                }
-                try {
-                    const isMicActive = await voiceWebWindow.webContents.executeJavaScript(`
-                        (() => {
-                            try {
-                                const btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
-                                const activeBtn = btns.find(b => { 
-                                    const txt = (b.textContent || '').trim().toLowerCase(); 
-                                    const aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
-                                    const testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
-                                    return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); 
-                                });
-                                return !!activeBtn;
-                            } catch(e) { return false; }
-                        })();
-                    `);
-                    
-                    BrowserWindow.getAllWindows().forEach(w => {
-                        if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
-                            w.webContents.send('sync-mic-state', isMicActive);
-                        }
-                    });
-                } catch (err) {
-                    // Ignore errors if the page is navigating or destroyed
-                }
-            }, 1000);
-            
-            return result;
+            return result === true;
         } catch (err) {
             return false;
         }
@@ -817,7 +907,10 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('send-oa-automation', async (event, language) => {
         if (accumulatedScreenshots.length === 0) return false;
         const codePrompt = PROMPTS.OA_AUTOMATION(language);
-        const voicePrompt = PROMPTS.VOICE_CONTEXT;
+        // 🆕 Feature 1: Different prompt per brain in interview mode
+        const voicePrompt = global.currentSessionMode === 'proctored_live_interview' 
+            ? PROMPTS.VOICE_SCREENSHOT_CONTEXT 
+            : PROMPTS.VOICE_CONTEXT;
         await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
         setTimeout(async () => {
             await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots);
@@ -837,23 +930,68 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('send-oa-fix-error', async () => {
         if (accumulatedScreenshots.length === 0) return false;
         await sendPayloadToWindow(codeWebWindow, PROMPTS.FIX_ERROR, accumulatedScreenshots);
+        // 🆕 Feature 8: Voice Brain gets read-only context for fix errors too
+        const voiceFixPrompt = global.currentSessionMode === 'proctored_live_interview'
+            ? PROMPTS.VOICE_SCREENSHOT_CONTEXT
+            : PROMPTS.VOICE_CONTEXT;
         setTimeout(async () => {
-            await sendPayloadToWindow(voiceWebWindow, PROMPTS.VOICE_CONTEXT, accumulatedScreenshots);
+            await sendPayloadToWindow(voiceWebWindow, voiceFixPrompt, accumulatedScreenshots);
             accumulatedScreenshots = [];
         }, 1500);
         return true;
     });
 
-    ipcMain.handle('send-oa-regenerate', async () => {
-        const script = `(() => { const btn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent||'').toLowerCase().includes('regenerate') || (b.getAttribute('aria-label')||'').toLowerCase().includes('regenerate')); if(btn) btn.click(); })();`;
-        if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.webContents.executeJavaScript(script);
-        if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.webContents.executeJavaScript(script);
+    ipcMain.handle('send-oa-regenerate', async (event, target) => {
+        // 🆕 Feature 11: Cursor-aware regenerate — target = 'voice', 'code', or undefined (both)
+        const script = `(() => { try { const btn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent||'').toLowerCase().includes('regenerate') || (b.getAttribute('aria-label')||'').toLowerCase().includes('regenerate')); if(btn) { btn.click(); return true; } return false; } catch(e) { return false; } })();`;
+        if (target === 'voice') {
+            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+        } else if (target === 'code') {
+            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+        } else {
+            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+        }
         return true;
     });
 
     ipcMain.handle('send-manual-text', async (event, text) => {
         if (!text) return;
         await sendPayloadToWindow(voiceWebWindow, text, []);
+    });
+
+    // ==========================================================
+    // 🆕 Phase 3: CODE→VOICE BRAIN SYNC (Silent Context Injection)
+    // ==========================================================
+    ipcMain.handle('sync-code-to-voice', async (event, codeText) => {
+        if (!voiceWebWindow || voiceWebWindow.isDestroyed() || !codeText) return false;
+        if (global.currentSessionMode !== 'proctored_live_interview') return false;
+        const syncPrompt = PROMPTS.CODE_TO_VOICE_SYNC(String(codeText));
+        await sendPayloadToWindow(voiceWebWindow, syncPrompt, []);
+        return true;
+    });
+
+    // ==========================================================
+    // 🆕 Phase 3: SESSION HANDOFF (Account Rotation Context Transfer)
+    // ==========================================================
+    ipcMain.handle('generate-session-handoff', async (event, handoffData) => {
+        const { problemDesc, lastCode, conversationSummary, status } = handoffData || {};
+        const handoffPrompt = PROMPTS.SESSION_HANDOFF(
+            String(problemDesc || ''),
+            String(lastCode || ''),
+            String(conversationSummary || ''),
+            String(status || 'In progress')
+        );
+        // Reload both brains with new loadout first
+        launchDualBrains();
+        // Wait for DOM ready, then inject context
+        setTimeout(async () => {
+            await sendPayloadToWindow(codeWebWindow, handoffPrompt, []);
+            setTimeout(async () => {
+                await sendPayloadToWindow(voiceWebWindow, handoffPrompt, []);
+            }, 2000);
+        }, 5000);
+        return true;
     });
 
     // ==========================================================
@@ -903,6 +1041,11 @@ function setupGeneralIpcHandlers() {
                     codeWebWindow.setBounds({ x, y, width: safeWidth, height: safeHeight });
                     codeWebWindow.showInactive();
                 }
+                
+                // 🟢 STRICT FIX: Force Voice Brain to hide so it doesn't leak into OA!
+                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                    voiceWebWindow.hide();
+                }
             } else {
                 // 🟢 DUAL BRAIN (50/50 Split)
                 const halfWidth = Math.floor(width / 2);
@@ -923,7 +1066,7 @@ function setupGeneralIpcHandlers() {
             }
 
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
                 global.radialHudWindow.moveTop();
             }
             return true;
@@ -1165,7 +1308,12 @@ function setupGeneralIpcHandlers() {
     });
 
     // 🟢 THE MASTER STEALTH TOGGLE (United for both Mouse and Keyboard!)
+    let stealthToggleLock = false;
     global.toggleStealthMode = () => {
+        if (stealthToggleLock) return; // 🐛 Debounce guard against double-fire race condition
+        stealthToggleLock = true;
+        setTimeout(() => { stealthToggleLock = false; }, 300); // 300ms lockout
+
         if (mainWindow && !mainWindow.isDestroyed()) {
             isGhostHidden = !isGhostHidden;
             global.isGhostHidden = isGhostHidden;
@@ -1190,8 +1338,9 @@ function setupGeneralIpcHandlers() {
                     codeWebWindow.setIgnoreMouseEvents(true, { forward: true });
                 }
                 
-                // 🟢 LINK THE MINIMAP TO STEALTH MODE
+                // 🐛 FIX: Use OPACITY instead of hide() so radial still receives IPC (red dot!)
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                    global.radialHudWindow.setOpacity(0);
                     global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true });
                 }
                 
@@ -1214,19 +1363,22 @@ function setupGeneralIpcHandlers() {
                 }
             }
             
-            // 🟢 RESTORE THE MINIMAP
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
-                global.radialHudWindow.showInactive();
+            // 🐛 FIX: Restore radial from opacity=0 (not from hide) if still in interview mode
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+                global.radialHudWindow.setOpacity(1);
                 global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
                 global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
             }
 
-            // 🟢 THE Z-INDEX RESTACKER (Ensures Minimap sits ON TOP of Transparent Dark Panes)
+            // 🟢 THE Z-INDEX RESTACKER
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.isLiveInterviewMode) {
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
                 setTimeout(() => {
-                    if (!global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop();
-                }, 50); // 50ms delay guarantees the OS finishes painting the MainWindow first
+                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                        global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 3);
+                        global.radialHudWindow.moveTop();
+                    }
+                }, 100);
             }
         }
         }

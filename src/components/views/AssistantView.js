@@ -224,7 +224,9 @@ export class AssistantView extends LitElement {
         voiceChatHistory: { type: Array },
         codeChatIndex: { type: Number },
         voiceChatIndex: { type: Number },
-        paneHoverState: { type: String }
+        paneHoverState: { type: String },
+        voiceTranscript: { type: String }, // 🆕 Feature 6.5: Live interviewer transcription
+        lastCodeSyncedText: { type: String } // 🆕 Phase 3: Track last synced code to avoid re-sending
     };
 
     constructor() {
@@ -288,6 +290,9 @@ export class AssistantView extends LitElement {
         this.codeChatIndex = 0;
         this.voiceChatIndex = 0;
         this.paneHoverState = 'code';
+        this.voiceTranscript = ''; // 🆕 Feature 6.5
+        this.lastCodeSyncedText = ''; // 🆕 Phase 3
+        this.activePage = 1; // 🐛 BUG 2 FIX: Always start on page 1
     }
 
     showToast(msg) {
@@ -373,6 +378,15 @@ export class AssistantView extends LitElement {
             // 🎯 The AI has been silent for 4 seconds. The payload is ready. FIRE THE PING!
             if (window.require) {
                 window.require('electron').ipcRenderer.send('ai-generation-complete');
+                
+                // 🆕 Phase 3: Code→Voice Brain Sync (Silent Context Injection)
+                if (this.currentMode === 'proctored_live_interview' && this.codeChatHistory.length > 0) {
+                    const latestCode = this.codeChatHistory[this.codeChatHistory.length - 1];
+                    if (latestCode && latestCode !== this.lastCodeSyncedText && latestCode.length > 50) {
+                        this.lastCodeSyncedText = latestCode;
+                        window.require('electron').ipcRenderer.invoke('sync-code-to-voice', String(latestCode)).catch(() => {});
+                    }
+                }
             }
             this.requestUpdate();
         }, 4000); 
@@ -435,6 +449,20 @@ export class AssistantView extends LitElement {
                 this.requestUpdate();
             });
 
+            ipcRenderer.on('voice-update-message', (event, text) => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                this.markAiActive();
+                if (this.voiceChatHistory.length > 0) {
+                    const a = [...this.voiceChatHistory];
+                    a[a.length - 1] = text;
+                    this.voiceChatHistory = a;
+                } else {
+                    this.voiceChatHistory = [text];
+                    this.voiceChatIndex = 0;
+                }
+                this.requestUpdate();
+            });
+
             ipcRenderer.on('code-new-message', (event, text) => {
                 if (this.currentMode !== 'proctored_live_interview') return;
                 this.markAiActive();
@@ -442,7 +470,75 @@ export class AssistantView extends LitElement {
                 this.codeChatIndex = this.codeChatHistory.length - 1;
                 this.requestUpdate();
             });
+
+            ipcRenderer.on('code-update-message', (event, text) => {
+                if (this.currentMode !== 'proctored_live_interview') return;
+                this.markAiActive();
+                if (this.codeChatHistory.length > 0) {
+                    const a = [...this.codeChatHistory];
+                    a[a.length - 1] = text;
+                    this.codeChatHistory = a;
+                } else {
+                    this.codeChatHistory = [text];
+                    this.codeChatIndex = 0;
+                }
+                this.requestUpdate();
+            });
+
+            // 🆕 Feature 6.5: Live Interviewer Transcription
+            ipcRenderer.on('voice-transcription-update', (event, transcript) => {
+                if (typeof transcript === 'string' && transcript.length > 0) {
+                    this.voiceTranscript = transcript;
+                    this.requestUpdate();
+                }
+            });
+
+            // 🆕 Feature 5: Ctrl+Scroll — temporarily capture wheel events for overlay scrolling
+            this._ctrlHeld = false;
+            ipcRenderer.on('ctrl-mouse-position', (event, pos) => {
+                if (this.currentMode !== 'proctored_live_interview' && this.currentMode !== 'proctored_oa') return;
+                // While Ctrl is held, temporarily disable ghost mode so we capture wheel events
+                if (!this._ctrlHeld) {
+                    this._ctrlHeld = true;
+                    // Temporarily un-ghost for wheel capture
+                    if (this._isCurrentlyGhosting) {
+                        this._wasGhostBeforeCtrl = true;
+                        this.setGhostMode(false);
+                    }
+                }
+                // Track which pane the cursor is over
+                const screenMid = window.screen.width / 2;
+                this.paneHoverState = pos.x < screenMid ? 'code' : 'voice';
+            });
+
+            // When Ctrl releases, restore ghost mode
+            this._ctrlReleaseHandler = () => {
+                if (this._ctrlHeld) {
+                    this._ctrlHeld = false;
+                    if (this._wasGhostBeforeCtrl) {
+                        this._wasGhostBeforeCtrl = false;
+                        setTimeout(() => this.setGhostMode(true), 100);
+                    }
+                }
+            };
+            // Listen for the radial CTRL_UP (it fires execute-radial-hud which means ctrl released)
+            // We can piggyback on the existing ghost-state-changed or add a dedicated one
         }
+
+        // 🆕 Feature 5: Wheel event handler for overlay scrolling
+        this._wheelHandler = (e) => {
+            if (!this._ctrlHeld) return; // Only intercept when Ctrl is held
+            e.preventDefault();
+            e.stopPropagation();
+            
+            const targetPaneId = this.paneHoverState === 'voice' ? 'chat-pane' : 'code-pane';
+            const pane = this.shadowRoot.querySelector(`#${targetPaneId}`);
+            if (pane) {
+                pane.scrollBy({ top: e.deltaY > 0 ? 80 : -80, behavior: 'smooth' });
+            }
+        };
+        // Attach to shadow root to capture wheel events inside the component
+        this.addEventListener('wheel', this._wheelHandler, { passive: false });
 
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
@@ -506,23 +602,20 @@ export class AssistantView extends LitElement {
                 if (this.currentProfileId) {
                     await ipcRenderer.invoke('switch-ai-profile', this.currentProfileId);
                     
-                    // 🟢 SMART AUTO-START VOICE BRAIN
+                    // 🟢 SMART AUTO-START VOICE BRAIN (Truth Driven)
                     if (this.currentMode === 'proctored_live_interview') {
                         let attempts = 0;
                         const tryMic = setInterval(async () => {
                             attempts++;
-                            if (this.isMicOn || attempts > 15) { // Stop after 15 seconds
+                            // Only stop when the background spy confirms the mic is actually ON, or we hit 20 attempts
+                            if (this.isMicOn || attempts > 20) { 
                                 clearInterval(tryMic);
+                                if (this.isMicOn) this.showToast('🎙️ Voice Brain Auto-Started');
                                 return;
                             }
-                            const success = await ipcRenderer.invoke('toggle-ai-mic', true);
-                            if (success) {
-                                this.isMicOn = true;
-                                this.showToast('🎙️ Voice Brain Auto-Started');
-                                this.requestUpdate();
-                                clearInterval(tryMic);
-                            }
-                        }, 1000); // Try to click it every 1 second until it works
+                            // Ask backend to click the button. The spy will handle updating this.isMicOn automatically.
+                            if (window.require) await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', true);
+                        }, 1500); // Try every 1.5 seconds to give the DOM time to react
                     }
                 }
                 if (prefs.tacThinkMode !== undefined) {
@@ -824,17 +917,18 @@ export class AssistantView extends LitElement {
         this.syncRadialToBackend();
     }
 
-    // 🟢 FIX: Strictly enforce Widget visibility after the component properties finish loading
+    // 🟢 FIX: Strictly enforce Widget visibility
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('currentMode')) {
             if (window.require) {
                 const { ipcRenderer } = window.require('electron');
                 
-                // 🟢 TELL BACKGROUND WE ARE IN OA MODE TO NUKE SHORTCUTS
-                ipcRenderer.send('set-oa-mode', this.currentMode === 'proctored_oa');
+                // 🟢 STRICT LOCK: Deadlock the widget for BOTH proctored modes
+                const isProctored = this.currentMode === 'proctored_oa' || this.currentMode === 'proctored_live_interview';
+                ipcRenderer.send('set-oa-mode', isProctored);
 
-                if (this.currentMode === 'proctored_oa' || this.currentMode === 'proctored_live_interview') {
+                if (isProctored) {
                     ipcRenderer.invoke('hide-widget');
                 } else {
                     ipcRenderer.invoke('show-widget').then(() => this.syncWidgetState());
@@ -873,7 +967,14 @@ export class AssistantView extends LitElement {
             case 'capture': this.showToast('📸 Screenshot Captured'); this.handleCaptureScreenshot(); break;
             case 'send_ai': this.showToast('🚀 Firing to AI'); this.handleSendToAI(); break;
             case 'fix_error': this.showToast('🔧 Fixing Error...'); this.handleFixError(); break;
-            case 'hide_unhide': this.showToast('👻 Toggled Stealth'); window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); break;
+            case 'hide_unhide':
+                // 🐛 FIX: Frontend debounce — prevent double-fire during async IPC round-trip
+                if (this._hideUnhideLock) break;
+                this._hideUnhideLock = true;
+                setTimeout(() => { this._hideUnhideLock = false; }, 500);
+                this.showToast('👻 Toggled Stealth');
+                window.require('electron').ipcRenderer.invoke('trigger-ghost-hide');
+                break;
             case 'toggle_page2':
                 this.activePage = this.activePage === 1 ? 2 : 1;
                 this.showToast(`📄 Switched to Page ${this.activePage}`);
@@ -1101,16 +1202,14 @@ export class AssistantView extends LitElement {
                 this.handleStopTyping();
                 this.setGhostMode(false); // Instantly turn off click-through
                 if (window.require) {
-                    window.require('electron').ipcRenderer.send('set-oa-mode', false);
+                    // 🐛 BUG 6 FIX: Kill radial FIRST, then change mode
                     window.require('electron').ipcRenderer.send('toggle-radial-permanent', false);
+                    window.require('electron').ipcRenderer.send('set-oa-mode', false);
+                    window.require('electron').ipcRenderer.send('set-session-mode', 'main');
                 }
-                // Try to gracefully click the header back button, otherwise force reload to Hub
-                const header = document.querySelector('app-header');
-                if (header && header.onBackClick) {
-                    header.onBackClick();
-                } else {
-                    window.location.reload(); 
-                }
+                this.activePage = 1; // 🐛 BUG 2 FIX: Reset page on abort
+                // 🟢 FIX: Dispatch a clean routing event instead of reloading the whole page!
+                window.dispatchEvent(new CustomEvent('return-to-main'));
                 break;
 
             case 'regenerate':
@@ -1692,21 +1791,13 @@ export class AssistantView extends LitElement {
                 return;
             }
 
-            // 🟢 THE STRICT XML + MARKDOWN INJECTION PAYLOAD
-            let payload = `[SYSTEM DIRECTIVE: Act as an expert candidate interviewing for the role of "${prefs.interviewRole || 'Candidate'}" taking a live coding interview.]\n`;
-            payload += `[CRITICAL RULE 1: You are the candidate. ALWAYS use FIRST-PERSON pronouns ("I", "my", "we"). NEVER refer to the candidate in the third person.]\n`;
-            payload += `[CRITICAL RULE 2: STRICT XML RESPONSE FORMATTING. You MUST format your ENTIRE response using ONLY the following XML tags:]\n\n`;
-            
-            payload += `<CHAT>\nPut all normal conversation, logic explanations, complexity analysis, and greeting acknowledgments here.\n</CHAT>\n\n`;
-            payload += `<FULL_CODE>\nPut ONLY the complete, functional code here. You MUST wrap the code inside standard Markdown code blocks (e.g., \`\`\`cpp ... \`\`\`) so it formats correctly on my screen!\n</FULL_CODE>\n\n`;
-            payload += `<MINOR_FIX>\nIf I ask for a small syntax fix or point out a bug, put the short corrected snippet here. You MUST wrap the code inside standard Markdown code blocks (e.g., \`\`\`cpp ... \`\`\`)!\n</MINOR_FIX>\n\n`;
-            
-            payload += `[CANDIDATE BACKGROUND/RESUME DATA:\n${prefs.customPrompt}]\n\n`;
-            payload += `Please acknowledge that you have received this resume and understand the strict XML + Markdown formatting rules. Keep it brief. Respond ONLY using the <CHAT> tag.`;
+            // 🆕 Feature 10: Clean profile context — no more XML tags
+            const role = prefs.interviewRole || 'Software Engineer';
+            const payload = `[SYSTEM DIRECTIVE: Act as an expert candidate interviewing for the role of "${role}".]\n\nCRITICAL RULES:\n1. You ARE the candidate. ALWAYS use first-person pronouns ("I", "my", "we").\n2. Answer in clear, structured format. Use Markdown code blocks for code.\n3. Be concise but thorough. Show your thought process.\n4. If asked about your background, reference the resume data below.\n\nCANDIDATE BACKGROUND/RESUME:\n${prefs.customPrompt}\n\nPlease acknowledge that you have received this context. Keep it brief.`;
 
-            this.lastUserPrompt = "📄 Sent Profile Context & XML Formatting Rules to AI";
+            this.lastUserPrompt = "📄 Sent Profile Context to AI";
 
-            this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ingesting context & rules...)`];
+            this.localChatHistory = [...this.localChatHistory, `${this.lastUserPrompt}\n\n🤖 AI: (Ingesting context...)`];
             this.localChatIndex = this.localChatHistory.length - 1;
             this.requestUpdate();
             this.saveCurrentSession();
@@ -1755,15 +1846,19 @@ export class AssistantView extends LitElement {
     async handleToggleMic() {
         if (this.isSolving) return this.showToast('⏳ AI is busy...');
         if (!this.validateSetup()) return;
-        this.isMicOn = !this.isMicOn;
-        if (window.require) await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', this.isMicOn);
-        this.requestUpdate();
+        
+        this.showToast('🎙️ Toggling Mic...');
+        // 🟢 FIX: Do NOT toggle this.isMicOn manually! Ask the backend to click it, and wait for the DOM spy to sync the true state.
+        if (window.require) {
+            await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', !this.isMicOn);
+        }
     }
 
     setGhostMode(ignore) {
-        if (this._isCurrentlyGhosting === ignore) return;
-        this._isCurrentlyGhosting = ignore;
-        if (window.require) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', ignore);
+        const safeIgnore = !!ignore; // 🐛 BUG 1 FIX: Force clean boolean
+        if (this._isCurrentlyGhosting === safeIgnore) return;
+        this._isCurrentlyGhosting = safeIgnore;
+        if (window.require) window.require('electron').ipcRenderer.send('set-ignore-mouse-events', safeIgnore);
     }
 
     toggleDropdown(name) { this.activeDropdown = this.activeDropdown === name ? null : name; this.requestUpdate(); }
@@ -1921,7 +2016,7 @@ export class AssistantView extends LitElement {
         }
 
         const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
-        const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
+        const labelsArray = clockWiseGrid.map(key => String(this.getHotCornerLabel(activeMap[key] || 'none'))); // 🐛 BUG 1 FIX: Force string
         window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
     }
 
@@ -2045,6 +2140,12 @@ export class AssistantView extends LitElement {
                      @mouseenter=${() => this.paneHoverState = 'voice'}
                      style="flex: 1; border: 1px solid ${this.paneHoverState === 'voice' ? '#a142f4' : 'var(--border-color)'}; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s;">
                     ${voiceHeader}
+                    ${this.voiceTranscript ? html`
+                        <div style="background: rgba(161, 66, 244, 0.08); border: 1px solid rgba(161, 66, 244, 0.2); border-radius: 6px; padding: 8px 10px; margin-bottom: 10px; max-height: 60px; overflow-y: auto;">
+                            <div style="font-size: 9px; font-weight: bold; color: #a142f4; text-transform: uppercase; margin-bottom: 3px; letter-spacing: 0.5px;">🎙️ Interviewer Said:</div>
+                            <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; white-space: pre-wrap;">${this.voiceTranscript}</div>
+                        </div>
+                    ` : ''}
                     <div @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(rightContent)}></div>
                 </div>
 
