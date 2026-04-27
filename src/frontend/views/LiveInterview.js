@@ -52,6 +52,13 @@ export class LiveInterview extends LitElement {
         return page === 2 ? defaultPage2 : defaultPage1;
     }
 
+    showToast(msg) {
+        this.toastMessage = msg;
+        this.requestUpdate();
+        if (this.toastTimer) clearTimeout(this.toastTimer);
+        this.toastTimer = setTimeout(() => { this.toastMessage = ''; this.requestUpdate(); }, 2000);
+    }
+
     async connectedCallback() {
         super.connectedCallback();
         
@@ -73,6 +80,8 @@ export class LiveInterview extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             
+            ipcRenderer.send('set-ignore-mouse-events', true);
+
             this.ghostHiddenHandler = () => { this._isGhostHidden = true; };
             this.ghostVisibleHandler = () => { this._isGhostHidden = false; };
             ipcRenderer.on('app-made-hidden', this.ghostHiddenHandler);
@@ -127,7 +136,7 @@ export class LiveInterview extends LitElement {
                 if (sliceIndex !== null) {
                     const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
                     let activeMap = this.activePage === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});                    
-                    activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; // 🟢 Perfect Merge Map Injection
+                    activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; 
                     const action = activeMap[clockWiseGrid[sliceIndex]];
                     if (action && action !== 'none') this.executeHotCorner(action);
                 }
@@ -153,6 +162,7 @@ export class LiveInterview extends LitElement {
             ipcRenderer.on('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.on('radial-continuous-hold', this.radialContinuousHandler);
             
+            // 🟢 ENGAGE THE SAFE AUTO-MIC LOOP
             this._autoStartMic();
         }
     }
@@ -160,7 +170,7 @@ export class LiveInterview extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('sync-preference', this.syncPrefHandler);
-        if (this.autoMicTimer) clearInterval(this.autoMicTimer);
+        if (this.autoMicTimer) clearTimeout(this.autoMicTimer);
         
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
@@ -177,19 +187,40 @@ export class LiveInterview extends LitElement {
         }
     }
 
+    // 🟢 NEW: Synchronous, safe auto-start loop that never jams IPC!
     _autoStartMic() {
+        if (!window.require) return;
+        const { ipcRenderer } = window.require('electron');
+        
+        if (this.autoMicTimer) {
+            clearTimeout(this.autoMicTimer);
+            this.autoMicTimer = null;
+        }
+        
         let attempts = 0;
-        if (this.autoMicTimer) clearInterval(this.autoMicTimer);
-        this.autoMicTimer = setInterval(async () => {
-            attempts++;
-            if (this.isMicOn || attempts > 20) {
-                clearInterval(this.autoMicTimer);
-                this.autoMicTimer = null;
-                if (this.isMicOn) this.showToast('🎙️ Voice Brain Auto-Started');
-                return;
+        
+        const tryEnable = async () => {
+            if (!this.isConnected) return; // Component dismounted
+            
+            if (this.isMicOn) {
+                this.showToast('🎙️ Voice Auto-Started');
+                return; // Mic is ON! We can stop checking.
             }
-            if (window.require) await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', true);
-        }, 1500);
+            
+            if (attempts >= 20) return; // Failsafe stop after ~40 seconds
+            
+            attempts++;
+            try {
+                // We use await to guarantee exactly one command travels across the bridge at a time
+                await ipcRenderer.invoke('toggle-ai-mic', true);
+            } catch (e) {}
+            
+            // Re-check/retry exactly 2 seconds after the last attempt finishes
+            this.autoMicTimer = setTimeout(tryEnable, 2000);
+        };
+
+        // Give Chromium 3 seconds to load the webpage before hammering it
+        this.autoMicTimer = setTimeout(tryEnable, 3000);
     }
 
     getHotCornerLabel(action) {
@@ -209,14 +240,14 @@ export class LiveInterview extends LitElement {
     syncRadialToBackend() {
         if (!window.require) return;
         let activeMap = this.activePage === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});
-        activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; // 🟢 FIX: Perfect Merge
+        activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; 
 
         const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
         const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
         window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
     }
 
-    async executeHotCorner(action) {
+    executeHotCorner(action) {
         if (!window.require) return;
         const { ipcRenderer } = window.require('electron');
         switch (action) {
@@ -289,7 +320,7 @@ export class LiveInterview extends LitElement {
                 this.codeChatIndex = 0; this.voiceChatIndex = 0;
                 ipcRenderer.invoke('new-chat');
                 this.requestUpdate();
-                setTimeout(() => this._autoStartMic(), 4000);
+                this._autoStartMic(); // 🟢 Trigger the safe loop again
                 break;
             case 'text_inc': 
             case 'text_dec':
@@ -334,10 +365,10 @@ export class LiveInterview extends LitElement {
         }, 50);
     }
 
-    async handleToggleMic() {
+    handleToggleMic() {
         this.showToast('🎙️ Toggling Mic...');
         if (window.require) {
-            await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', !this.isMicOn);
+            window.require('electron').ipcRenderer.invoke('toggle-ai-mic', !this.isMicOn).catch(()=>{});
         }
     }
 
