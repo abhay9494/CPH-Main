@@ -72,6 +72,7 @@ let activeLoadout = { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codePr
 let accumulatedScreenshots = [];
 let scrapingInterval = null;
 let isAppQuitting = false;
+let wasAiVisibleBeforeGhost = false;
 
 // NEW: Universal AI Configurations
 const AI_CONFIGS = [
@@ -530,13 +531,13 @@ function setupGeneralIpcHandlers() {
             global.currentSessionMode = 'main';
             global.isLiveInterviewMode = false;
             
-            let isGhostHidden = false;
             global.isGhostHidden = false;
-            let wasAiVisibleBeforeGhost = false;
+            global.isClickThroughState = false; // 🟢 FORCE RESET GHOST MODE STATE
 
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(false);
+                mainWindow.webContents.send('ghost-state-changed', false); // 🟢 BEAM OFF STATE TO UI
             }
 
             if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
@@ -553,8 +554,6 @@ function setupGeneralIpcHandlers() {
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                 global.radialHudWindow.hide();
             }
-        } else if (!mainWindow.isDestroyed()) {
-            mainWindow.setIgnoreMouseEvents(false);
         }
     });
 
@@ -749,15 +748,6 @@ function setupGeneralIpcHandlers() {
             if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.hide();
             if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.hide();
             return false;
-        }
-    });
-
-    ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
-        global.isClickThroughState = ignore;
-        const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) {
-            win.setIgnoreMouseEvents(ignore, { forward: true });
-            win.webContents.send('ghost-state-changed', ignore);
         }
     });
 

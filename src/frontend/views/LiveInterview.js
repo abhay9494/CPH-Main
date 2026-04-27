@@ -390,6 +390,8 @@ export class LiveInterview extends LitElement {
                 if (window.require) {
                     window.require('electron').ipcRenderer.send('set-session-mode', 'main');
                     window.require('electron').ipcRenderer.send('toggle-radial-permanent', false);
+                    // 🟢 FIX: Command the backend to disengage Ghost Mode BEFORE leaving!
+                    window.require('electron').ipcRenderer.send('set-ignore-mouse-events', false);
                 }
                 window.dispatchEvent(new CustomEvent('return-to-main'));
                 break;

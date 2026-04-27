@@ -390,7 +390,9 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
 function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     ipcMain.on('view-changed', (event, view) => {
         if (view !== 'assistant' && !mainWindow.isDestroyed()) {
+            global.isClickThroughState = false;
             mainWindow.setIgnoreMouseEvents(false);
+            mainWindow.webContents.send('ghost-state-changed', false); // 🟢 SYNC UI BADGE
         }
     });
 
