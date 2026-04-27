@@ -112,7 +112,8 @@ function launchDualBrains(appState) {
     appState.voiceWebWindow.setContentProtection(true);
     appState.voiceWebWindow.webContents.setAudioMuted(true);
 
-    if (process.platform === 'win32') appState.voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
+    // 🟢 FIX: Demoted Voice Brain to 'floating' layer
+    if (process.platform === 'win32') appState.voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
     appState.voiceWebWindow.loadURL(voiceProvider.url);
     
     appState.voiceWebWindow.webContents.on('dom-ready', async () => {
@@ -169,7 +170,9 @@ function launchDualBrains(appState) {
     });
     appState.codeWebWindow.setContentProtection(true);
     appState.codeWebWindow.webContents.setAudioMuted(true);
-    if (process.platform === 'win32') appState.codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
+    
+    // 🟢 FIX: Demoted Code Brain to 'floating' layer
+    if (process.platform === 'win32') appState.codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
     appState.codeWebWindow.loadURL(codeProvider.url);
     appState.codeWebWindow.webContents.on('dom-ready', async () => {
         appState.codeWebWindow.webContents.insertCSS('* { cursor: default !important; }');
@@ -179,6 +182,17 @@ function launchDualBrains(appState) {
     const preventDeath = (win) => {
         win.on('close', (event) => {
             if (!appState.isAppQuitting) { event.preventDefault(); win.hide(); }
+        });
+        
+        // 🟢 FIX: Z-INDEX ENFORCER - Force Overlay/Minimap to top if AI window is clicked
+        win.on('focus', () => {
+            const mainAppWin = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
+            if (mainAppWin && !mainAppWin.isDestroyed()) mainAppWin.moveTop();
+            
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                global.radialHudWindow.moveTop();
+            }
         });
     };
     preventDeath(appState.voiceWebWindow);
@@ -260,28 +274,37 @@ function setupInterviewController(appState) {
 
                 if (!appState.codeWebWindow.isDestroyed()) {
                     appState.codeWebWindow.setOpacity(1); appState.codeWebWindow.setIgnoreMouseEvents(false);
-                    appState.codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    appState.codeWebWindow.setAlwaysOnTop(true, 'floating', 1); // 🟢 FIX
                     appState.codeWebWindow.setBounds({ x, y, width: safeWidth, height: safeHeight });
                     appState.codeWebWindow.showInactive();
                 }
                 if (appState.voiceWebWindow && !appState.voiceWebWindow.isDestroyed()) { appState.voiceWebWindow.hide(); }
             } else {
-                const halfWidth = Math.floor(width / 2);
+                let mainBounds = { x: 0, y: 0, width: width, height: height };
+                const mainAppWin = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
+                if (mainAppWin && !mainAppWin.isDestroyed()) {
+                    mainBounds = mainAppWin.getBounds();
+                }
+                
+                const halfWidth = Math.floor(mainBounds.width / 2);
+
                 if (!appState.codeWebWindow.isDestroyed()) {
                     appState.codeWebWindow.setOpacity(1); appState.codeWebWindow.setIgnoreMouseEvents(false);
-                    appState.codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-                    appState.codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
+                    appState.codeWebWindow.setAlwaysOnTop(true, 'floating', 1); // 🟢 FIX
+                    appState.codeWebWindow.setBounds({ x: mainBounds.x, y: mainBounds.y, width: halfWidth, height: mainBounds.height });
                     appState.codeWebWindow.showInactive();
                 }
                 if (appState.voiceWebWindow && !appState.voiceWebWindow.isDestroyed()) {
                     appState.voiceWebWindow.setOpacity(1); appState.voiceWebWindow.setIgnoreMouseEvents(false);
-                    appState.voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
-                    appState.voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
+                    appState.voiceWebWindow.setAlwaysOnTop(true, 'floating', 1); // 🟢 FIX
+                    appState.voiceWebWindow.setBounds({ x: mainBounds.x + halfWidth, y: mainBounds.y, width: halfWidth, height: mainBounds.height });
                     appState.voiceWebWindow.showInactive();
                 }
             }
 
-            if (appState.mainWindow && !appState.mainWindow.isDestroyed()) appState.mainWindow.moveTop();
+            const mainAppWin = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
+            if (mainAppWin && !mainAppWin.isDestroyed()) mainAppWin.moveTop();
+            
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
                 global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
                 global.radialHudWindow.moveTop();
