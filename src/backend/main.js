@@ -1,70 +1,29 @@
-if (require('electron-squirrel-startup')) {
-    process.exit(0);
-}
+if (require('electron-squirrel-startup')) process.exit(0);
 
-// ==========================================================
-// OA GLOBAL PROMPTS (Embedded to avoid missing files)
-// ==========================================================
 const PROMPTS = {
-    OA_AUTOMATION: (language) => `Output ONLY functional code in ${language || 'c++'}. CRITICAL RULES:
-- Do NOT output any greetings, explanations, or comments.
-- Use single letter variable names.
-- Give me code with a main function so that I can run locally.
-- Don't change the function signature given in the image. See function signature and test cases from the image.
-- Give me test cases to be put in cph extension of vs code (only those test cases which are visible in the image) like this:
-test case1
-input
-expected output
-- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
-
-    REFACTOR: `Refactor the above code. Output ONLY functional code. CRITICAL RULES:
-- Do NOT output any greetings, explanations, or comments.
-- If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.
-- Break large functions into smaller helper functions.
-- If specific independent tasks happen in a sequence, change the order of initialization if it doesn't affect the output.
-- Structurally invert nested if statements by checking for invalid conditions and returning early.
-- Replace long switch statements or if-else chains with a Map (Dictionary) or Array lookup.
-- Algorithms often iterate forward (0 to N). Change this to backward iteration (N to 0) or use recursion.
-- Extract complex conditions into variables with semantic names.
-- Do not use classes.
-- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
-
-    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. CRITICAL RULES:
-- Output ONLY the fully corrected functional code.
-- Do NOT output any greetings, general explanations, or extra text.
-- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
-
+    OA_AUTOMATION: (language) => `Output ONLY functional code in ${language || 'c++'}. CRITICAL RULES:\n- Do NOT output any greetings, explanations, or comments.\n- Use single letter variable names.\n- Give me code with a main function so that I can run locally.\n- Don't change the function signature given in the image. See function signature and test cases from the image.\n- Give me test cases to be put in cph extension of vs code (only those test cases which are visible in the image) like this:\ntest case1\ninput\nexpected output\n- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
+    REFACTOR: `Refactor the above code. Output ONLY functional code. CRITICAL RULES:\n- Do NOT output any greetings, explanations, or comments.\n- If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.\n- Break large functions into smaller helper functions.\n- If specific independent tasks happen in a sequence, change the order of initialization if it doesn't affect the output.\n- Structurally invert nested if statements by checking for invalid conditions and returning early.\n- Replace long switch statements or if-else chains with a Map (Dictionary) or Array lookup.\n- Algorithms often iterate forward (0 to N). Change this to backward iteration (N to 0) or use recursion.\n- Extract complex conditions into variables with semantic names.\n- Do not use classes.\n- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
+    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. CRITICAL RULES:\n- Output ONLY the fully corrected functional code.\n- Do NOT output any greetings, general explanations, or extra text.\n- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
     VOICE_CONTEXT: `Read the attached problem or code. Do NOT output the solution or read it out loud. Just ingest the context silently. Be prepared to answer verbal questions about its logic, approach, or time complexity if I ask you through the microphone. Reply with a short confirmation that you understand.`
 };
 
 const { app, BrowserWindow, shell, ipcMain, globalShortcut, session, desktopCapturer, clipboard, nativeImage, dialog } = require('electron');
 
-// 🛑 RED FLAG PREVENTION: Permanently mute all native OS error popups
-dialog.showErrorBox = function(title, content) {
-    console.log(`[SILENT ERROR BOX DUMPED] ${title}: ${content}`);
-};
-process.on('uncaughtException', (error) => {
-    console.error('[SILENT CRASH PREVENTED] Uncaught Exception:', error);
-});
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('[SILENT CRASH PREVENTED] Unhandled Rejection:', reason);
-});
+dialog.showErrorBox = function(title, content) { console.log(`[SILENT ERROR BOX DUMPED] ${title}: ${content}`); };
+process.on('uncaughtException', (error) => { console.error('[SILENT CRASH PREVENTED] Uncaught Exception:', error); });
+process.on('unhandledRejection', (reason, promise) => { console.error('[SILENT CRASH PREVENTED] Unhandled Rejection:', reason); });
 
-// ==========================================================
-// STEALTH RADIO: Bypass Chromium Audio/Mic Security Blocks
-// ==========================================================
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 
-const { createWindow, updateGlobalShortcuts } = require('./windowManager'); // 🟢 FIX: Path corrected!
-const storage = require('./storage'); // 🟢 FIX: Path corrected!
+const { createWindow, updateGlobalShortcuts } = require('./windowManager');
+const storage = require('./storage');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 
 let mainWindow = null;
-let widgetWindow = null;
 let voiceWebWindow = null;
 let codeWebWindow = null;
 let currentBrainMode = 'fast';
@@ -74,76 +33,49 @@ let scrapingInterval = null;
 let isAppQuitting = false;
 let wasAiVisibleBeforeGhost = false;
 
-// NEW: Universal AI Configurations
 const AI_CONFIGS = [
     { name: 'ChatGPT', url: 'https://chatgpt.com', msgSelector: 'div[data-message-author-role="assistant"]' },
     { name: 'Gemini', url: 'https://gemini.google.com/app', msgSelector: 'model-response' },
     { name: 'Grok', url: 'https://grok.com', msgSelector: '.prose' }
 ];
 
-function startUniversalAIBridge() {
-    launchDualBrains();
-}
-
 function launchDualBrains() {
-    const { BrowserWindow } = require('electron');
-    const storage = require('./storage');
     const prefs = storage.getPreferences();
     const loadouts = prefs.dualBrainLoadouts || [];
-    activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || 
-                    { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
-
+    activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
     const voiceProvider = AI_CONFIGS[activeLoadout.voiceEngine];
     const codeProvider = AI_CONFIGS[activeLoadout.codeEngine];
 
-    // --- 🗣️ 1. VOICE BRAIN ---
     if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.destroy();
     voiceWebWindow = new BrowserWindow({
-        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
-        title: `🗣️ Voice Brain: ${voiceProvider.name}`,
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true, title: `🗣️ Voice Brain: ${voiceProvider.name}`,
         webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfileId}` }
     });
     voiceWebWindow.setContentProtection(true);
     voiceWebWindow.webContents.setAudioMuted(true);
-
     if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
     voiceWebWindow.loadURL(voiceProvider.url);
-    
-    // Voice WebRTC Injection (Keeps Mic Alive)
     voiceWebWindow.webContents.on('dom-ready', async () => {
         voiceWebWindow.webContents.insertCSS('* { cursor: default !important; }');
-        
         try {
-            const { desktopCapturer } = require('electron');
             const sources = await desktopCapturer.getSources({ types: ['screen'] });
             if (!sources || sources.length === 0) return;
             const screenSourceId = sources[0].id;
-
             const hijackScript = `
                 if (!window.__micHijacked) {
                     window.__micHijacked = true;
-                    
                     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
                     navigator.mediaDevices.getUserMedia = async (constraints) => {
                         if (constraints && constraints.audio) {
                             try {
-                                console.log("🕵️‍♂️ Hardware Mic Blocked. Routing System Audio directly...");
-                                
-                                const stream = await originalGetUserMedia({
-                                    audio: { mandatory: { chromeMediaSource: 'desktop' } },
-                                    video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } }
-                                });
-                                
+                                const stream = await originalGetUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } } });
                                 const audioTrack = stream.getAudioTracks()[0];
                                 const videoTrack = stream.getVideoTracks()[0];
-                                if (videoTrack) videoTrack.stop(); // Destroy the video feed
-                                
+                                if (videoTrack) videoTrack.stop();
                                 return new MediaStream([audioTrack]);
                             } catch (e) {
-                                console.error('🔥 Loopback Hijack Failed:', e);
                                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                const dest = ctx.createMediaStreamDestination();
-                                return dest.stream; 
+                                return ctx.createMediaStreamDestination().stream; 
                             }
                         }
                         return originalGetUserMedia(constraints);
@@ -151,18 +83,13 @@ function launchDualBrains() {
                 }
                 true;
             `;
-            
             await voiceWebWindow.webContents.executeJavaScript(hijackScript);
-        } catch (err) {
-            console.error('Failed to inject WebRTC Hijack:', err);
-        }
+        } catch (err) { }
     });
 
-    // --- 💻 2. CODE BRAIN ---
     if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.destroy();
     codeWebWindow = new BrowserWindow({
-        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
-        title: `💻 Code Brain: ${codeProvider.name}`,
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true, title: `💻 Code Brain: ${codeProvider.name}`,
         webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.codeProfileId}` }
     });
     codeWebWindow.setContentProtection(true);
@@ -175,13 +102,9 @@ function launchDualBrains() {
     });
 
     const preventDeath = (win) => {
-        win.on('close', (event) => {
-            if (!isAppQuitting) { event.preventDefault(); win.hide(); }
-        });
+        win.on('close', (event) => { if (!isAppQuitting) { event.preventDefault(); win.hide(); } });
         win.on('focus', () => {
-            const mainAppWin = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
-            if (mainAppWin && !mainAppWin.isDestroyed()) mainAppWin.moveTop();
-            
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                 global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
                 global.radialHudWindow.moveTop();
@@ -190,16 +113,12 @@ function launchDualBrains() {
     };
     preventDeath(voiceWebWindow);
     preventDeath(codeWebWindow);
-
     startDualScrapers(voiceProvider, codeProvider);
 }
 
 function startDualScrapers(voiceProvider, codeProvider) {
     if (scrapingInterval) clearInterval(scrapingInterval);
-    
-    let lastVoiceMsg = { count: 0, text: "" };
-    let lastCodeMsg = { count: 0, text: "" };
-    let lastMicState = null;
+    let lastVoiceMsg = { count: 0, text: "" }, lastCodeMsg = { count: 0, text: "" }, lastMicState = null;
 
     scrapingInterval = setInterval(async () => {
         const scrape = async (win, provider) => {
@@ -220,29 +139,15 @@ function startDualScrapers(voiceProvider, codeProvider) {
 
         const vData = await scrape(voiceWebWindow, voiceProvider).catch(() => null);
         if (vData) {
-            if (vData.count > lastVoiceMsg.count) {
-                BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed()) w.webContents.send('voice-new-message', vData.text);
-                });
-            } else if (vData.count === lastVoiceMsg.count && vData.text !== lastVoiceMsg.text) {
-                BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed()) w.webContents.send('voice-update-message', vData.text);
-                });
-            }
+            if (vData.count > lastVoiceMsg.count) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-new-message', vData.text); });
+            else if (vData.count === lastVoiceMsg.count && vData.text !== lastVoiceMsg.text) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-update-message', vData.text); });
             lastVoiceMsg = vData;
         }
 
         const cData = await scrape(codeWebWindow, codeProvider).catch(() => null);
         if (cData) {
-            if (cData.count > lastCodeMsg.count) {
-                BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text);
-                });
-            } else if (cData.count === lastCodeMsg.count && cData.text !== lastCodeMsg.text) {
-                BrowserWindow.getAllWindows().forEach(w => {
-                    if (!w.isDestroyed()) w.webContents.send('code-update-message', cData.text);
-                });
-            }
+            if (cData.count > lastCodeMsg.count) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text); });
+            else if (cData.count === lastCodeMsg.count && cData.text !== lastCodeMsg.text) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-update-message', cData.text); });
             lastCodeMsg = cData;
         }
 
@@ -261,42 +166,22 @@ function startDualScrapers(voiceProvider, codeProvider) {
                     } catch(e) { return false; }
                 })();
             `;
-            
-            voiceWebWindow.webContents.executeJavaScript(spyScript)
-                .then((isMicActive) => {
-                    if (isMicActive !== lastMicState) {
-                        lastMicState = isMicActive;
-                        BrowserWindow.getAllWindows().forEach(w => {
-                            if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
-                                w.webContents.send('sync-mic-state', !!isMicActive);
-                            }
-                        });
-                    }
-                })
-                .catch(() => { });
+            voiceWebWindow.webContents.executeJavaScript(spyScript).then((isMicActive) => {
+                if (isMicActive !== lastMicState) {
+                    lastMicState = isMicActive;
+                    BrowserWindow.getAllWindows().forEach(w => {
+                        if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) { w.webContents.send('sync-mic-state', !!isMicActive); }
+                    });
+                }
+            }).catch(() => { });
         }
     }, 1000);
 }
 
 async function sendPayloadToWindow(win, customText, images = []) {
     if (!win || win.isDestroyed()) return;
-    const { clipboard, nativeImage } = require('electron');
-    
-    const isBoxReady = await win.webContents.executeJavaScript(`(() => { 
-        try {
-            const el = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); 
-            if (el && el.offsetParent !== null) { 
-                el.focus(); 
-                return true; 
-            }
-            return false;
-        } catch(e) { return false; }
-    })()`);
-    
-    if (!isBoxReady) {
-        console.log("🛑 Aborted Paste: Textbox is hidden (AI is currently in Voice Mode).");
-        return;
-    }
+    const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
+    if (!isBoxReady) return;
     
     for (let imgData of images) {
         const img = nativeImage.createFromDataURL(imgData);
@@ -305,14 +190,10 @@ async function sendPayloadToWindow(win, customText, images = []) {
         await new Promise(r => setTimeout(r, 400));
     }
     
-    if (customText) {
-        clipboard.writeText(customText);
-        win.webContents.paste();
-    }
+    if (customText) { clipboard.writeText(customText); win.webContents.paste(); }
 
     const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-    let isReady = false;
-    let attempts = 0;
+    let isReady = false, attempts = 0;
     while (!isReady && attempts < 40) {
         isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
         if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
@@ -325,32 +206,25 @@ async function sendPayloadToWindow(win, customText, images = []) {
 
 function createMainWindow() {
     mainWindow = createWindow(null, null);
-
     mainWindow.on('hide', () => {
         if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) voiceWebWindow.hide();
         if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) codeWebWindow.hide();
     });
-
     mainWindow.on('show', () => {
         let m = mainWindow;
-        m.focus();
-        m.setOpacity(0.99);
+        m.focus(); m.setOpacity(0.99);
         setTimeout(() => { m.setOpacity(1); }, 50);
-        if (m.webContents) {
-            m.webContents.send('app-made-visible');
-        }
+        if (m.webContents) m.webContents.send('app-made-visible');
     });
     return mainWindow;
 }
 
 let autoTyperProcess = null;
-
 ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
     BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-status', true));
     let cleanCode = rawCode.replace(/^(c\+\+|python|java|javascript|js)\s*\n/i, '');
     const b64Code = Buffer.from(cleanCode).toString('base64');
     const ps1Path = path.join(os.tmpdir(), 'cptyper.ps1');
-    
     const psScript = `
     param([string]$b64, [int]$wpm, [int]$mistakeChance)
     Add-Type -AssemblyName System.Windows.Forms
@@ -358,11 +232,9 @@ ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
     $chars = $text.ToCharArray()
     $baseDelay = [math]::Round(12000 / $wpm)
     if ($baseDelay -lt 10) { $baseDelay = 10 }
-    
     $lineIdx = 0
     [Console]::WriteLine("LINE_0")
     [Console]::Out.Flush()
-    
     foreach ($c in $chars) {
         $key = $c.ToString()
         if ($key -eq "\`r") { continue }
@@ -377,7 +249,6 @@ ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
             continue
         }
         if ('+^%~(){}[]'.Contains($key)) { $key = "{$key}" }
-        
         if ($key -match '^[a-z]$') {
             if ((Get-Random -Minimum 1 -Maximum 100) -le $mistakeChance) {
                 $wrongChars = "abcdefghijklmnopqrstuvwxyz"
@@ -401,9 +272,7 @@ ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
     `;
     fs.writeFileSync(ps1Path, psScript);
     if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
-    
     autoTyperProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance]);
-    
     autoTyperProcess.stdout.on('data', (data) => {
         const text = data.toString();
         const lines = text.split(/[\r\n]+/);
@@ -414,45 +283,29 @@ ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
             }
         });
     });
-    autoTyperProcess.on('close', () => {
-        BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-status', false));
-    });
+    autoTyperProcess.on('close', () => { BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-status', false)); });
 });
 
 ipcMain.on('stop-auto-type', (event) => {
-    if (autoTyperProcess) {
-        try { autoTyperProcess.kill(); } catch(e){}
-        autoTyperProcess = null;
-    }
+    if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} autoTyperProcess = null; }
     BrowserWindow.getAllWindows().forEach(w => w.webContents.send('typing-status', false));
 });
 
 app.whenReady().then(async () => {
     const { session, desktopCapturer } = require('electron');
-    
     app.on('session-created', (sess) => {
         sess.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
         sess.setPermissionCheckHandler(() => true);
-        sess.setDisplayMediaRequestHandler(
-            (request, callback) => {
-                desktopCapturer.getSources({ types: ['screen'] }).then(sources => {
-                    callback({ video: sources[0], audio: 'loopback' });
-                });
-            },
-            { useSystemPicker: false } 
-        );
+        sess.setDisplayMediaRequestHandler((request, callback) => {
+            desktopCapturer.getSources({ types: ['screen'] }).then(sources => { callback({ video: sources[0], audio: 'loopback' }); });
+        }, { useSystemPicker: false });
     });
 
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
     session.defaultSession.setPermissionCheckHandler(() => true);
-    session.defaultSession.setDisplayMediaRequestHandler(
-        (request, callback) => {
-            desktopCapturer.getSources({ types: ['screen'] }).then(sources => {
-                callback({ video: sources[0], audio: 'loopback' });
-            });
-        },
-        { useSystemPicker: false }
-    );
+    session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
+        desktopCapturer.getSources({ types: ['screen'] }).then(sources => { callback({ video: sources[0], audio: 'loopback' }); });
+    }, { useSystemPicker: false });
 
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
         details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0';
@@ -463,24 +316,12 @@ app.whenReady().then(async () => {
     createMainWindow();
     setupStorageIpcHandlers();
     setupGeneralIpcHandlers();
-    startUniversalAIBridge();
+    launchDualBrains();
 });
 
-app.on('window-all-closed', () => {
-    if (process.platform !== 'darwin') {
-        app.quit();
-    }
-});
-
-app.on('before-quit', () => {
-    isAppQuitting = true;
-});
-
-app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-        createMainWindow();
-    }
-});
+app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
+app.on('before-quit', () => { isAppQuitting = true; });
+app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) createMainWindow(); });
 
 function setupStorageIpcHandlers() {
     ipcMain.handle('storage:get-config', async () => { return { success: true, data: storage.getConfig() }; });
@@ -515,19 +356,11 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('open-login-window', async (event, profileId, aiIndex) => {
         const provider = AI_CONFIGS[aiIndex];
         const partitionId = `persist:ai_profile_${profileId}`;
-        
         return new Promise((resolve) => {
             const loginWin = new BrowserWindow({
-                width: 1000, height: 800,
-                show: true, autoHideMenuBar: true,
-                title: `Login to ${provider.name}`,
-                webPreferences: {
-                    nodeIntegration: false,
-                    contextIsolation: true,
-                    partition: partitionId
-                }
+                width: 1000, height: 800, show: true, autoHideMenuBar: true, title: `Login to ${provider.name}`,
+                webPreferences: { nodeIntegration: false, contextIsolation: true, partition: partitionId }
             });
-            
             loginWin.loadURL(provider.url);
             loginWin.on('closed', () => { resolve(true); });
         });
@@ -535,31 +368,26 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.handle('get-app-version', async () => { return app.getVersion(); });
 
+    // 🟢 ABSOLUTE FIX: Prevent any Ghost Mode Reset bugs on re-entry!
     ipcMain.on('view-changed', (event, view) => {
         if (view !== 'assistant') {
             global.currentSessionMode = 'main';
             global.isLiveInterviewMode = false;
-            
             global.isGhostHidden = false;
-            global.isClickThroughState = false; // 🟢 FORCE RESET GHOST MODE STATE
+            global.isClickThroughState = false;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(false);
-                mainWindow.webContents.send('ghost-state-changed', false); // 🟢 BEAM OFF STATE TO UI
+                mainWindow.webContents.send('ghost-state-changed', false);
             }
 
             if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
-                voiceWebWindow.hide();
-                voiceWebWindow.setOpacity(1);
-                voiceWebWindow.setIgnoreMouseEvents(false);
+                voiceWebWindow.hide(); voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
             }
             if (codeWebWindow && !codeWebWindow.isDestroyed()) {
-                codeWebWindow.hide();
-                codeWebWindow.setOpacity(1);
-                codeWebWindow.setIgnoreMouseEvents(false);
+                codeWebWindow.hide(); codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
             }
-
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                 global.radialHudWindow.hide();
             }
@@ -576,13 +404,6 @@ function setupGeneralIpcHandlers() {
         catch (error) { return { success: false, error: error.message }; }
     });
 
-    ipcMain.on('update-keybinds', (event, newKeybinds) => {
-        if (mainWindow) {
-            storage.setKeybinds(newKeybinds);
-            updateGlobalShortcuts(newKeybinds, mainWindow, null, null);
-        }
-    });
-
     ipcMain.handle('capture-screenshot', async () => {
         try {
             const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
@@ -592,7 +413,6 @@ function setupGeneralIpcHandlers() {
             const filePath = path.join(saveDir, `screenshot_${Date.now()}.png`);
             const base64Data = screenImage.replace(/^data:image\/png;base64,/, "");
             fs.writeFileSync(filePath, base64Data, 'base64');
-
             accumulatedScreenshots.push(screenImage);
             return accumulatedScreenshots.length;
         } catch (err) { return accumulatedScreenshots.length; }
@@ -623,7 +443,6 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.handle('toggle-ai-mic', async (event, isTurningOn) => {
         if (!voiceWebWindow || voiceWebWindow.isDestroyed()) return false;
-        
         const script = `
             (function() {
                 try { 
@@ -633,18 +452,14 @@ function setupGeneralIpcHandlers() {
                         var aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
                         var testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
                         var isTurnOn = ${isTurningOn};
-                        if (isTurnOn) {
-                            return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice') || txt.includes('start voice');
-                        } else {
-                            return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop');
-                        }
+                        if (isTurnOn) { return aria.includes('voice') || aria.includes('microphone') || testid.includes('voice') || txt.includes('start voice'); } 
+                        else { return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); }
                     }); 
                     if (targetBtn) { targetBtn.click(); return true; }
                     return false;
                 } catch(e) { return false; }
             })();
         `;
-            
         try {
             const result = await voiceWebWindow.webContents.executeJavaScript(script);
             return result === true;
@@ -654,9 +469,7 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('set-ai-provider', async (event, targetIdx) => { return AI_CONFIGS[targetIdx].name; });
 
     ipcMain.handle('check-active-ai', () => {
-        if (!voiceWebWindow || voiceWebWindow.isDestroyed()) {
-            return { name: AI_CONFIGS[activeLoadout.voiceEngine].name, url: "" };
-        }
+        if (!voiceWebWindow || voiceWebWindow.isDestroyed()) { return { name: AI_CONFIGS[activeLoadout.voiceEngine].name, url: "" }; }
         return {name: AI_CONFIGS[activeLoadout.voiceEngine].name, url: voiceWebWindow.webContents.getURL() };
     });
 
@@ -710,6 +523,7 @@ function setupGeneralIpcHandlers() {
         launchDualBrains(); return targetProfileId;
     });
 
+    // 🟢 GUARANTEED 3-TIER LAYER ARCHITECTURE
     ipcMain.handle('toggle-ai-visibility', (event, forceShow) => {
         if (!codeWebWindow) return false;
         const isVisible = codeWebWindow.isVisible() && codeWebWindow.getOpacity() !== 0;
@@ -733,23 +547,27 @@ function setupGeneralIpcHandlers() {
                 }
                 if (voiceWebWindow && !voiceWebWindow.isDestroyed()) { voiceWebWindow.hide(); }
             } else {
-                const halfWidth = Math.floor(width / 2);
+                let mainBounds = { x: 0, y: 0, width: width, height: height };
+                if (mainWindow && !mainWindow.isDestroyed()) { mainBounds = mainWindow.getBounds(); }
+                const halfWidth = Math.floor(mainBounds.width / 2);
+
                 if (!codeWebWindow.isDestroyed()) {
                     codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
-                    codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
-                    codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
+                    codeWebWindow.setAlwaysOnTop(true, 'floating', 1); 
+                    codeWebWindow.setBounds({ x: mainBounds.x, y: mainBounds.y, width: halfWidth, height: mainBounds.height });
                     codeWebWindow.showInactive();
                 }
                 if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
                     voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
-                    voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
-                    voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
+                    voiceWebWindow.setAlwaysOnTop(true, 'floating', 1); 
+                    voiceWebWindow.setBounds({ x: mainBounds.x + halfWidth, y: mainBounds.y, width: halfWidth, height: mainBounds.height });
                     voiceWebWindow.showInactive();
                 }
             }
 
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
                 global.radialHudWindow.moveTop();
             }
             return true;
@@ -775,34 +593,7 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    ipcMain.on('ai-generation-complete', () => {
-        if (global.isGhostHidden || !mainWindow || mainWindow.getOpacity() === 0) return;
-        const flashBacklightScript = `
-            $namespace = "root/wmi"
-            $wmi = Get-CimInstance -Namespace $namespace -ClassName "AsusAtkWmi_WMNB" -ErrorAction SilentlyContinue
-            if (!$wmi) { $wmi = Get-CimInstance -Namespace $namespace -ClassName "AsusAtkWmi" -ErrorAction SilentlyContinue }
-            $dev = [uint32]327713  
-            if ($wmi) {
-                for ($i=0; $i -lt 3; $i++) {
-                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]128} -ErrorAction SilentlyContinue | Out-Null
-                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]0} -ErrorAction SilentlyContinue | Out-Null
-                    Start-Sleep -Milliseconds 200
-                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]131} -ErrorAction SilentlyContinue | Out-Null
-                    Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]3} -ErrorAction SilentlyContinue | Out-Null
-                    Start-Sleep -Milliseconds 250
-                }
-                Invoke-CimMethod -InputObject $wmi -MethodName DEVS -Arguments @{Device_ID=$dev; Control_status=[uint32]129} -ErrorAction SilentlyContinue | Out-Null
-            } else {
-                $wsh = New-Object -ComObject WScript.Shell
-                for ($i=0; $i -lt 3; $i++) {
-                    $wsh.SendKeys('{CAPSLOCK}'); Start-Sleep -Milliseconds 200
-                    $wsh.SendKeys('{CAPSLOCK}'); Start-Sleep -Milliseconds 250
-                }
-            }
-        `;
-        spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-Command', flashBacklightScript]);
-    });
-
+    // 🟢 BULLETPROOF STEALTH STATE TRACKER
     global.toggleStealthMode = () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             global.isGhostHidden = !global.isGhostHidden;
@@ -827,35 +618,35 @@ function setupGeneralIpcHandlers() {
                 }
                 
             } else {
-            mainWindow.webContents.send('app-made-visible');
-            mainWindow.setOpacity(1);
-            mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
-            
-            if (wasAiVisibleBeforeGhost) {
-                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
-                    voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
-                }
-                if (codeWebWindow && !codeWebWindow.isDestroyed()) {
-                    codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
-                }
-            }
-            
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
-                global.radialHudWindow.showInactive();
-                global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
-            }
-
-            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
-                setTimeout(() => { 
-                    if (!global.radialHudWindow.isDestroyed()) {
-                        global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
-                        global.radialHudWindow.moveTop(); 
+                mainWindow.webContents.send('app-made-visible');
+                mainWindow.setOpacity(1);
+                mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
+                
+                if (wasAiVisibleBeforeGhost) {
+                    if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                        voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
                     }
-                }, 50);
+                    if (codeWebWindow && !codeWebWindow.isDestroyed()) {
+                        codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
+                    }
+                }
+                
+                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+                    global.radialHudWindow.showInactive();
+                    global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
+                }
+
+                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
+                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+                    setTimeout(() => { 
+                        if (!global.radialHudWindow.isDestroyed()) {
+                            global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                            global.radialHudWindow.moveTop(); 
+                        }
+                    }, 50);
+                }
             }
-        }
         }
     };
 

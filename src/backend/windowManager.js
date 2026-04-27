@@ -2,22 +2,18 @@ const { BrowserWindow, globalShortcut, ipcMain, screen, app, session } = require
 const path = require('node:path');
 const fs = require('node:fs');
 const os = require('os');
-const storage = require('./storage'); // 🟢 FIX: Path corrected!
+const storage = require('./storage'); 
 
-// let mouseEventsIgnored = false;
 global.isOAModeActive = false;
 let windowResizing = false;
 let resizeAnimation = null;
-// let isOAModeActive = false; // 🟢 Tracks if Proctored OA is active
-const RESIZE_ANIMATION_DURATION = 500; // milliseconds
+const RESIZE_ANIMATION_DURATION = 500;
 
-// 🐛 FIX: Declare this globally so the export at the bottom can read it!
 let companionChatWindow = null;
 global.radialHudWindow = null; 
 global.activeRadialLabels = Array(16).fill('—');
 
 function createWindow(sendToRenderer, geminiSessionRef) {
-    // Get layout preference (default to 'normal')
     const prefs = storage.getPreferences();
     let windowWidth = Math.max(600, prefs.mainWindowWidth || 900);
     let windowHeight = Math.max(400, prefs.mainWindowHeight || 500);
@@ -31,7 +27,7 @@ function createWindow(sendToRenderer, geminiSessionRef) {
         alwaysOnTop: true,
         webPreferences: {
             nodeIntegration: true,
-            contextIsolation: false, // TODO: change to true
+            contextIsolation: false,
             backgroundThrottling: false,
             enableBlinkFeatures: 'GetDisplayMedia',
             webSecurity: true,
@@ -53,199 +49,126 @@ function createWindow(sendToRenderer, geminiSessionRef) {
 
     mainWindow.setResizable(false);
     mainWindow.setContentProtection(true);
-    // if (process.platform === 'win32') mainWindow.setDisplayAffinity('exclude_from_capture');
     mainWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true });
 
-    // Hide from Windows taskbar
     if (process.platform === 'win32') {
-        try {
-            mainWindow.setSkipTaskbar(true);
-            console.log('Hidden from Windows taskbar');
-        } catch (error) {
-            console.warn('Could not hide from taskbar:', error.message);
-        }
+        try { mainWindow.setSkipTaskbar(true); } catch (error) {}
     }
-
-    // Hide from Mission Control on macOS
     if (process.platform === 'darwin') {
-        try {
-            mainWindow.setHiddenInMissionControl(true);
-            console.log('Hidden from macOS Mission Control');
-        } catch (error) {
-            console.warn('Could not hide from Mission Control:', error.message);
-        }
+        try { mainWindow.setHiddenInMissionControl(true); } catch (error) {}
     }
 
-    // Center window at the top of the screen
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: screenWidth } = primaryDisplay.workAreaSize;
     const x = Math.floor((screenWidth - windowWidth) / 2);
     const y = 0;
     mainWindow.setPosition(x, y);
 
+    // 🟢 3-TIER Z-INDEX: Middle Layer (Overlay)
     if (process.platform === 'win32') {
-        mainWindow.setAlwaysOnTop(true, 'screen-saver', 2);
+        mainWindow.setAlwaysOnTop(true, 'pop-up-menu', 1);
     }
 
     mainWindow.loadFile(path.join(__dirname, '../index.html'));
 
-    // 🟢 PROTECT MAIN APP FROM F11 AND RELOADS
     mainWindow.webContents.on('before-input-event', (event, input) => {
         if (input.key === 'F11' || input.key === 'F5') event.preventDefault();
         if ((input.control || input.meta) && (input.key.toLowerCase() === 'r')) event.preventDefault();
     });
 
-    // After window is created, initialize keybinds
     mainWindow.webContents.once('dom-ready', () => {
         setTimeout(() => {
             const defaultKeybinds = getDefaultKeybinds();
             let keybinds = defaultKeybinds;
-
-            // Load keybinds from storage
             const savedKeybinds = storage.getKeybinds();
-            if (savedKeybinds) {
-                keybinds = { ...defaultKeybinds, ...savedKeybinds };
-            }
-
+            if (savedKeybinds) keybinds = { ...defaultKeybinds, ...savedKeybinds };
             updateGlobalShortcuts(keybinds, mainWindow, sendToRenderer, geminiSessionRef);
         }, 150);
     });
 
     setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef);
-
-    // 🟢 X-RAY MODE: Force open the console to see what is killing the UI!
-    // mainWindow.webContents.openDevTools({ mode: 'detach' });
-
     return mainWindow;
 }
 
 function getDefaultKeybinds() {
     const isMac = process.platform === 'darwin';
     return {
-        moveUp: isMac ? 'Alt+Up' : 'Ctrl+Up',
-        moveDown: isMac ? 'Alt+Down' : 'Ctrl+Down',
-        moveLeft: isMac ? 'Alt+Left' : 'Ctrl+Left',
-        moveRight: isMac ? 'Alt+Right' : 'Ctrl+Right',
-        toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\',
-        toggleClickThrough: isMac ? 'Cmd+M' : 'Ctrl+M',
-        nextStep: isMac ? 'Cmd+Enter' : 'Ctrl+Enter',
-        previousResponse: isMac ? 'Cmd+[' : 'Ctrl+[',
-        nextResponse: isMac ? 'Cmd+]' : 'Ctrl+]',
-        scrollUp: isMac ? 'Cmd+Shift+Up' : 'Ctrl+Shift+Up',
+        moveUp: isMac ? 'Alt+Up' : 'Ctrl+Up', moveDown: isMac ? 'Alt+Down' : 'Ctrl+Down',
+        moveLeft: isMac ? 'Alt+Left' : 'Ctrl+Left', moveRight: isMac ? 'Alt+Right' : 'Ctrl+Right',
+        toggleVisibility: isMac ? 'Cmd+\\' : 'Ctrl+\\', toggleClickThrough: isMac ? 'Cmd+M' : 'Ctrl+M',
+        nextStep: isMac ? 'Cmd+Enter' : 'Ctrl+Enter', previousResponse: isMac ? 'Cmd+[' : 'Ctrl+[',
+        nextResponse: isMac ? 'Cmd+]' : 'Ctrl+]', scrollUp: isMac ? 'Cmd+Shift+Up' : 'Ctrl+Shift+Up',
         scrollDown: isMac ? 'Cmd+Shift+Down' : 'Ctrl+Shift+Down',
-        emergencyErase: isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E',
-        emergencyKill: isMac ? 'Cmd+Shift+Q' : 'Ctrl+Shift+Q', // 🟢 NEW: Instant Death
+        emergencyErase: isMac ? 'Cmd+Shift+E' : 'Ctrl+Shift+E', emergencyKill: isMac ? 'Cmd+Shift+Q' : 'Ctrl+Shift+Q',
     };
 }
 
 function updateGlobalShortcuts(keybinds, mainWindow) {
-    // Unregister old shortcuts before applying new ones
     globalShortcut.unregisterAll();
-
     if (!keybinds) return;
 
     const register = (action, keys, callback) => {
         if (keys) {
-            try {
-                // Electron's globalShortcut requires keys in specific formats (e.g., 'CommandOrControl+X')
-                // This safely handles the registration
-                globalShortcut.register(keys.replace('Cmd', 'Command').replace('Ctrl', 'Control'), callback);
-            } catch (e) {
-                console.error(`Failed to register shortcut for ${action}: ${keys}`);
-            }
+            try { globalShortcut.register(keys.replace('Cmd', 'Command').replace('Ctrl', 'Control'), callback); } 
+            catch (e) { }
         }
     };
 
-    // ----------------------------------------------------
-    // 1. WINDOW MOVEMENT (20px per press)
-    // ----------------------------------------------------
     const moveStep = 20;
     register('moveUp', keybinds.moveUp, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            const bounds = mainWindow.getBounds();
-            mainWindow.setBounds({ ...bounds, y: bounds.y - moveStep });
-        }
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (mainWindow && !mainWindow.isDestroyed()) { const b = mainWindow.getBounds(); mainWindow.setBounds({ ...b, y: b.y - moveStep }); }
     });
     register('moveDown', keybinds.moveDown, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            const bounds = mainWindow.getBounds();
-            mainWindow.setBounds({ ...bounds, y: bounds.y + moveStep });
-        }
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (mainWindow && !mainWindow.isDestroyed()) { const b = mainWindow.getBounds(); mainWindow.setBounds({ ...b, y: b.y + moveStep }); }
     });
     register('moveLeft', keybinds.moveLeft, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            const bounds = mainWindow.getBounds();
-            mainWindow.setBounds({ ...bounds, x: bounds.x - moveStep });
-        }
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (mainWindow && !mainWindow.isDestroyed()) { const b = mainWindow.getBounds(); mainWindow.setBounds({ ...b, x: b.x - moveStep }); }
     });
     register('moveRight', keybinds.moveRight, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            const bounds = mainWindow.getBounds();
-            mainWindow.setBounds({ ...bounds, x: bounds.x + moveStep });
-        }
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (mainWindow && !mainWindow.isDestroyed()) { const b = mainWindow.getBounds(); mainWindow.setBounds({ ...b, x: b.x + moveStep }); }
     });
 
-    // 🟢 FIX: Destroyed the duplicated local stealth variables!
-
     register('toggleVisibility', keybinds.toggleVisibility, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
-
-        // 🟢 Route the keyboard shortcut directly to the Master Stealth Engine
-        if (global.toggleStealthMode) {
-            global.toggleStealthMode();
-        }
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.toggleStealthMode) global.toggleStealthMode();
     });
 
     let isClickThrough = false;
     register('toggleClickThrough', keybinds.toggleClickThrough, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) {
             isClickThrough = !isClickThrough;
             mainWindow.setIgnoreMouseEvents(isClickThrough, { forward: true });
         }
     });
 
-    // ----------------------------------------------------
-    // 3. AI ACTIONS (Capture Screenshot)
-    // ----------------------------------------------------
     register('nextStep', keybinds.nextStep, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
-        if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send('execute-widget-action', 'capture');
-        }
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('execute-widget-action', 'capture');
     });
 
-    // ----------------------------------------------------
-    // 4. NAVIGATION (Responses)
-    // ----------------------------------------------------
     register('previousResponse', keybinds.previousResponse, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-previous-response');
     });
     register('nextResponse', keybinds.nextResponse, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('navigate-next-response');
     });
 
-    // ----------------------------------------------------
-    // 5. SCROLLING
-    // ----------------------------------------------------
     register('scrollUp', keybinds.scrollUp, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-up');
     });
     register('scrollDown', keybinds.scrollDown, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return; // 🟢 KILLSWITCH
+        if (global.isOAModeActive || global.isLiveInterviewMode) return;
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('scroll-response-down');
     });
 
-    // ----------------------------------------------------
-    // 6. EMERGENCY ERASE (Nuke & Quit)
-    // ----------------------------------------------------
     register('emergencyErase', keybinds.emergencyErase, async () => {
         try {
             storage.clearAllData();
@@ -255,21 +178,13 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                 await part.clearStorageData();
             }
             app.quit();
-        } catch (e) {
-            app.quit();
-        }
+        } catch (e) { app.quit(); }
     });
 
-    register('emergencyKill', keybinds.emergencyKill, () => {
-        console.log("💀 EMERGENCY KILL TRIGGERED!");
-        app.exit(0);
-    });
+    register('emergencyKill', keybinds.emergencyKill, () => { app.exit(0); });
 
-    // 🟢 CREATE THE INDEPENDENT RADIAL WINDOW AS A PERMANENT MINIMAP
     global.createRadialWindow = () => {
         const { screen } = require('electron');
-        
-        // 🟢 Read Live Settings!
         const prefs = storage.getPreferences();
         const rs = prefs.radialSettings || { size: 400, offsetX: 0, offsetY: 0 };
         const bgAlpha = prefs.backgroundTransparency ?? 0.8;
@@ -283,6 +198,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             global.radialHudWindow.setContentProtection(true);
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
 
+            // 🟢 3-TIER Z-INDEX: Absolute Top Layer (Minimap)
             global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
             global.radialHudWindow.moveTop();
 
@@ -326,36 +242,22 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             ipcRenderer.on('update-hud', (e, data) => {
                 const { slice, labels, isActive, ghostMode } = data;
 
-                // 🟢 IF HIDDEN, STRIP ALL UI EXCEPT THE RED DOT
-                if (ghostMode) {
-                    container.style.opacity = '0';
-                    return; 
-                } else {
-                    container.style.opacity = '1';
-                    ghostDot.style.opacity = '0';
-                }
+                if (ghostMode) { container.style.opacity = '0'; return; } 
+                else { container.style.opacity = '1'; ghostDot.style.opacity = '0'; }
 
                 if (isActive) {
-                    centerText.style.color = '#00cc66'; 
-                    centerText.style.borderColor = '#00cc66';
-                    centerText.style.boxShadow = '0 0 15px rgba(0,204,102,0.4)';
+                    centerText.style.color = '#00cc66'; centerText.style.borderColor = '#00cc66'; centerText.style.boxShadow = '0 0 15px rgba(0,204,102,0.4)';
                 } else {
-                    centerText.style.color = '#f14c4c'; 
-                    centerText.style.borderColor = '#f14c4c';
-                    centerText.style.boxShadow = 'none';
+                    centerText.style.color = '#f14c4c'; centerText.style.borderColor = '#f14c4c'; centerText.style.boxShadow = 'none';
                 }
 
                 for(let i=0; i<16; i++) {
                     const el = document.getElementById('icon-'+i);
                     el.innerText = labels[i].split(' ')[0] || '';
                     if(slice === i && isActive) {
-                        el.style.opacity = '1';
-                        el.style.transform = 'translate(-50%, -50%) scale(1.6)';
-                        el.style.color = '#00cc66'; 
+                        el.style.opacity = '1'; el.style.transform = 'translate(-50%, -50%) scale(1.6)'; el.style.color = '#00cc66'; 
                     } else {
-                        el.style.opacity = '0.4';
-                        el.style.transform = 'translate(-50%, -50%) scale(1)';
-                        el.style.color = 'white';
+                        el.style.opacity = '0.4'; el.style.transform = 'translate(-50%, -50%) scale(1)'; el.style.color = 'white';
                     }
                 }
 
@@ -367,20 +269,16 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
                     centerText.innerText = 'RADIAL MINIMAP';
                 }
             });
-            ipcRenderer.on('set-ghost-dot', (e, isVisible) => {
-                ghostDot.style.opacity = isVisible ? '1' : '0';
-            });
+            ipcRenderer.on('set-ghost-dot', (e, isVisible) => { ghostDot.style.opacity = isVisible ? '1' : '0'; });
             </script>
             </body></html>
             `;
             global.radialHudWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
             
-            // 🟢 Apply Physical Coordinates!
             const primaryDisplay = screen.getPrimaryDisplay();
             const { width, height } = primaryDisplay.workAreaSize;
-            // Base centered position at the bottom
             let baseX = Math.floor((width - rs.size) / 2);
-            let baseY = height - (rs.size + 20); // 20px padding from bottom
+            let baseY = height - (rs.size + 20);
             global.radialHudWindow.setPosition(baseX + rs.offsetX, baseY + rs.offsetY);
         }
     };
@@ -391,11 +289,10 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         if (view !== 'assistant' && !mainWindow.isDestroyed()) {
             global.isClickThroughState = false;
             mainWindow.setIgnoreMouseEvents(false);
-            mainWindow.webContents.send('ghost-state-changed', false); // 🟢 SYNC UI BADGE
+            mainWindow.webContents.send('ghost-state-changed', false);
         }
     });
 
-    // 🟢 BGMI Tracker Variables
     let bgmiTrackerProcess = null;
     let radialTelemetryLoop = null;
     let radialAnchorX = 0;
@@ -403,7 +300,6 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
     let currentRadialSlice = null;
     const DEADZONE_PX = 25; 
 
-    // 🟢 MISSING TELEMETRY ENGINE RESTORED: 16-Zone Mouse Edge Tracker
     let hotCornerInterval = null;
     let currentDwellZone = null;
 
@@ -421,7 +317,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             const x = point.x - dx;
             const y = point.y - dy;
             
-            const edge = 15; // Physical pixel tolerance
+            const edge = 35; // Tolerance
             let isTop = y <= edge;
             let isBottom = y >= h - edge;
             let isLeft = x <= edge;
@@ -430,7 +326,6 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             const xPct = (x / w) * 100;
             const yPct = (y / h) * 100;
 
-            // Math to slice edges into 5 segments based on custom sliders
             const getSeg = (pct, centerSize, cornerSize) => {
                 if (pct <= cornerSize) return '1'; 
                 if (pct >= 100 - cornerSize) return '5'; 
@@ -456,7 +351,6 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 activeZone = s === '1' ? 'top_right' : s === '2' ? 'right_mid_top' : s === '3' ? 'middle_right' : s === '4' ? 'right_mid_bottom' : 'bottom_right';
             }
 
-            // Stream the exact zone to the frontend every 50ms
             if (activeZone !== currentDwellZone) {
                 currentDwellZone = activeZone;
                 const mainAppWindow = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
@@ -486,7 +380,6 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
     });
 
-    // 🟢 NEW: Live Preview Toggle for the Settings Menu
     ipcMain.on('preview-radial-hud', (event, isPreview) => {
         global.isPreviewingRadial = isPreview;
         if (isPreview) {
@@ -497,25 +390,23 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             global.createRadialWindow();
             global.radialHudWindow.showInactive();
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-            // Force it GREEN so you can easily see the edges while adjusting!
+            global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+            global.radialHudWindow.moveTop();
             global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true });
         } else {
-            // Hide it if we leave the tab, unless we are actually in an active interview
             if (!global.isLiveInterviewMode && global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                 global.radialHudWindow.hide();
             }
         }
     });
 
-    // 🟢 DOT PROXIMITY ROUTER
     ipcMain.on('set-ghost-dot', (event, isVisible) => {
         if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
             global.radialHudWindow.webContents.send('set-ghost-dot', isVisible);
         }
     });
 
-    // 🟢 UPDATED: Rebuild now respects the Preview Mode flag
-    ipcMain.removeAllListeners('rebuild-radial-hud'); // Safety clear
+    ipcMain.removeAllListeners('rebuild-radial-hud');
     ipcMain.on('rebuild-radial-hud', () => {
         if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
             global.radialHudWindow.destroy();
@@ -525,7 +416,7 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             global.createRadialWindow();
             global.radialHudWindow.showInactive();
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-            global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9); // 🟢 DOMINANCE
+            global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
             global.radialHudWindow.moveTop();
             global.radialHudWindow.webContents.send('update-hud', { 
                 slice: null, 
@@ -535,22 +426,15 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }
     });
 
-    // 🟢 NEW: Live Preview Engine for Main Display
     ipcMain.on('live-resize-main-window', (event, { width, height }) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            // 🟢 DEFENSE: Reject any live-resize requests that would squish the UI!
             const safeWidth = Math.max(600, width);
             const safeHeight = Math.max(400, height);
-
             mainWindow.setResizable(true);
             mainWindow.setSize(safeWidth, safeHeight);
-            
-            // Keep it perfectly centered at the top of the screen as it grows!
-            const { screen } = require('electron');
             const primaryDisplay = screen.getPrimaryDisplay();
             const screenWidth = primaryDisplay.workAreaSize.width;
             const x = Math.floor((screenWidth - safeWidth) / 2);
-            
             mainWindow.setPosition(x, 0);
             mainWindow.setResizable(false);
         }
@@ -565,45 +449,27 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                 global.radialHudWindow.showInactive();
                 global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
                 global.radialHudWindow.moveTop();
-                
                 global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
                 global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
             }
 
             if (!bgmiTrackerProcess) {
                 const { spawn } = require('child_process');
-                const fs = require('fs');
-                const path = require('path');
-
-                // 🟢 Bulletproof Array format: Prevents VS Code/Prettier from breaking PowerShell indentation!
                 const psScript = [
-                    '$code = @"',
-                    'using System;',
-                    'using System.Runtime.InteropServices;',
-                    'public class KeyH {',
-                    '    [DllImport("user32.dll")]',
-                    '    public static extern short GetAsyncKeyState(int vKey);',
-                    '}',
-                    '"@',
-                    'Add-Type -TypeDefinition $code',
-                    '$ctrlDown = $false',
+                    '$code = @"', 'using System;', 'using System.Runtime.InteropServices;',
+                    'public class KeyH { [DllImport("user32.dll")] public static extern short GetAsyncKeyState(int vKey); }', '"@',
+                    'Add-Type -TypeDefinition $code', '$ctrlDown = $false',
                     'while ($true) {',
                     '    $state = [KeyH]::GetAsyncKeyState(0x11)',
                     '    $isDown = ($state -band 0x8000) -ne 0',
                     '    if ($isDown -ne $ctrlDown) {',
                     '        $ctrlDown = $isDown',
-                    '        if ($isDown) { ',
-                    '            [Console]::WriteLine("CTRL_DOWN")',
-                    '            [Console]::Out.Flush()',
-                    '        } else { ',
-                    '            [Console]::WriteLine("CTRL_UP")',
-                    '            [Console]::Out.Flush()',
-                    '        }',
+                    '        if ($isDown) { [Console]::WriteLine("CTRL_DOWN"); [Console]::Out.Flush() }',
+                    '        else { [Console]::WriteLine("CTRL_UP"); [Console]::Out.Flush() }',
                     '    }',
                     '    Start-Sleep -Milliseconds 15',
                     '}'
                 ].join('\n');
-                // 🟢 SECURITY BYPASS: Force it into Electron's User Data folder so Windows Defender ignores it!
                 const scriptPath = path.join(app.getPath('userData'), 'cph_radial_tracker.ps1');
                 fs.writeFileSync(scriptPath, psScript);
 
@@ -611,45 +477,28 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
 
                 bgmiTrackerProcess.stdout.on('data', (data) => {
                     const lines = data.toString().split('\n');
-
                     for (let output of lines) {
                         output = output.trim();
-
                         if (output === 'CTRL_DOWN') {
                             if (global.isGhostHidden) continue;
                             if (global.ctrlHoldTimer) clearTimeout(global.ctrlHoldTimer);
 
-                            // 🟢 Read live delay from storage so changes take effect immediately!
                             const prefs = require('./storage').getPreferences();
                             const rs = prefs.radialSettings || {};
                             const holdDelayMs = rs.holdDelay ?? 2000;
 
-                            // 🟢 THE CUSTOM DELAY
                             global.ctrlHoldTimer = setTimeout(() => {
                                 global.isRadialModeActive = true;
-
-                                // 🟢 Set Anchor point *AFTER* 2 seconds have passed!
-                                const { screen } = require('electron');
                                 const point = screen.getCursorScreenPoint();
                                 radialAnchorX = point.x;
                                 radialAnchorY = point.y;
                                 currentRadialSlice = null;
 
-                                // 🟢 Armed: Turn HUD text GREEN & Re-Ghost
                                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                    // 🟢 Z-INDEX DOMINANCE
                                     global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
                                     global.radialHudWindow.moveTop();
-                                    
-                                    // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
                                     global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                                    // 🟢 FIX: Appended ghostMode: false
-                                    global.radialHudWindow.webContents.send('update-hud', {
-                                        slice: null,
-                                        labels: global.activeRadialLabels,
-                                        isActive: true,
-                                        ghostMode: false
-                                    });
+                                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
                                 }
 
                                 if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
@@ -659,25 +508,17 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                     const dy = p.y - radialAnchorY;
                                     const dist = Math.sqrt(dx*dx + dy*dy);
 
-                                    // Must pull > 25px away from where the 2-second timer finished
                                     if (dist > DEADZONE_PX) {
                                         let angle = Math.atan2(dy, dx) * (180 / Math.PI);
                                         angle = angle + 90; 
                                         if (angle < 0) angle += 360;
-                                        let adjustedAngle = (angle + 11.25) % 360;
-                                        currentRadialSlice = Math.floor(adjustedAngle / 22.5);
+                                        currentRadialSlice = Math.floor(((angle + 11.25) % 360) / 22.5);
                                     } else {
                                         currentRadialSlice = null; 
                                     }
 
                                     if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                        // 🟢 FIX: Appended ghostMode: false
-                                        global.radialHudWindow.webContents.send('update-hud', {
-                                            slice: currentRadialSlice,
-                                            labels: global.activeRadialLabels,
-                                            isActive: true,
-                                            ghostMode: false
-                                        });
+                                        global.radialHudWindow.webContents.send('update-hud', { slice: currentRadialSlice, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
                                     }
 
                                     const mainAppWindow = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
@@ -689,22 +530,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                         }
 
                         if (output === 'CTRL_UP') {
-                            // If you released Ctrl before 2 seconds, cancel the timer
-                            if (global.ctrlHoldTimer) {
-                                clearTimeout(global.ctrlHoldTimer);
-                                global.ctrlHoldTimer = null;
-                            }
-
+                            if (global.ctrlHoldTimer) { clearTimeout(global.ctrlHoldTimer); global.ctrlHoldTimer = null; }
                             if (global.isGhostHidden) continue;
 
-                            // If the system was ARMED and GREEN, execute the pull!
                             if (global.isRadialModeActive) {
-                                if (radialTelemetryLoop) {
-                                    clearInterval(radialTelemetryLoop);
-                                    radialTelemetryLoop = null;
-                                }
+                                if (radialTelemetryLoop) { clearInterval(radialTelemetryLoop); radialTelemetryLoop = null; }
 
-                                // Bulletproof Execution Window Target
                                 const mainAppWindow = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
                                 if (currentRadialSlice !== null && mainAppWindow && !mainAppWindow.isDestroyed()) {
                                     mainAppWindow.webContents.send('execute-radial-hud', currentRadialSlice);
@@ -713,36 +544,18 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                                 currentRadialSlice = null;
                                 global.isRadialModeActive = false;
 
-                                // 🟢 Reset: Turn HUD text back to RED
                                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                    // 🟢 FIX: Appended ghostMode: false
-                                    global.radialHudWindow.webContents.send('update-hud', { 
-                                        slice: null, 
-                                        labels: global.activeRadialLabels, 
-                                        isActive: false,
-                                        ghostMode: false
-                                    });
+                                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
                                 }
                             }
                         }
                     }
                 });
-
-                bgmiTrackerProcess.stderr.on('data', (data) => {
-                    console.error('[BGMI ERROR]', data.toString());
-                });
             }
         } else {
-            // Mode Cleanup
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
-            if (bgmiTrackerProcess) {
-                bgmiTrackerProcess.kill();
-                bgmiTrackerProcess = null;
-            }
-            if (radialTelemetryLoop) {
-                clearInterval(radialTelemetryLoop);
-                radialTelemetryLoop = null;
-            }
+            if (bgmiTrackerProcess) { bgmiTrackerProcess.kill(); bgmiTrackerProcess = null; }
+            if (radialTelemetryLoop) { clearInterval(radialTelemetryLoop); radialTelemetryLoop = null; }
         }
     });
 
@@ -751,161 +564,43 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         if (isActive) global.isClickThroughState = true;
     });
 
-    // 🟢 FIX: Intercept and track the ignore-mouse events here so the global shortcuts can read it!
     ipcMain.removeAllListeners('set-ignore-mouse-events');
     ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
         global.isClickThroughState = ignore;
         const win = BrowserWindow.fromWebContents(event.sender);
         if (win) {
             win.setIgnoreMouseEvents(ignore, { forward: true });
-            // 🟢 BEAM THE STATE TO THE APP HEADER INDICATOR!
             win.webContents.send('ghost-state-changed', ignore);
         }
     });
 
-    ipcMain.handle('window-minimize', () => {
-        if (!mainWindow.isDestroyed()) {
-            mainWindow.minimize();
-        }
-    });
+    ipcMain.handle('window-minimize', () => { if (!mainWindow.isDestroyed()) mainWindow.minimize(); });
 
     ipcMain.on('update-keybinds', (event, newKeybinds) => {
-        if (!mainWindow.isDestroyed()) {
-            updateGlobalShortcuts(newKeybinds, mainWindow, sendToRenderer, geminiSessionRef);
-        }
+        if (!mainWindow.isDestroyed()) { updateGlobalShortcuts(newKeybinds, mainWindow, sendToRenderer, geminiSessionRef); }
     });
 
     ipcMain.handle('toggle-window-visibility', async event => {
         try {
-            if (mainWindow.isDestroyed()) {
-                return { success: false, error: 'Window has been destroyed' };
-            }
-
-            if (mainWindow.isVisible()) {
-                mainWindow.hide();
-            } else {
-                mainWindow.showInactive();
-            }
+            if (mainWindow.isDestroyed()) return { success: false, error: 'Window has been destroyed' };
+            if (mainWindow.isVisible()) mainWindow.hide();
+            else mainWindow.showInactive();
             return { success: true };
-        } catch (error) {
-            console.error('Error toggling window visibility:', error);
-            return { success: false, error: error.message };
-        }
+        } catch (error) { return { success: false, error: error.message }; }
     });
 
-    function animateWindowResize(mainWindow, targetWidth, targetHeight, layoutMode) {
-        return new Promise(resolve => {
-            // Check if window is destroyed before starting animation
-            if (mainWindow.isDestroyed()) {
-                // console.log('Cannot animate resize: window has been destroyed');
-                resolve();
-                return;
-            }
+    ipcMain.handle('update-sizes', async event => { return { success: true }; });
 
-            // Clear any existing animation
-            if (resizeAnimation) {
-                clearInterval(resizeAnimation);
-                resizeAnimation = null;
-            }
-
-            const [startWidth, startHeight] = mainWindow.getSize();
-
-            // If already at target size, no need to animate
-            if (startWidth === targetWidth && startHeight === targetHeight) {
-                // console.log(`Window already at target size for ${layoutMode} mode`);
-                resolve();
-                return;
-            }
-
-            // console.log(`Starting animated resize from ${startWidth}x${startHeight} to ${targetWidth}x${targetHeight}`);
-
-            windowResizing = true;
-            mainWindow.setResizable(true);
-
-            const frameRate = 60; // 60 FPS
-            const totalFrames = Math.floor(RESIZE_ANIMATION_DURATION / (1000 / frameRate));
-            let currentFrame = 0;
-
-            const widthDiff = targetWidth - startWidth;
-            const heightDiff = targetHeight - startHeight;
-
-            resizeAnimation = setInterval(() => {
-                currentFrame++;
-                const progress = currentFrame / totalFrames;
-
-                // Use easing function (ease-out)
-                const easedProgress = 1 - Math.pow(1 - progress, 3);
-
-                const currentWidth = Math.round(startWidth + widthDiff * easedProgress);
-                const currentHeight = Math.round(startHeight + heightDiff * easedProgress);
-
-                if (!mainWindow || mainWindow.isDestroyed()) {
-                    clearInterval(resizeAnimation);
-                    resizeAnimation = null;
-                    windowResizing = false;
-                    return;
-                }
-                mainWindow.setSize(currentWidth, currentHeight);
-
-                // Re-center the window during animation
-                const primaryDisplay = screen.getPrimaryDisplay();
-                const { width: screenWidth } = primaryDisplay.workAreaSize;
-                const x = Math.floor((screenWidth - currentWidth) / 2);
-                const y = 0;
-                mainWindow.setPosition(x, y);
-
-                if (currentFrame >= totalFrames) {
-                    clearInterval(resizeAnimation);
-                    resizeAnimation = null;
-                    windowResizing = false;
-
-                    // Check if window is still valid before final operations
-                    if (!mainWindow.isDestroyed()) {
-                        mainWindow.setResizable(false);
-
-                        // Ensure final size is exact
-                        mainWindow.setSize(targetWidth, targetHeight);
-                        const finalX = Math.floor((screenWidth - targetWidth) / 2);
-                        mainWindow.setPosition(finalX, 0);
-                    }
-
-                    // console.log(`Animation complete: ${targetWidth}x${targetHeight}`);
-                    resolve();
-                }
-            }, 1000 / frameRate);
-        });
-    }
-
-    ipcMain.handle('update-sizes', async event => {
-        // NEUTERED: Window resizing is permanently disabled. 
-        // In an OA or Interview, dynamic resizing causes eye-tracking suspicion. 
-        // The window will now remain a constant, reliable size.
-        return { success: true };
-    });
-
-    // 🟢 FIXED: Force window to open the second connection is established
     ipcMain.on('open-companion-window', (event, data) => {
-        // console.log("[DEBUG-COMPANION] Received open request for:", data.name);
-        
         if (typeof companionChatWindow === 'undefined' || !companionChatWindow || companionChatWindow.isDestroyed()) {
-            // console.log("[DEBUG-COMPANION] Creating Companion window...");
             const { screen } = require('electron');
             const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-            
-            // Fixed width, full height
             const windowWidth = 340; 
             
             companionChatWindow = new BrowserWindow({
-                width: windowWidth,
-                height: height,
-                frame: false,
-                transparent: true,
-                alwaysOnTop: true,
-                hasShadow: false,
-                skipTaskbar: true,
+                width: windowWidth, height: height, frame: false, transparent: true, alwaysOnTop: true, hasShadow: false, skipTaskbar: true,
                 webPreferences: { nodeIntegration: true, contextIsolation: false }
             });
-            
             companionChatWindow.setContentProtection(true);
             
             const htmlContent = `
@@ -914,14 +609,8 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                     <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
                     <style>
                         body { margin:0; padding:12px; background:rgba(20,20,20,0.8); color:white; font-family:'Inter', -apple-system, sans-serif; display:flex; flex-direction:column; height:100vh; box-sizing:border-box; border-left:1px solid #444; }
-                        ::-webkit-scrollbar { width: 6px; }
-                        ::-webkit-scrollbar-track { background: transparent; }
-                        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-                        ::-webkit-scrollbar-thumb:hover { background: #666; }
+                        ::-webkit-scrollbar { width: 6px; } ::-webkit-scrollbar-track { background: transparent; } ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
                         .msg-box { background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; word-wrap: break-word; }
-                        pre { background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 11px; margin: 5px 0; border: 1px solid #333; }
-                        code { font-family: monospace; background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px; }
-                        p { margin: 0 0 5px 0; } p:last-child { margin: 0; }
                     </style>
                 </head>
                 <body>
@@ -934,19 +623,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
                         require('electron').ipcRenderer.on('new-msg', (e, d) => {
                             const div = document.createElement('div');
                             div.className = 'msg-box';
-                            const isYou = d.name.includes('You');
-                            const color = isYou ? '#00cc66' : '#a142f4';
-                            div.style.borderLeft = '2px solid ' + color;
-                            div.innerHTML = '<strong style="color:' + color + '; display:block; margin-bottom:4px;">' + d.name + '</strong>' + marked.parse(d.message);
-                            
-                            const msgs = document.getElementById('msgs');
-                            msgs.appendChild(div);
-                            msgs.scrollTop = msgs.scrollHeight;
+                            div.style.borderLeft = '2px solid ' + (d.name.includes('You') ? '#00cc66' : '#a142f4');
+                            div.innerHTML = '<strong style="color:' + (d.name.includes('You') ? '#00cc66' : '#a142f4') + '; display:block; margin-bottom:4px;">' + d.name + '</strong>' + marked.parse(d.message);
+                            document.getElementById('msgs').appendChild(div);
+                            document.getElementById('msgs').scrollTop = document.getElementById('msgs').scrollHeight;
                         });
-                        
-                        require('electron').ipcRenderer.on('sync-opacity', (e, opacity) => {
-                            document.body.style.background = \`rgba(20,20,20,\${opacity})\`;
-                        });
+                        require('electron').ipcRenderer.on('sync-opacity', (e, opacity) => { document.body.style.background = \`rgba(20,20,20,\${opacity})\`; });
                     </script>
                 </body>
                 </html>
@@ -954,74 +636,6 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             companionChatWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
             companionChatWindow.setPosition(width - windowWidth, 0);
         }
-        
-        // Ensure it pops up immediately
-        // console.log("[DEBUG-COMPANION] Showing Companion window.");
-        companionChatWindow.showInactive();
-    });
-
-    ipcMain.on('relay-companion-chat', (event, data) => {
-        if (!companionChatWindow || companionChatWindow.isDestroyed()) {
-            const { screen } = require('electron');
-            const { width, height } = screen.getPrimaryDisplay().workAreaSize;
-            const windowWidth = 340; 
-
-            companionChatWindow = new BrowserWindow({
-                width: windowWidth, height: height,
-                alwaysOnTop: true, frame: false, transparent: true, 
-                skipTaskbar: true,
-                webPreferences: { nodeIntegration: true, contextIsolation: false }
-            });
-            
-            companionChatWindow.setContentProtection(true);
-            
-            const htmlContent = `
-                <html>
-                <head>
-                    <script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script>
-                    <style>
-                        body { margin:0; padding:12px; background:rgba(20,20,20,0.8); color:white; font-family:'Inter', -apple-system, sans-serif; display:flex; flex-direction:column; height:100vh; box-sizing:border-box; border-left:1px solid #444; }
-                        ::-webkit-scrollbar { width: 6px; }
-                        ::-webkit-scrollbar-track { background: transparent; }
-                        ::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
-                        ::-webkit-scrollbar-thumb:hover { background: #666; }
-                        .msg-box { background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; word-wrap: break-word; }
-                        pre { background: rgba(0,0,0,0.5); padding: 8px; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 11px; margin: 5px 0; border: 1px solid #333; }
-                        code { font-family: monospace; background: rgba(0,0,0,0.3); padding: 2px 4px; border-radius: 3px; }
-                        p { margin: 0 0 5px 0; } p:last-child { margin: 0; }
-                    </style>
-                </head>
-                <body>
-                    <div style="-webkit-app-region:drag; font-size:12px; font-weight:bold; color:#888; margin-bottom:10px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #333;">
-                        <span>Whisper Log</span>
-                        <span style="-webkit-app-region:no-drag; cursor: default !important; color:#f14c4c; font-size:14px;" onclick="require('electron').ipcRenderer.send('close-companion-chat')">X</span>
-                    </div>
-                    <div id="msgs" style="flex:1; overflow-y:auto; display:flex; flex-direction:column;"></div>
-                    <script>
-                        require('electron').ipcRenderer.on('new-msg', (e, d) => {
-                            const div = document.createElement('div');
-                            div.className = 'msg-box';
-                            const isYou = d.name.includes('You');
-                            const color = isYou ? '#00cc66' : '#a142f4';
-                            div.style.borderLeft = '2px solid ' + color;
-                            div.innerHTML = '<strong style="color:' + color + '; display:block; margin-bottom:4px;">' + d.name + '</strong>' + marked.parse(d.message);
-                            
-                            const msgs = document.getElementById('msgs');
-                            msgs.appendChild(div);
-                            msgs.scrollTop = msgs.scrollHeight; 
-                        });
-                        
-                        require('electron').ipcRenderer.on('sync-opacity', (e, opacity) => {
-                            document.body.style.background = \`rgba(20,20,20,\${opacity})\`;
-                        });
-                    </script>
-                </body>
-                </html>
-            `;
-            companionChatWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
-            companionChatWindow.setPosition(width - windowWidth, 0);
-        }
-        
         setTimeout(() => {
             if (companionChatWindow && !companionChatWindow.isDestroyed()) {
                 companionChatWindow.webContents.send('new-msg', data);
@@ -1030,24 +644,24 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         }, 300);
     });
 
-    ipcMain.on('close-companion-chat', () => {
-        if (companionChatWindow && !companionChatWindow.isDestroyed()) {
-            companionChatWindow.close();
-            companionChatWindow = null;
+    ipcMain.on('relay-companion-chat', (event, data) => {
+        if (!companionChatWindow || companionChatWindow.isDestroyed()) {
+            const { screen } = require('electron');
+            const { width, height } = screen.getPrimaryDisplay().workAreaSize;
+            companionChatWindow = new BrowserWindow({
+                width: 340, height: height, alwaysOnTop: true, frame: false, transparent: true, skipTaskbar: true,
+                webPreferences: { nodeIntegration: true, contextIsolation: false }
+            });
+            companionChatWindow.setContentProtection(true);
+            const htmlContent = `<html><head><script src="https://cdn.jsdelivr.net/npm/marked@4.3.0/marked.min.js"></script><style>body { margin:0; padding:12px; background:rgba(20,20,20,0.8); color:white; font-family:'Inter', -apple-system, sans-serif; display:flex; flex-direction:column; height:100vh; box-sizing:border-box; border-left:1px solid #444; } .msg-box { background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 6px; margin-bottom: 8px; font-size: 13px; line-height: 1.4; word-wrap: break-word; }</style></head><body><div style="-webkit-app-region:drag; font-size:12px; font-weight:bold; color:#888; margin-bottom:10px; display:flex; justify-content:space-between; padding-bottom:8px; border-bottom:1px solid #333;"><span>Whisper Log</span><span style="-webkit-app-region:no-drag; cursor: default !important; color:#f14c4c; font-size:14px;" onclick="require('electron').ipcRenderer.send('close-companion-chat')">X</span></div><div id="msgs" style="flex:1; overflow-y:auto; display:flex; flex-direction:column;"></div><script>require('electron').ipcRenderer.on('new-msg', (e, d) => { const div = document.createElement('div'); div.className = 'msg-box'; div.style.borderLeft = '2px solid ' + (d.name.includes('You') ? '#00cc66' : '#a142f4'); div.innerHTML = '<strong style="color:' + (d.name.includes('You') ? '#00cc66' : '#a142f4') + '; display:block; margin-bottom:4px;">' + d.name + '</strong>' + marked.parse(d.message); document.getElementById('msgs').appendChild(div); document.getElementById('msgs').scrollTop = document.getElementById('msgs').scrollHeight; }); require('electron').ipcRenderer.on('sync-opacity', (e, opacity) => { document.body.style.background = \`rgba(20,20,20,\${opacity})\`; });</script></body></html>`;
+            companionChatWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+            companionChatWindow.setPosition(width - 340, 0);
         }
+        setTimeout(() => { if (companionChatWindow && !companionChatWindow.isDestroyed()) { companionChatWindow.webContents.send('new-msg', data); companionChatWindow.showInactive(); } }, 300);
     });
 
-    ipcMain.handle('hide-companion-chat', () => {
-        if (companionChatWindow && !companionChatWindow.isDestroyed()) {
-            companionChatWindow.hide();
-        }
-    });
+    ipcMain.on('close-companion-chat', () => { if (companionChatWindow && !companionChatWindow.isDestroyed()) { companionChatWindow.close(); companionChatWindow = null; } });
+    ipcMain.handle('hide-companion-chat', () => { if (companionChatWindow && !companionChatWindow.isDestroyed()) companionChatWindow.hide(); });
 }
 
-module.exports = {
-    createWindow,
-    getDefaultKeybinds,
-    updateGlobalShortcuts,
-    setupWindowIpcHandlers,
-    getCompanionWindow: () => companionChatWindow
-};
+module.exports = { createWindow, getDefaultKeybinds, updateGlobalShortcuts, setupWindowIpcHandlers, getCompanionWindow: () => companionChatWindow };

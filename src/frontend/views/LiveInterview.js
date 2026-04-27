@@ -5,86 +5,51 @@ export class LiveInterview extends LitElement {
     static styles = css`
         :host { display: flex; flex-direction: column; height: 100%; width: 100%; background: transparent; }
         * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; cursor: default !important; user-select: none; }
-        
         .split-container { display: flex; width: 100%; height: 100%; background: transparent; position: relative; gap: 10px; padding-bottom: 10px; }
-        
-        .pane {
-            flex: 1; border-radius: 8px; overflow-y: auto; padding: 15px 10px; 
-            background: var(--bg-secondary); transition: border-color 0.2s;
-            display: flex; flex-direction: column;
-            border: 1px solid var(--border-color);
-        }
+        .pane { flex: 1; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s; display: flex; flex-direction: column; border: 1px solid var(--border-color); }
         .pane.hovered-code { border-color: #4285f4; }
         .pane.hovered-voice { border-color: #a142f4; }
-        
-        .pane-header {
-            position: sticky; top: -15px; background: var(--bg-tertiary); backdrop-filter: blur(5px); 
-            padding: 8px 10px; margin: -15px -10px 10px -10px; border-bottom: 1px solid var(--border-color); 
-            z-index: 10; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0;
-        }
-
+        .pane-header { position: sticky; top: -15px; background: var(--bg-tertiary); backdrop-filter: blur(5px); padding: 8px 10px; margin: -15px -10px 10px -10px; border-bottom: 1px solid var(--border-color); z-index: 10; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0; }
         .header-title { font-size: 11px; font-weight: bold; text-transform: uppercase; }
         .code-title { color: #4285f4; }
         .voice-title { color: #a142f4; }
-
         .header-controls { display: flex; gap: 8px; align-items: center; }
-        
         .status-badge { font-size: 11px; }
         .count-badge { font-size: 11px; background: rgba(255,255,255,0.1); padding: 2px 6px; border-radius: 4px; }
-        
-        .mic-btn {
-            padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; transition: 0.2s; cursor: pointer !important;
-        }
+        .mic-btn { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; transition: 0.2s; cursor: pointer !important; }
         .mic-btn.on { background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid rgba(0, 204, 102, 0.4); }
         .mic-btn.off { background: rgba(241, 76, 76, 0.15); color: #f14c4c; border: 1px solid rgba(241, 76, 76, 0.4); }
-
         .chat-feed-wrapper { flex: 1; overflow-y: auto; }
-        
-        /* Toast */
-        .toast {
-            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
-            background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66;
-            padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: bold;
-            opacity: 0; transition: opacity 0.3s; z-index: 1000; pointer-events: none; text-transform: uppercase;
-        }
+        .toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: bold; opacity: 0; transition: opacity 0.3s; z-index: 1000; pointer-events: none; text-transform: uppercase; }
         .toast.visible { opacity: 1; }
-
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
     `;
 
     static properties = {
-        codeChatHistory: { type: Array },
-        voiceChatHistory: { type: Array },
-        codeChatIndex: { type: Number },
-        voiceChatIndex: { type: Number },
-        paneHoverState: { type: String },
-        isMicOn: { type: Boolean },
-        tacThinkMode: { type: Boolean },
-        toastMessage: { type: String },
-        activePage: { type: Number },
-        prefs: { type: Object }
+        codeChatHistory: { type: Array }, voiceChatHistory: { type: Array },
+        codeChatIndex: { type: Number }, voiceChatIndex: { type: Number },
+        paneHoverState: { type: String }, isMicOn: { type: Boolean },
+        tacThinkMode: { type: Boolean }, toastMessage: { type: String },
+        activePage: { type: Number }, prefs: { type: Object }
     };
 
     constructor() {
         super();
-        this.codeChatHistory = [];
-        this.voiceChatHistory = [];
-        this.codeChatIndex = 0;
-        this.voiceChatIndex = 0;
-        this.paneHoverState = 'code';
-        this.isMicOn = false;
-        this.tacThinkMode = false;
-        this.toastMessage = '';
-        this.activePage = 1;
-        this.prefs = {};
-        this.trimTick = 0;
-        
-        // 🟢 NEW: Track Ghost State locally for the Stealth Edge
-        this._isGhostHidden = false;
-        this._isHoveringStealthDot = false;
-        this.hoverTimer = null;
+        this.codeChatHistory = []; this.voiceChatHistory = [];
+        this.codeChatIndex = 0; this.voiceChatIndex = 0;
+        this.paneHoverState = 'code'; this.isMicOn = false;
+        this.tacThinkMode = false; this.toastMessage = '';
+        this.activePage = 1; this.prefs = {}; this.trimTick = 0;
+        this._isGhostHidden = false; this._isHoveringStealthDot = false;
+        this.hoverTimer = null; this.autoMicTimer = null;
+    }
+
+    getDefaultMap(page) {
+        const defaultPage1 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'mic', right_mid_top: 'change_ai', middle_left: 'prev_resp', middle_right: 'next_resp', left_mid_bottom: 'fast_think', right_mid_bottom: 'change_profile', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
+        const defaultPage2 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'bg_inc', right_mid_top: 'text_inc', middle_left: 'reset', middle_right: 'language', left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
+        return page === 2 ? defaultPage2 : defaultPage1;
     }
 
     async connectedCallback() {
@@ -94,7 +59,6 @@ export class LiveInterview extends LitElement {
             const raw = await window.cheatingDaddy.storage.getPreferences();
             this.prefs = raw?.data || raw || {};
             if (this.prefs.tacThinkMode !== undefined) this.tacThinkMode = this.prefs.tacThinkMode;
-            
             this.syncRadialToBackend(); 
         }
 
@@ -109,56 +73,38 @@ export class LiveInterview extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             
-            // 🟢 State Trackers for the Ghost Window
             this.ghostHiddenHandler = () => { this._isGhostHidden = true; };
             this.ghostVisibleHandler = () => { this._isGhostHidden = false; };
             ipcRenderer.on('app-made-hidden', this.ghostHiddenHandler);
             ipcRenderer.on('app-made-visible', this.ghostVisibleHandler);
 
-            // 🟢 THE FIX: Emergency Edge Stealth Timer & Logic restored!
             this.hoverHandler = (_, zone) => {
-                if (this.hoverTimer) {
-                    clearInterval(this.hoverTimer);
-                    this.hoverTimer = null;
-                }
+                if (this.hoverTimer) { clearInterval(this.hoverTimer); this.hoverTimer = null; }
 
                 const killDot = () => {
                     if (this._isHoveringStealthDot) {
-                        if (window.require) window.require('electron').ipcRenderer.send('set-ghost-dot', false);
+                        ipcRenderer.send('set-ghost-dot', false);
                         this._isHoveringStealthDot = false;
                     }
                 };
 
-                if (!zone || zone === 'none') {
-                    killDot();
-                    return;
-                }
+                if (!zone || zone === 'none') { killDot(); return; }
 
                 const stealthEdge = this.prefs.interviewStealthEdge || 'none';
-                if (zone !== stealthEdge || stealthEdge === 'none') {
-                    killDot();
-                    return; // Ignore all edges except the designated Stealth Edge
-                }
+                if (zone !== stealthEdge || stealthEdge === 'none') { killDot(); return; }
 
-                // Show the Red Dot if we are currently hidden
                 if (this._isGhostHidden) {
                     if (!this._isHoveringStealthDot) {
-                        if (window.require) window.require('electron').ipcRenderer.send('set-ghost-dot', true);
+                        ipcRenderer.send('set-ghost-dot', true);
                         this._isHoveringStealthDot = true;
                     }
-                } else {
-                    killDot();
-                }
+                } else { killDot(); }
 
                 const bounds = this.prefs.hotCornerBounds || { hideTime: 0 };
-                // Hide is instant (0ms), Unhide uses the delay slider
                 let targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
                 
                 let progress = 0;
-                if (targetTimeMs <= 0) {
-                    this.executeHotCorner('hide_unhide');
-                    return;
-                }
+                if (targetTimeMs <= 0) { this.executeHotCorner('hide_unhide'); return; }
 
                 this.hoverTimer = setInterval(() => {
                     progress += (50 / targetTimeMs) * 100;
@@ -171,55 +117,17 @@ export class LiveInterview extends LitElement {
             };
             ipcRenderer.on('hot-corner-hover', this.hoverHandler);
 
-            this.voiceNewHandler = (_, text) => {
-                this.voiceChatHistory = [...this.voiceChatHistory, `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`];
-                this.voiceChatIndex = this.voiceChatHistory.length - 1;
-                this.requestUpdate();
-                this.scrollToBottom('voice-feed');
-            };
-            
-            this.voiceUpdateHandler = (_, text) => {
-                if (this.voiceChatHistory.length > 0) {
-                    const a = [...this.voiceChatHistory];
-                    a[a.length - 1] = `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`;
-                    this.voiceChatHistory = a;
-                } else {
-                    this.voiceChatHistory = [`🤖 AI:\n${text}`];
-                    this.voiceChatIndex = 0;
-                }
-                this.requestUpdate();
-                this.scrollToBottom('voice-feed');
-            };
-
-            this.codeNewHandler = (_, text) => {
-                this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`];
-                this.codeChatIndex = this.codeChatHistory.length - 1;
-                this.requestUpdate();
-                this.scrollToBottom('code-feed');
-            };
-
-            this.codeUpdateHandler = (_, text) => {
-                if (this.codeChatHistory.length > 0) {
-                    const a = [...this.codeChatHistory];
-                    a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`;
-                    this.codeChatHistory = a;
-                } else {
-                    this.codeChatHistory = [`🤖 AI:\n${text}`];
-                    this.codeChatIndex = 0;
-                }
-                this.requestUpdate();
-                this.scrollToBottom('code-feed');
-            };
-
-            this.micSyncHandler = (_, state) => {
-                this.isMicOn = state;
-                this.requestUpdate();
-            };
+            this.voiceNewHandler = (_, text) => { this.voiceChatHistory = [...this.voiceChatHistory, `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`]; this.voiceChatIndex = this.voiceChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
+            this.voiceUpdateHandler = (_, text) => { if (this.voiceChatHistory.length > 0) { const a = [...this.voiceChatHistory]; a[a.length - 1] = `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`; this.voiceChatHistory = a; } else { this.voiceChatHistory = [`🤖 AI:\n${text}`]; this.voiceChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('voice-feed'); };
+            this.codeNewHandler = (_, text) => { this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; this.codeChatIndex = this.codeChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('code-feed'); };
+            this.codeUpdateHandler = (_, text) => { if (this.codeChatHistory.length > 0) { const a = [...this.codeChatHistory]; a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; this.codeChatHistory = a; } else { this.codeChatHistory = [`🤖 AI:\n${text}`]; this.codeChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('code-feed'); };
+            this.micSyncHandler = (_, state) => { this.isMicOn = state; this.requestUpdate(); };
 
             this.radialExecuteHandler = (_, sliceIndex) => {
                 if (sliceIndex !== null) {
                     const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
-                    const activeMap = this.activePage === 2 ? (this.prefs.interviewCornersPage2 || {}) : (this.prefs.interviewCorners || {});
+                    let activeMap = this.activePage === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});                    
+                    activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; // 🟢 Perfect Merge Map Injection
                     const action = activeMap[clockWiseGrid[sliceIndex]];
                     if (action && action !== 'none') this.executeHotCorner(action);
                 }
@@ -227,15 +135,13 @@ export class LiveInterview extends LitElement {
 
             this.radialContinuousHandler = (_, sliceIndex) => {
                 const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
-                const activeMap = this.activePage === 2 ? (this.prefs.interviewCornersPage2 || {}) : (this.prefs.interviewCorners || {});
-                const action = activeMap[clockWiseGrid[sliceIndex]];
+                let activeMap = this.activePage === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});                
+                activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; 
                 
+                const action = activeMap[clockWiseGrid[sliceIndex]];
                 if (['scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'].includes(action)) {
                     this.trimTick = (this.trimTick || 0) + 1;
-                    if (this.trimTick >= 6) { 
-                        this.executeHotCorner(action);
-                        this.trimTick = 0;
-                    }
+                    if (this.trimTick >= 6) { this.executeHotCorner(action); this.trimTick = 0; }
                 }
             };
 
@@ -246,12 +152,16 @@ export class LiveInterview extends LitElement {
             ipcRenderer.on('sync-mic-state', this.micSyncHandler);
             ipcRenderer.on('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.on('radial-continuous-hold', this.radialContinuousHandler);
+            
+            this._autoStartMic();
         }
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('sync-preference', this.syncPrefHandler);
+        if (this.autoMicTimer) clearInterval(this.autoMicTimer);
+        
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeListener('app-made-hidden', this.ghostHiddenHandler);
@@ -265,6 +175,21 @@ export class LiveInterview extends LitElement {
             ipcRenderer.removeListener('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.removeListener('radial-continuous-hold', this.radialContinuousHandler);
         }
+    }
+
+    _autoStartMic() {
+        let attempts = 0;
+        if (this.autoMicTimer) clearInterval(this.autoMicTimer);
+        this.autoMicTimer = setInterval(async () => {
+            attempts++;
+            if (this.isMicOn || attempts > 20) {
+                clearInterval(this.autoMicTimer);
+                this.autoMicTimer = null;
+                if (this.isMicOn) this.showToast('🎙️ Voice Brain Auto-Started');
+                return;
+            }
+            if (window.require) await window.require('electron').ipcRenderer.invoke('toggle-ai-mic', true);
+        }, 1500);
     }
 
     getHotCornerLabel(action) {
@@ -283,14 +208,8 @@ export class LiveInterview extends LitElement {
 
     syncRadialToBackend() {
         if (!window.require) return;
-        const defaultPage1 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'mic', right_mid_top: 'change_ai', middle_left: 'prev_resp', middle_right: 'next_resp', left_mid_bottom: 'fast_think', right_mid_bottom: 'change_profile', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
-        const defaultPage2 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'bg_inc', right_mid_top: 'text_inc', middle_left: 'reset', middle_right: 'language', left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
-
         let activeMap = this.activePage === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});
-        
-        if (Object.keys(activeMap).length === 0) {
-            activeMap = this.activePage === 2 ? defaultPage2 : defaultPage1;
-        }
+        activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; // 🟢 FIX: Perfect Merge
 
         const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
         const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
@@ -298,30 +217,32 @@ export class LiveInterview extends LitElement {
     }
 
     async executeHotCorner(action) {
+        if (!window.require) return;
+        const { ipcRenderer } = window.require('electron');
         switch (action) {
             case 'capture': 
                 this.showToast('📸 Screenshot Captured');
-                if (window.require) window.require('electron').ipcRenderer.invoke('capture-screenshot');
+                ipcRenderer.invoke('capture-screenshot');
                 break;
             case 'send_ai': 
                 this.showToast('🚀 Firing to AI');
-                if (window.require) window.require('electron').ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text');
+                ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text');
                 break;
             case 'fix_error': 
                 this.showToast('🔧 Fixing Error...');
-                if (window.require) window.require('electron').ipcRenderer.invoke('send-oa-fix-error');
+                ipcRenderer.invoke('send-oa-fix-error');
                 break;
             case 'regenerate':
                 this.showToast('🔄 Regenerating...');
-                if (window.require) window.require('electron').ipcRenderer.invoke('send-oa-regenerate');
+                ipcRenderer.invoke('send-oa-regenerate');
                 break;
             case 'hide_unhide': 
                 this.showToast('👻 Toggled Stealth'); 
-                if (window.require) window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); 
+                ipcRenderer.invoke('trigger-ghost-hide'); 
                 break;
             case 'toggle_ai_vis':
                 this.showToast('👁️ Toggled AI Window');
-                if (window.require) window.require('electron').ipcRenderer.invoke('toggle-ai-visibility');
+                ipcRenderer.invoke('toggle-ai-visibility');
                 break;
             case 'toggle_page2':
                 this.activePage = this.activePage === 1 ? 2 : 1;
@@ -366,8 +287,9 @@ export class LiveInterview extends LitElement {
                 this.showToast('✨ Session Reset');
                 this.codeChatHistory = []; this.voiceChatHistory = [];
                 this.codeChatIndex = 0; this.voiceChatIndex = 0;
-                if (window.require) window.require('electron').ipcRenderer.invoke('new-chat');
+                ipcRenderer.invoke('new-chat');
                 this.requestUpdate();
+                setTimeout(() => this._autoStartMic(), 4000);
                 break;
             case 'text_inc': 
             case 'text_dec':
@@ -391,12 +313,9 @@ export class LiveInterview extends LitElement {
                 break;
             case 'abort_oa':
                 this.showToast('🚪 Exiting...');
-                if (window.require) {
-                    window.require('electron').ipcRenderer.send('set-session-mode', 'main');
-                    window.require('electron').ipcRenderer.send('toggle-radial-permanent', false);
-                    // 🟢 FIX: Command the backend to disengage Ghost Mode BEFORE leaving!
-                    window.require('electron').ipcRenderer.send('set-ignore-mouse-events', false);
-                }
+                ipcRenderer.send('set-session-mode', 'main');
+                ipcRenderer.send('toggle-radial-permanent', false);
+                ipcRenderer.send('set-ignore-mouse-events', false);
                 window.dispatchEvent(new CustomEvent('return-to-main'));
                 break;
         }
@@ -413,13 +332,6 @@ export class LiveInterview extends LitElement {
                 }
             }
         }, 50);
-    }
-
-    showToast(msg) {
-        this.toastMessage = msg;
-        this.requestUpdate();
-        if (this.toastTimer) clearTimeout(this.toastTimer);
-        this.toastTimer = setTimeout(() => { this.toastMessage = ''; this.requestUpdate(); }, 2000);
     }
 
     async handleToggleMic() {

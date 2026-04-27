@@ -163,8 +163,8 @@ export class RootApp extends LitElement {
             const raw = await window.cheatingDaddy.storage.getPreferences();
             const bounds = (raw?.data || raw || {}).hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
             ipcRenderer.send('start-hot-corners', bounds);
-            ipcRenderer.send('set-ignore-mouse-events', true); 
             ipcRenderer.send('toggle-radial-permanent', true);
+            setTimeout(() => ipcRenderer.send('set-ignore-mouse-events', true), 200); 
         }
         else if (destination === 'companion') {
             ipcRenderer.send('stop-hot-corners');
