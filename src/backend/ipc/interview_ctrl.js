@@ -283,6 +283,7 @@ function setupInterviewController(appState) {
 
             if (appState.mainWindow && !appState.mainWindow.isDestroyed()) appState.mainWindow.moveTop();
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
                 global.radialHudWindow.moveTop();
             }
             return true;

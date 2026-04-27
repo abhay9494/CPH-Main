@@ -283,9 +283,8 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
             global.radialHudWindow.setContentProtection(true);
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
 
-            if (process.platform === 'win32') {
-                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 3);
-            }
+            global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+            global.radialHudWindow.moveTop();
 
             const htmlContent = `
             <html><body style="margin:0; overflow:hidden; font-family:sans-serif; color:white; pointer-events:none !important;">
@@ -526,6 +525,8 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
             global.createRadialWindow();
             global.radialHudWindow.showInactive();
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+            global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9); // 🟢 DOMINANCE
+            global.radialHudWindow.moveTop();
             global.radialHudWindow.webContents.send('update-hud', { 
                 slice: null, 
                 labels: global.activeRadialLabels, 
@@ -560,12 +561,12 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
         if (isVisible) {
             global.createRadialWindow();
 
-            // 🟢 HUD Starts Visible, but RED (Inactive)
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
                 global.radialHudWindow.showInactive();
-                // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                global.radialHudWindow.moveTop();
+                
                 global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                // 🟢 FIX: Appended ghostMode: false
                 global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
             }
 
@@ -636,6 +637,10 @@ function setupWindowIpcHandlers(mainWindow, sendToRenderer, geminiSessionRef) {
 
                                 // 🟢 Armed: Turn HUD text GREEN & Re-Ghost
                                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                    // 🟢 Z-INDEX DOMINANCE
+                                    global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                                    global.radialHudWindow.moveTop();
+                                    
                                     // 🟢 DEFENSE 3: Re-apply the flag to beat the Windows OS reset bug!
                                     global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
                                     // 🟢 FIX: Appended ghostMode: false

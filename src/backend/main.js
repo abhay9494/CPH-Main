@@ -839,7 +839,12 @@ function setupGeneralIpcHandlers() {
 
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
-                setTimeout(() => { if (!global.radialHudWindow.isDestroyed()) global.radialHudWindow.moveTop(); }, 50);
+                setTimeout(() => { 
+                    if (!global.radialHudWindow.isDestroyed()) {
+                        global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                        global.radialHudWindow.moveTop(); 
+                    }
+                }, 50);
             }
         }
         }
