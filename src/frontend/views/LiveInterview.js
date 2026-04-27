@@ -59,7 +59,7 @@ export class LiveInterview extends LitElement {
         voiceChatHistory: { type: Array },
         codeChatIndex: { type: Number },
         voiceChatIndex: { type: Number },
-        paneHoverState: { type: String }, // 'code' or 'voice'
+        paneHoverState: { type: String },
         isMicOn: { type: Boolean },
         tacThinkMode: { type: Boolean },
         toastMessage: { type: String },
@@ -80,6 +80,11 @@ export class LiveInterview extends LitElement {
         this.activePage = 1;
         this.prefs = {};
         this.trimTick = 0;
+        
+        // 🟢 NEW: Track Ghost State locally for the Stealth Edge
+        this._isGhostHidden = false;
+        this._isHoveringStealthDot = false;
+        this.hoverTimer = null;
     }
 
     async connectedCallback() {
@@ -90,11 +95,9 @@ export class LiveInterview extends LitElement {
             this.prefs = raw?.data || raw || {};
             if (this.prefs.tacThinkMode !== undefined) this.tacThinkMode = this.prefs.tacThinkMode;
             
-            // 🟢 MAP ICONS TO BACKEND INSTANTLY ON LOAD
             this.syncRadialToBackend(); 
         }
 
-        // 🟢 KEEP PREFS IN SYNC SO RADIAL MAP PAGES ALWAYS LOAD LATEST SETTINGS
         this.syncPrefHandler = (e) => {
             if (e.detail && e.detail.key && e.detail.value !== undefined) {
                 this.prefs = { ...this.prefs, [e.detail.key]: e.detail.value };
@@ -106,6 +109,68 @@ export class LiveInterview extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             
+            // 🟢 State Trackers for the Ghost Window
+            this.ghostHiddenHandler = () => { this._isGhostHidden = true; };
+            this.ghostVisibleHandler = () => { this._isGhostHidden = false; };
+            ipcRenderer.on('app-made-hidden', this.ghostHiddenHandler);
+            ipcRenderer.on('app-made-visible', this.ghostVisibleHandler);
+
+            // 🟢 THE FIX: Emergency Edge Stealth Timer & Logic restored!
+            this.hoverHandler = (_, zone) => {
+                if (this.hoverTimer) {
+                    clearInterval(this.hoverTimer);
+                    this.hoverTimer = null;
+                }
+
+                const killDot = () => {
+                    if (this._isHoveringStealthDot) {
+                        if (window.require) window.require('electron').ipcRenderer.send('set-ghost-dot', false);
+                        this._isHoveringStealthDot = false;
+                    }
+                };
+
+                if (!zone || zone === 'none') {
+                    killDot();
+                    return;
+                }
+
+                const stealthEdge = this.prefs.interviewStealthEdge || 'none';
+                if (zone !== stealthEdge || stealthEdge === 'none') {
+                    killDot();
+                    return; // Ignore all edges except the designated Stealth Edge
+                }
+
+                // Show the Red Dot if we are currently hidden
+                if (this._isGhostHidden) {
+                    if (!this._isHoveringStealthDot) {
+                        if (window.require) window.require('electron').ipcRenderer.send('set-ghost-dot', true);
+                        this._isHoveringStealthDot = true;
+                    }
+                } else {
+                    killDot();
+                }
+
+                const bounds = this.prefs.hotCornerBounds || { hideTime: 0 };
+                // Hide is instant (0ms), Unhide uses the delay slider
+                let targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
+                
+                let progress = 0;
+                if (targetTimeMs <= 0) {
+                    this.executeHotCorner('hide_unhide');
+                    return;
+                }
+
+                this.hoverTimer = setInterval(() => {
+                    progress += (50 / targetTimeMs) * 100;
+                    if (progress >= 100) {
+                        clearInterval(this.hoverTimer);
+                        this.hoverTimer = null;
+                        this.executeHotCorner('hide_unhide');
+                    }
+                }, 50);
+            };
+            ipcRenderer.on('hot-corner-hover', this.hoverHandler);
+
             this.voiceNewHandler = (_, text) => {
                 this.voiceChatHistory = [...this.voiceChatHistory, `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`];
                 this.voiceChatIndex = this.voiceChatHistory.length - 1;
@@ -151,7 +216,6 @@ export class LiveInterview extends LitElement {
                 this.requestUpdate();
             };
 
-            // 🟢 RADIAL HUD: LISTEN FOR THE EXECUTION WRIST-FLICK
             this.radialExecuteHandler = (_, sliceIndex) => {
                 if (sliceIndex !== null) {
                     const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
@@ -161,7 +225,6 @@ export class LiveInterview extends LitElement {
                 }
             };
 
-            // 🟢 RADIAL HUD: CONTINUOUS HOLD LISTENER (For Scrolling & Text Sizing)
             this.radialContinuousHandler = (_, sliceIndex) => {
                 const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
                 const activeMap = this.activePage === 2 ? (this.prefs.interviewCornersPage2 || {}) : (this.prefs.interviewCorners || {});
@@ -169,7 +232,7 @@ export class LiveInterview extends LitElement {
                 
                 if (['scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'].includes(action)) {
                     this.trimTick = (this.trimTick || 0) + 1;
-                    if (this.trimTick >= 6) { // Fire action every ~180ms
+                    if (this.trimTick >= 6) { 
                         this.executeHotCorner(action);
                         this.trimTick = 0;
                     }
@@ -181,8 +244,6 @@ export class LiveInterview extends LitElement {
             ipcRenderer.on('code-new-message', this.codeNewHandler);
             ipcRenderer.on('code-update-message', this.codeUpdateHandler);
             ipcRenderer.on('sync-mic-state', this.micSyncHandler);
-            
-            // 🟢 BIND RADIAL LISTENERS
             ipcRenderer.on('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.on('radial-continuous-hold', this.radialContinuousHandler);
         }
@@ -193,6 +254,9 @@ export class LiveInterview extends LitElement {
         window.removeEventListener('sync-preference', this.syncPrefHandler);
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
+            ipcRenderer.removeListener('app-made-hidden', this.ghostHiddenHandler);
+            ipcRenderer.removeListener('app-made-visible', this.ghostVisibleHandler);
+            ipcRenderer.removeListener('hot-corner-hover', this.hoverHandler);
             ipcRenderer.removeListener('voice-new-message', this.voiceNewHandler);
             ipcRenderer.removeListener('voice-update-message', this.voiceUpdateHandler);
             ipcRenderer.removeListener('code-new-message', this.codeNewHandler);
@@ -203,7 +267,6 @@ export class LiveInterview extends LitElement {
         }
     }
 
-    // 🟢 GENERATE THE EMOJI LABELS
     getHotCornerLabel(action) {
         const labels = {
             'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
@@ -218,7 +281,6 @@ export class LiveInterview extends LitElement {
         return labels[action] || action || '—';
     }
 
-    // 🟢 BEAM THE LABELS TO THE BACKEND WINDOW
     syncRadialToBackend() {
         if (!window.require) return;
         const defaultPage1 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'mic', right_mid_top: 'change_ai', middle_left: 'prev_resp', middle_right: 'next_resp', left_mid_bottom: 'fast_think', right_mid_bottom: 'change_profile', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
@@ -235,7 +297,6 @@ export class LiveInterview extends LitElement {
         window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
     }
 
-    // 🟢 RADIAL HUD: EXECUTION ENGINE
     async executeHotCorner(action) {
         switch (action) {
             case 'capture': 
