@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <style>
+        body { margin:0; overflow:hidden; font-family:sans-serif; color:white; pointer-events:none !important; }
+        #wrapper { position:relative; width:100%; height:100%; }
+        #container { position:absolute; width:100%; height:100%; border-radius:50%; background:rgba(30,30,30,0.8); border:3px solid rgba(255,255,255,0.1); backdrop-filter:blur(4px); box-shadow: 0 10px 40px rgba(0,0,0,0.8); transition: opacity 0.2s; }
+        #highlight { position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; background:transparent; transition: 0.1s; }
+        #icons { position:absolute; width:100%; height:100%; top:0; left:0; }
+        #centerText { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); text-align:center; font-size:14px; font-weight:bold; color:#f14c4c; background:rgba(10,10,10,0.8); padding:8px 12px; border-radius:8px; border:1px solid #f14c4c; width: 35%; text-transform:uppercase; transition: 0.2s; }
+        #ghostDot { position:absolute; top:50%; left:50%; transform:translate(-50%, -50%); width:6px; height:6px; background-color:#f14c4c; border-radius:50%; opacity:0; transition: opacity 0.2s; }
+    </style>
+</head>
+<body>
+    <div id="wrapper">
+        <div id="container">
+            <div id="highlight"></div>
+            <div id="icons"></div>
+            <div id="centerText">RADIAL MINIMAP</div>
+        </div>
+        <div id="ghostDot"></div>
+    </div>
+    <script>
+        const { ipcRenderer } = require('electron');
+        const container = document.getElementById('container');
+        const ghostDot = document.getElementById('ghostDot');
+        const highlight = document.getElementById('highlight');
+        const centerText = document.getElementById('centerText');
+        const iconsDiv = document.getElementById('icons');
+        
+        let SIZE = 400;
+        let RADIUS = SIZE * 0.375;
+
+        function initIcons() {
+            iconsDiv.innerHTML = '';
+            for(let i=0; i<16; i++) {
+                let angle = i * 22.5 - 90;
+                let rad = angle * Math.PI / 180;
+                let x = (SIZE/2) + RADIUS * Math.cos(rad);
+                let y = (SIZE/2) + RADIUS * Math.sin(rad);
+                let el = document.createElement('div');
+                el.id = 'icon-'+i;
+                el.style.position = 'absolute';
+                el.style.left = x + 'px';
+                el.style.top = y + 'px';
+                el.style.transform = 'translate(-50%, -50%)';
+                el.style.fontSize = Math.max(14, SIZE/18) + 'px';
+                el.style.opacity = '0.4';
+                el.style.transition = '0.2s';
+                iconsDiv.appendChild(el);
+            }
+        }
+        initIcons();
+
+        // 🟢 Listeners for Live Preview Settings updates
+        ipcRenderer.on('init-hud-size', (e, payload) => {
+            SIZE = payload.size || 400;
+            RADIUS = SIZE * 0.375;
+            centerText.style.fontSize = Math.max(10, SIZE/30) + 'px';
+            if (payload.bgAlpha !== undefined) container.style.background = `rgba(30,30,30,${payload.bgAlpha})`;
+            initIcons();
+        });
+
+        ipcRenderer.on('update-hud', (e, data) => {
+            const { slice, labels, isActive, ghostMode } = data;
+
+            // 🟢 IF HIDDEN, STRIP ALL UI EXCEPT THE RED DOT
+            if (ghostMode) {
+                container.style.opacity = '0';
+                return; 
+            } else {
+                container.style.opacity = '1';
+                ghostDot.style.opacity = '0';
+            }
+
+            if (isActive) {
+                centerText.style.color = '#00cc66'; 
+                centerText.style.borderColor = '#00cc66';
+                centerText.style.boxShadow = '0 0 15px rgba(0,204,102,0.4)';
+            } else {
+                centerText.style.color = '#f14c4c'; 
+                centerText.style.borderColor = '#f14c4c';
+                centerText.style.boxShadow = 'none';
+            }
+
+            for(let i=0; i<16; i++) {
+                const el = document.getElementById('icon-'+i);
+                if (el) {
+                    el.innerText = (labels[i] || '').split(' ')[0] || '';
+                    if(slice === i && isActive) {
+                        el.style.opacity = '1';
+                        el.style.transform = 'translate(-50%, -50%) scale(1.6)';
+                        el.style.color = '#00cc66'; 
+                    } else {
+                        el.style.opacity = '0.4';
+                        el.style.transform = 'translate(-50%, -50%) scale(1)';
+                        el.style.color = 'white';
+                    }
+                }
+            }
+
+            if (slice !== null && isActive && labels[slice]) {
+                highlight.style.background = `conic-gradient(from ${slice * 22.5 - 11.25}deg, rgba(0, 204, 102, 0.4) 0deg, rgba(0, 204, 102, 0.4) 22.5deg, transparent 22.5deg)`;
+                centerText.innerText = labels[slice].replace(/^[^\w\s]+/, '').trim() || labels[slice];
+            } else {
+                highlight.style.background = 'transparent';
+                centerText.innerText = 'RADIAL MINIMAP';
+            }
+        });
+
+        ipcRenderer.on('set-ghost-dot', (e, isVisible) => {
+            ghostDot.style.opacity = isVisible ? '1' : '0';
+        });
+    </script>
+</body>
+</html>
