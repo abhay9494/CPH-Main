@@ -62,7 +62,9 @@ export class LiveInterview extends LitElement {
         paneHoverState: { type: String }, // 'code' or 'voice'
         isMicOn: { type: Boolean },
         tacThinkMode: { type: Boolean },
-        toastMessage: { type: String }
+        toastMessage: { type: String },
+        activePage: { type: Number },
+        prefs: { type: Object }
     };
 
     constructor() {
@@ -75,6 +77,9 @@ export class LiveInterview extends LitElement {
         this.isMicOn = false;
         this.tacThinkMode = false;
         this.toastMessage = '';
+        this.activePage = 1;
+        this.prefs = {};
+        this.trimTick = 0;
     }
 
     async connectedCallback() {
@@ -82,14 +87,25 @@ export class LiveInterview extends LitElement {
         
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
             const raw = await window.cheatingDaddy.storage.getPreferences();
-            const prefs = raw?.data || raw || {};
-            if (prefs.tacThinkMode !== undefined) this.tacThinkMode = prefs.tacThinkMode;
+            this.prefs = raw?.data || raw || {};
+            if (this.prefs.tacThinkMode !== undefined) this.tacThinkMode = this.prefs.tacThinkMode;
+            
+            // 🟢 MAP ICONS TO BACKEND INSTANTLY ON LOAD
+            this.syncRadialToBackend(); 
         }
+
+        // 🟢 KEEP PREFS IN SYNC SO RADIAL MAP PAGES ALWAYS LOAD LATEST SETTINGS
+        this.syncPrefHandler = (e) => {
+            if (e.detail && e.detail.key && e.detail.value !== undefined) {
+                this.prefs = { ...this.prefs, [e.detail.key]: e.detail.value };
+                if (e.detail.key.includes('interviewCorners')) this.syncRadialToBackend();
+            }
+        };
+        window.addEventListener('sync-preference', this.syncPrefHandler);
 
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             
-            // 🟢 NEW: Unified routing handlers
             this.voiceNewHandler = (_, text) => {
                 this.voiceChatHistory = [...this.voiceChatHistory, `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`];
                 this.voiceChatIndex = this.voiceChatHistory.length - 1;
@@ -135,16 +151,46 @@ export class LiveInterview extends LitElement {
                 this.requestUpdate();
             };
 
+            // 🟢 RADIAL HUD: LISTEN FOR THE EXECUTION WRIST-FLICK
+            this.radialExecuteHandler = (_, sliceIndex) => {
+                if (sliceIndex !== null) {
+                    const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
+                    const activeMap = this.activePage === 2 ? (this.prefs.interviewCornersPage2 || {}) : (this.prefs.interviewCorners || {});
+                    const action = activeMap[clockWiseGrid[sliceIndex]];
+                    if (action && action !== 'none') this.executeHotCorner(action);
+                }
+            };
+
+            // 🟢 RADIAL HUD: CONTINUOUS HOLD LISTENER (For Scrolling & Text Sizing)
+            this.radialContinuousHandler = (_, sliceIndex) => {
+                const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
+                const activeMap = this.activePage === 2 ? (this.prefs.interviewCornersPage2 || {}) : (this.prefs.interviewCorners || {});
+                const action = activeMap[clockWiseGrid[sliceIndex]];
+                
+                if (['scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'].includes(action)) {
+                    this.trimTick = (this.trimTick || 0) + 1;
+                    if (this.trimTick >= 6) { // Fire action every ~180ms
+                        this.executeHotCorner(action);
+                        this.trimTick = 0;
+                    }
+                }
+            };
+
             ipcRenderer.on('voice-new-message', this.voiceNewHandler);
             ipcRenderer.on('voice-update-message', this.voiceUpdateHandler);
             ipcRenderer.on('code-new-message', this.codeNewHandler);
             ipcRenderer.on('code-update-message', this.codeUpdateHandler);
             ipcRenderer.on('sync-mic-state', this.micSyncHandler);
+            
+            // 🟢 BIND RADIAL LISTENERS
+            ipcRenderer.on('execute-radial-hud', this.radialExecuteHandler);
+            ipcRenderer.on('radial-continuous-hold', this.radialContinuousHandler);
         }
     }
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        window.removeEventListener('sync-preference', this.syncPrefHandler);
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeListener('voice-new-message', this.voiceNewHandler);
@@ -152,17 +198,149 @@ export class LiveInterview extends LitElement {
             ipcRenderer.removeListener('code-new-message', this.codeNewHandler);
             ipcRenderer.removeListener('code-update-message', this.codeUpdateHandler);
             ipcRenderer.removeListener('sync-mic-state', this.micSyncHandler);
+            ipcRenderer.removeListener('execute-radial-hud', this.radialExecuteHandler);
+            ipcRenderer.removeListener('radial-continuous-hold', this.radialContinuousHandler);
+        }
+    }
+
+    // 🟢 GENERATE THE EMOJI LABELS
+    getHotCornerLabel(action) {
+        const labels = {
+            'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
+            'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
+            'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
+            'change_profile': '👤 Swap Pane', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
+            'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
+            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
+            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
+            'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort'
+        };
+        return labels[action] || action || '—';
+    }
+
+    // 🟢 BEAM THE LABELS TO THE BACKEND WINDOW
+    syncRadialToBackend() {
+        if (!window.require) return;
+        const defaultPage1 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'mic', right_mid_top: 'change_ai', middle_left: 'prev_resp', middle_right: 'next_resp', left_mid_bottom: 'fast_think', right_mid_bottom: 'change_profile', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
+        const defaultPage2 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'bg_inc', right_mid_top: 'text_inc', middle_left: 'reset', middle_right: 'language', left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
+
+        let activeMap = this.activePage === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});
+        
+        if (Object.keys(activeMap).length === 0) {
+            activeMap = this.activePage === 2 ? defaultPage2 : defaultPage1;
+        }
+
+        const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
+        const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
+        window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
+    }
+
+    // 🟢 RADIAL HUD: EXECUTION ENGINE
+    async executeHotCorner(action) {
+        switch (action) {
+            case 'capture': 
+                this.showToast('📸 Screenshot Captured');
+                if (window.require) window.require('electron').ipcRenderer.invoke('capture-screenshot');
+                break;
+            case 'send_ai': 
+                this.showToast('🚀 Firing to AI');
+                if (window.require) window.require('electron').ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text');
+                break;
+            case 'fix_error': 
+                this.showToast('🔧 Fixing Error...');
+                if (window.require) window.require('electron').ipcRenderer.invoke('send-oa-fix-error');
+                break;
+            case 'regenerate':
+                this.showToast('🔄 Regenerating...');
+                if (window.require) window.require('electron').ipcRenderer.invoke('send-oa-regenerate');
+                break;
+            case 'hide_unhide': 
+                this.showToast('👻 Toggled Stealth'); 
+                if (window.require) window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); 
+                break;
+            case 'toggle_page2':
+                this.activePage = this.activePage === 1 ? 2 : 1;
+                this.showToast(`📄 Switched to Page ${this.activePage}`);
+                this.syncRadialToBackend(); 
+                break;
+            case 'scroll_up':
+                if (this.paneHoverState === 'voice') this.shadowRoot.querySelector('#voice-feed-wrapper')?.scrollBy({top: -150, behavior: 'smooth'});
+                else this.shadowRoot.querySelector('#code-feed-wrapper')?.scrollBy({top: -150, behavior: 'smooth'});
+                break;
+            case 'scroll_down':
+                if (this.paneHoverState === 'voice') this.shadowRoot.querySelector('#voice-feed-wrapper')?.scrollBy({top: 150, behavior: 'smooth'});
+                else this.shadowRoot.querySelector('#code-feed-wrapper')?.scrollBy({top: 150, behavior: 'smooth'});
+                break;
+            case 'prev_resp':
+                this.showToast('◀ Previous');
+                if (this.paneHoverState === 'voice' && this.voiceChatIndex > 0) { this.voiceChatIndex--; this.requestUpdate(); }
+                else if (this.paneHoverState === 'code' && this.codeChatIndex > 0) { this.codeChatIndex--; this.requestUpdate(); }
+                break;
+            case 'next_resp':
+                this.showToast('▶ Next');
+                if (this.paneHoverState === 'voice' && this.voiceChatIndex < this.voiceChatHistory.length - 1) { this.voiceChatIndex++; this.requestUpdate(); }
+                else if (this.paneHoverState === 'code' && this.codeChatIndex < this.codeChatHistory.length - 1) { this.codeChatIndex++; this.requestUpdate(); }
+                break;
+            case 'change_profile':
+                this.showToast('👤 Swapped Loadout Pane');
+                this.paneHoverState = this.paneHoverState === 'code' ? 'voice' : 'code';
+                this.requestUpdate();
+                break;
+            case 'fast_think': 
+                this.tacThinkMode = !this.tacThinkMode; 
+                this.showToast(this.tacThinkMode ? '🧠 THINK Mode ON' : '⚡ FAST Mode ON');
+                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                    window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
+                }
+                this.requestUpdate(); 
+                break;
+            case 'mic':
+                this.handleToggleMic();
+                break;
+            case 'reset':
+                this.showToast('✨ Session Reset');
+                this.codeChatHistory = []; this.voiceChatHistory = [];
+                this.codeChatIndex = 0; this.voiceChatIndex = 0;
+                if (window.require) window.require('electron').ipcRenderer.invoke('new-chat');
+                this.requestUpdate();
+                break;
+            case 'text_inc': 
+            case 'text_dec':
+                let currentSize = this.prefs.fontSize || 13;
+                currentSize = Math.max(12, Math.min(32, currentSize + (action === 'text_inc' ? 1 : -1)));
+                this.showToast(action === 'text_inc' ? 'A+ Text Size' : 'A- Text Size');
+                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                    window.cheatingDaddy.storage.updatePreference('fontSize', currentSize);
+                    window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'fontSize', value: currentSize } })); 
+                }
+                break;
+            case 'bg_inc':
+            case 'bg_dec':
+                let newTrans = (this.prefs.backgroundTransparency || 0.8) + (action === 'bg_inc' ? 0.05 : -0.05);
+                newTrans = Math.max(0, Math.min(1, Math.round(newTrans * 100) / 100));
+                this.showToast(action === 'bg_inc' ? '⬛ Opacity Increased' : '⬜ Opacity Decreased');
+                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                    window.cheatingDaddy.storage.updatePreference('backgroundTransparency', newTrans);
+                    window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newTrans } })); 
+                }
+                break;
+            case 'abort_oa':
+                this.showToast('🚪 Exiting...');
+                if (window.require) {
+                    window.require('electron').ipcRenderer.send('set-session-mode', 'main');
+                    window.require('electron').ipcRenderer.send('toggle-radial-permanent', false);
+                }
+                window.dispatchEvent(new CustomEvent('return-to-main'));
+                break;
         }
     }
 
     scrollToBottom(feedId) {
-        // Find the chat-feed component and scroll its internal container
         setTimeout(() => {
             const feed = this.shadowRoot.getElementById(feedId);
             if (feed && feed.shadowRoot) {
                 const container = feed.shadowRoot.querySelector('.markdown-body');
                 if (container) {
-                    // Find the parent wrapper in THIS file and scroll it
                     const wrapper = this.shadowRoot.getElementById(feedId + '-wrapper');
                     if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
                 }

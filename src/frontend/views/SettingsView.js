@@ -560,6 +560,40 @@ export class SettingsView extends LitElement {
         return labels[action] || '—';
     }
 
+    getHotCornerLabel(action) {
+        const labels = {
+            'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
+            'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
+            'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
+            'change_profile': '👤 Swap Pane', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
+            'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
+            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
+            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
+            'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
+            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
+            'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2',
+            'regenerate': '🔄 Regen'
+        };
+        return labels[action] || action || '—';
+    }
+
+    syncRadialToBackend() {
+        if (!window.require) return;
+        const defaultPage1 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'mic', right_mid_top: 'change_ai', middle_left: 'prev_resp', middle_right: 'next_resp', left_mid_bottom: 'fast_think', right_mid_bottom: 'change_profile', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
+        const defaultPage2 = { top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide', left_mid_top: 'bg_inc', right_mid_top: 'text_inc', middle_left: 'reset', middle_right: 'language', left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec', bottom_left: 'send_ai', bottom_mid_left: 'regenerate', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'fix_error' };
+
+        const page = this.editingPage || 1;
+        let activeMap = page === 2 ? (this.prefs?.interviewCornersPage2 || {}) : (this.prefs?.interviewCorners || {});
+        
+        if (Object.keys(activeMap).length === 0) {
+            activeMap = page === 2 ? defaultPage2 : defaultPage1;
+        }
+
+        const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
+        const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
+        window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
+    }
+
     renderMatrixCell(id, row, col, label, mapName = 'hotCorners') {
         const currentCorners = this.prefs[mapName] || {};
         const action = currentCorners[id] || 'none';
