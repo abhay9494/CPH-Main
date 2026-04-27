@@ -319,6 +319,10 @@ export class LiveInterview extends LitElement {
                 this.showToast('👻 Toggled Stealth'); 
                 if (window.require) window.require('electron').ipcRenderer.invoke('trigger-ghost-hide'); 
                 break;
+            case 'toggle_ai_vis':
+                this.showToast('👁️ Toggled AI Window');
+                if (window.require) window.require('electron').ipcRenderer.invoke('toggle-ai-visibility');
+                break;
             case 'toggle_page2':
                 this.activePage = this.activePage === 1 ? 2 : 1;
                 this.showToast(`📄 Switched to Page ${this.activePage}`);

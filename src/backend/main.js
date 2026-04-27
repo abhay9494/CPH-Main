@@ -106,7 +106,7 @@ function launchDualBrains() {
     voiceWebWindow.setContentProtection(true);
     voiceWebWindow.webContents.setAudioMuted(true);
 
-    if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
+    if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
     voiceWebWindow.loadURL(voiceProvider.url);
     
     // Voice WebRTC Injection (Keeps Mic Alive)
@@ -167,7 +167,7 @@ function launchDualBrains() {
     });
     codeWebWindow.setContentProtection(true);
     codeWebWindow.webContents.setAudioMuted(true);
-    if (process.platform === 'win32') codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 0);
+    if (process.platform === 'win32') codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
     codeWebWindow.loadURL(codeProvider.url);
     codeWebWindow.webContents.on('dom-ready', async () => {
         codeWebWindow.webContents.insertCSS('* { cursor: default !important; }');
@@ -177,6 +177,15 @@ function launchDualBrains() {
     const preventDeath = (win) => {
         win.on('close', (event) => {
             if (!isAppQuitting) { event.preventDefault(); win.hide(); }
+        });
+        win.on('focus', () => {
+            const mainAppWin = BrowserWindow.getAllWindows().find(w => w.webContents.getURL().includes('index.html'));
+            if (mainAppWin && !mainAppWin.isDestroyed()) mainAppWin.moveTop();
+            
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                global.radialHudWindow.moveTop();
+            }
         });
     };
     preventDeath(voiceWebWindow);
@@ -718,7 +727,7 @@ function setupGeneralIpcHandlers() {
 
                 if (!codeWebWindow.isDestroyed()) {
                     codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
-                    codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
                     codeWebWindow.setBounds({ x, y, width: safeWidth, height: safeHeight });
                     codeWebWindow.showInactive();
                 }
@@ -727,13 +736,13 @@ function setupGeneralIpcHandlers() {
                 const halfWidth = Math.floor(width / 2);
                 if (!codeWebWindow.isDestroyed()) {
                     codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
-                    codeWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
                     codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
                     codeWebWindow.showInactive();
                 }
                 if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
                     voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
-                    voiceWebWindow.setAlwaysOnTop(true, 'screen-saver', 1);
+                    voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
                     voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
                     voiceWebWindow.showInactive();
                 }
