@@ -132,6 +132,19 @@ export class LiveInterview extends LitElement {
             this.codeUpdateHandler = (_, text) => { if (this.codeChatHistory.length > 0) { const a = [...this.codeChatHistory]; a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; this.codeChatHistory = a; } else { this.codeChatHistory = [`🤖 AI:\n${text}`]; this.codeChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('code-feed'); };
             this.micSyncHandler = (_, state) => { this.isMicOn = state; this.requestUpdate(); };
 
+            // 🟢 NEW: Sync local UI to backend DOM Scraper Truth
+            this.aiModeSyncHandler = (_, isThinkMode) => {
+                if (this.tacThinkMode !== isThinkMode) {
+                    this.tacThinkMode = isThinkMode;
+                    if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                        window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
+                    }
+                    this.syncRadialToBackend(); 
+                    this.requestUpdate();
+                }
+            };
+            ipcRenderer.on('sync-ai-mode', this.aiModeSyncHandler);
+
             this.radialExecuteHandler = (_, sliceIndex) => {
                 if (sliceIndex !== null) {
                     const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
@@ -162,7 +175,6 @@ export class LiveInterview extends LitElement {
             ipcRenderer.on('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.on('radial-continuous-hold', this.radialContinuousHandler);
             
-            // 🟢 ENGAGE THE SAFE AUTO-MIC LOOP
             this._autoStartMic();
         }
     }
@@ -182,12 +194,12 @@ export class LiveInterview extends LitElement {
             ipcRenderer.removeListener('code-new-message', this.codeNewHandler);
             ipcRenderer.removeListener('code-update-message', this.codeUpdateHandler);
             ipcRenderer.removeListener('sync-mic-state', this.micSyncHandler);
+            ipcRenderer.removeListener('sync-ai-mode', this.aiModeSyncHandler);
             ipcRenderer.removeListener('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.removeListener('radial-continuous-hold', this.radialContinuousHandler);
         }
     }
 
-    // 🟢 NEW: Synchronous, safe auto-start loop that never jams IPC!
     _autoStartMic() {
         if (!window.require) return;
         const { ipcRenderer } = window.require('electron');
@@ -200,26 +212,19 @@ export class LiveInterview extends LitElement {
         let attempts = 0;
         
         const tryEnable = async () => {
-            if (!this.isConnected) return; // Component dismounted
-            
+            if (!this.isConnected) return; 
             if (this.isMicOn) {
                 this.showToast('🎙️ Voice Auto-Started');
-                return; // Mic is ON! We can stop checking.
+                return; 
             }
-            
-            if (attempts >= 20) return; // Failsafe stop after ~40 seconds
+            if (attempts >= 20) return; 
             
             attempts++;
             try {
-                // We use await to guarantee exactly one command travels across the bridge at a time
                 await ipcRenderer.invoke('toggle-ai-mic', true);
             } catch (e) {}
-            
-            // Re-check/retry exactly 2 seconds after the last attempt finishes
             this.autoMicTimer = setTimeout(tryEnable, 2000);
         };
-
-        // Give Chromium 3 seconds to load the webpage before hammering it
         this.autoMicTimer = setTimeout(tryEnable, 3000);
     }
 
@@ -228,7 +233,9 @@ export class LiveInterview extends LitElement {
             'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
             'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
             'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
-            'change_profile': '👤 Swap Pane', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
+            'change_profile': '👤 Swap Pane', 
+            'fast_think': this.tacThinkMode ? '🧠 Think' : '⚡ Fast', // 🟢 DYNAMIC UI INJECTION
+            'refactor': '🛠️ Refactor',
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
@@ -304,12 +311,9 @@ export class LiveInterview extends LitElement {
                 this.requestUpdate();
                 break;
             case 'fast_think': 
-                this.tacThinkMode = !this.tacThinkMode; 
-                this.showToast(this.tacThinkMode ? '🧠 THINK Mode ON' : '⚡ FAST Mode ON');
-                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
-                    window.cheatingDaddy.storage.updatePreference('tacThinkMode', this.tacThinkMode);
-                }
-                this.requestUpdate(); 
+                // 🟢 NEW: Active DOM Command Injection
+                this.showToast('🔄 Toggling AI Mode...');
+                ipcRenderer.invoke('toggle-ai-mode');
                 break;
             case 'mic':
                 this.handleToggleMic();
@@ -320,7 +324,7 @@ export class LiveInterview extends LitElement {
                 this.codeChatIndex = 0; this.voiceChatIndex = 0;
                 ipcRenderer.invoke('new-chat');
                 this.requestUpdate();
-                this._autoStartMic(); // 🟢 Trigger the safe loop again
+                this._autoStartMic(); 
                 break;
             case 'text_inc': 
             case 'text_dec':
@@ -398,7 +402,7 @@ export class LiveInterview extends LitElement {
                             <button class="mic-btn ${this.isMicOn ? 'on' : 'off'}" @click=${this.handleToggleMic}>
                                 🎙️ MIC: ${this.isMicOn ? 'ON' : 'OFF'}
                             </button>
-                            <span class="status-badge" style="color: #00cc66;">⚡ Fast</span>
+                            <span class="status-badge" style="color: ${this.tacThinkMode ? '#f59e0b' : '#00cc66'};">${this.tacThinkMode ? '🧠 Think' : '⚡ Fast'}</span>
                             <span class="count-badge">${this.voiceChatHistory.length ? `${this.voiceChatIndex + 1}/${this.voiceChatHistory.length}` : '0/0'}</span>
                         </div>
                     </div>

@@ -15,7 +15,7 @@ process.on('unhandledRejection', (reason, promise) => { console.error('[CRASH PR
 
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
-app.commandLine.appendSwitch('disable-features', 'Autofill,AutofillServerCommunication');
+app.commandLine.appendSwitch('disable-features', 'Autofill,AutofillServerCommunication,PasswordGeneration,PasswordManager');
 
 const { createWindow, updateGlobalShortcuts } = require('./windowManager'); 
 const storage = require('./storage'); 
@@ -28,7 +28,6 @@ let mainWindow = null;
 let voiceWebWindow = null;
 let codeWebWindow = null;
 let companionChatWindow = null;
-let currentBrainMode = 'fast';
 let activeLoadout = { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
 let accumulatedScreenshots = [];
 let scrapingInterval = null;
@@ -38,6 +37,8 @@ let wasAiVisibleBeforeGhost = false;
 global.radialHudWindow = null; 
 global.activeRadialLabels = Array(16).fill('—');
 global.isOAModeActive = false;
+global.isGhostHidden = false; 
+global.isThinkModeActive = false; 
 
 const AI_CONFIGS = [
     { name: 'ChatGPT', url: 'https://chatgpt.com', msgSelector: 'div[data-message-author-role="assistant"]' },
@@ -59,7 +60,6 @@ global.createRadialWindow = () => {
         global.radialHudWindow.setContentProtection(true);
         global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
 
-        // 🟢 ABSOLUTE TOP LAYER
         global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
         global.radialHudWindow.moveTop();
 
@@ -162,7 +162,6 @@ function launchDualBrains() {
     voiceWebWindow.setContentProtection(true);
     voiceWebWindow.webContents.setAudioMuted(true);
 
-    // 🟢 TUCK AI UNDER OVERLAY
     if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
     voiceWebWindow.loadURL(voiceProvider.url);
     
@@ -181,12 +180,33 @@ function launchDualBrains() {
                             try {
                                 const stream = await originalGetUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } } });
                                 const audioTrack = stream.getAudioTracks()[0];
+                                if (!audioTrack) throw new Error('No track');
                                 const videoTrack = stream.getVideoTracks()[0];
                                 if (videoTrack) videoTrack.stop();
-                                return new MediaStream([audioTrack]);
+                                
+                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                const dest = ctx.createMediaStreamDestination();
+                                
+                                const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
+                                source.connect(dest);
+                                
+                                const osc = ctx.createOscillator();
+                                osc.frequency.value = 20000; 
+                                const gain = ctx.createGain();
+                                gain.gain.value = 0.02; 
+                                osc.connect(gain);
+                                gain.connect(dest);
+                                osc.start();
+                                
+                                return dest.stream;
                             } catch (e) {
                                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                return ctx.createMediaStreamDestination().stream; 
+                                const dest = ctx.createMediaStreamDestination();
+                                const osc = ctx.createOscillator();
+                                osc.frequency.value = 20000;
+                                osc.connect(dest);
+                                osc.start();
+                                return dest.stream; 
                             }
                         }
                         return originalGetUserMedia(constraints);
@@ -207,7 +227,6 @@ function launchDualBrains() {
     codeWebWindow.setContentProtection(true);
     codeWebWindow.webContents.setAudioMuted(true);
 
-    // 🟢 TUCK AI UNDER OVERLAY
     if (process.platform === 'win32') codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
     codeWebWindow.loadURL(codeProvider.url);
     codeWebWindow.webContents.on('dom-ready', async () => {
@@ -293,9 +312,10 @@ function startDualScrapers(voiceProvider, codeProvider) {
     }, 1000);
 }
 
+// 🟢 NEW: Synchronized Typing Simulator to ensure @Pro and @Fast chips register perfectly
 async function sendPayloadToWindow(win, customText, images = []) {
     if (!win || win.isDestroyed()) return;
-    const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('#prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
+    const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
     if (!isBoxReady) return;
     
     for (let imgData of images) {
@@ -304,7 +324,28 @@ async function sendPayloadToWindow(win, customText, images = []) {
         win.webContents.paste();
         await new Promise(r => setTimeout(r, 400));
     }
-    if (customText) { clipboard.writeText(customText); win.webContents.paste(); }
+
+    if (customText) { 
+        let textToPaste = customText;
+
+        // If the payload explicitly begins with the mode override tag, we type it out slowly like a human first
+        if (customText.startsWith('@Pro ') || customText.startsWith('@Fast ')) {
+            const tag = customText.startsWith('@Pro ') ? 'Pro' : 'Fast';
+            textToPaste = customText.substring(tag.length + 2); 
+            
+            win.webContents.insertText('@');
+            await new Promise(r => setTimeout(r, 350)); // Wait for mention dropdown to open
+            win.webContents.insertText(tag);
+            await new Promise(r => setTimeout(r, 150)); // Wait for Angular to filter list
+            win.webContents.insertText(' ');
+            await new Promise(r => setTimeout(r, 150)); // Space converts text into the Blue Chip
+        }
+        
+        if (textToPaste) {
+            clipboard.writeText(textToPaste); 
+            win.webContents.paste(); 
+        }
+    }
 
     const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
     let isReady = false, attempts = 0;
@@ -339,7 +380,7 @@ app.whenReady().then(async () => {
     });
 
     storage.initializeStorage();
-    mainWindow = createWindow(); // Initialize main UI Window
+    mainWindow = createWindow(); 
 
     mainWindow.on('hide', () => {
         if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) voiceWebWindow.hide();
@@ -481,10 +522,11 @@ function setupGeneralIpcHandlers() {
         if (hotCornerInterval) { clearInterval(hotCornerInterval); hotCornerInterval = null; currentDwellZone = null; }
     });
 
+    // 🟢 SECURED: The Minimap leak is fixed. It is explicitly forced off via ghostMode payload
     ipcMain.on('sync-radial-labels', (event, labels) => {
         global.activeRadialLabels = labels || Array(16).fill('—');
         if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: global.isRadialModeActive || false });
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: global.isRadialModeActive || false, ghostMode: global.isGhostHidden === true });
         }
     });
 
@@ -495,7 +537,7 @@ function setupGeneralIpcHandlers() {
             global.createRadialWindow();
             global.radialHudWindow.showInactive();
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true });
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
         } else {
             if (!global.isLiveInterviewMode && global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
         }
@@ -514,7 +556,7 @@ function setupGeneralIpcHandlers() {
             global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
             global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
             global.radialHudWindow.moveTop();
-            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: global.isPreviewingRadial });
+            global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: global.isPreviewingRadial, ghostMode: global.isGhostHidden === true });
         }
     });
 
@@ -562,74 +604,70 @@ function setupGeneralIpcHandlers() {
 
                 bgmiTrackerProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-WindowStyle', 'Hidden', '-File', scriptPath]);
 
-                let psBuffer = "";
                 bgmiTrackerProcess.stdout.on('data', (data) => {
-                    psBuffer += data.toString();
-                    
-                    if (psBuffer.includes('CTRL_DOWN')) {
-                        psBuffer = psBuffer.replace(/CTRL_DOWN/g, ''); // Clear the buffer of the command
+                    const lines = data.toString().split('\n');
+                    for (let output of lines) {
+                        output = output.trim();
+                        if (output === 'CTRL_DOWN') {
+                            if (global.isGhostHidden) return;
+                            if (global.ctrlHoldTimer) clearTimeout(global.ctrlHoldTimer);
 
-                        if (global.isGhostHidden) return;
-                        if (global.ctrlHoldTimer) clearTimeout(global.ctrlHoldTimer);
+                            const prefs = storage.getPreferences();
+                            const rs = prefs.radialSettings || {};
+                            const holdDelayMs = rs.holdDelay ?? 2000;
 
-                        const prefs = storage.getPreferences();
-                        const rs = prefs.radialSettings || {};
-                        const holdDelayMs = rs.holdDelay ?? 2000;
-
-                        global.ctrlHoldTimer = setTimeout(() => {
-                            global.isRadialModeActive = true;
-                            const { screen } = require('electron');
-                            const point = screen.getCursorScreenPoint();
-                            radialAnchorX = point.x; radialAnchorY = point.y;
-                            currentRadialSlice = null;
-
-                            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
-                                global.radialHudWindow.moveTop();
-                                global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
-                                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
-                            }
-
-                            if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
-                            radialTelemetryLoop = setInterval(() => {
-                                const p = screen.getCursorScreenPoint();
-                                const dx = p.x - radialAnchorX; const dy = p.y - radialAnchorY;
-                                const dist = Math.sqrt(dx*dx + dy*dy);
-
-                                if (dist > DEADZONE_PX) {
-                                    let angle = Math.atan2(dy, dx) * (180 / Math.PI);
-                                    angle = angle + 90; if (angle < 0) angle += 360;
-                                    currentRadialSlice = Math.floor(((angle + 11.25) % 360) / 22.5);
-                                } else { currentRadialSlice = null; }
+                            global.ctrlHoldTimer = setTimeout(() => {
+                                global.isRadialModeActive = true;
+                                const point = screen.getCursorScreenPoint();
+                                radialAnchorX = point.x; radialAnchorY = point.y;
+                                currentRadialSlice = null;
 
                                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                    global.radialHudWindow.webContents.send('update-hud', { slice: currentRadialSlice, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
+                                    global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                                    global.radialHudWindow.moveTop();
+                                    global.radialHudWindow.setIgnoreMouseEvents(true, { forward: true });
+                                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
                                 }
 
-                                if (mainWindow && !mainWindow.isDestroyed() && currentRadialSlice !== null) {
-                                    mainWindow.webContents.send('radial-continuous-hold', currentRadialSlice);
+                                if (radialTelemetryLoop) clearInterval(radialTelemetryLoop);
+                                radialTelemetryLoop = setInterval(() => {
+                                    const p = screen.getCursorScreenPoint();
+                                    const dx = p.x - radialAnchorX; const dy = p.y - radialAnchorY;
+                                    const dist = Math.sqrt(dx*dx + dy*dy);
+
+                                    if (dist > DEADZONE_PX) {
+                                        let angle = Math.atan2(dy, dx) * (180 / Math.PI);
+                                        angle = angle + 90; if (angle < 0) angle += 360;
+                                        currentRadialSlice = Math.floor(((angle + 11.25) % 360) / 22.5);
+                                    } else { currentRadialSlice = null; }
+
+                                    if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                        global.radialHudWindow.webContents.send('update-hud', { slice: currentRadialSlice, labels: global.activeRadialLabels, isActive: true, ghostMode: false });
+                                    }
+
+                                    if (mainWindow && !mainWindow.isDestroyed() && currentRadialSlice !== null) {
+                                        mainWindow.webContents.send('radial-continuous-hold', currentRadialSlice);
+                                    }
+                                }, 30);
+                            }, holdDelayMs);
+                        }
+
+                        if (output === 'CTRL_UP') {
+                            if (global.ctrlHoldTimer) { clearTimeout(global.ctrlHoldTimer); global.ctrlHoldTimer = null; }
+                            
+                            if (global.isRadialModeActive) {
+                                if (radialTelemetryLoop) { clearInterval(radialTelemetryLoop); radialTelemetryLoop = null; }
+
+                                if (currentRadialSlice !== null && mainWindow && !mainWindow.isDestroyed()) {
+                                    mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
                                 }
-                            }, 30);
-                        }, holdDelayMs);
-                    }
 
-                    if (psBuffer.includes('CTRL_UP')) {
-                        psBuffer = psBuffer.replace(/CTRL_UP/g, ''); // Clear the buffer of the command
+                                currentRadialSlice = null;
+                                global.isRadialModeActive = false;
 
-                        if (global.ctrlHoldTimer) { clearTimeout(global.ctrlHoldTimer); global.ctrlHoldTimer = null; }
-                        
-                        if (global.isRadialModeActive) {
-                            if (radialTelemetryLoop) { clearInterval(radialTelemetryLoop); radialTelemetryLoop = null; }
-
-                            if (currentRadialSlice !== null && mainWindow && !mainWindow.isDestroyed()) {
-                                mainWindow.webContents.send('execute-radial-hud', currentRadialSlice);
-                            }
-
-                            currentRadialSlice = null;
-                            global.isRadialModeActive = false;
-
-                            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
-                                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: false });
+                                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                                    global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: global.isGhostHidden === true });
+                                }
                             }
                         }
                     }
@@ -659,11 +697,17 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('clear-screenshots', async () => { accumulatedScreenshots = []; return 0; });
     ipcMain.handle('get-screenshots', async () => { return accumulatedScreenshots; });
 
+    const getModePrefix = () => global.isThinkModeActive ? '@Pro ' : '@Fast ';
+
     ipcMain.handle('send-screenshots-to-ai', async (event, customPrompt) => {
         try {
             if (accumulatedScreenshots.length === 0) return false;
-            const codePrompt = customPrompt || PROMPTS.OA_AUTOMATION('C++');
-            const voicePrompt = PROMPTS.VOICE_CONTEXT;
+            let codePrompt = customPrompt || PROMPTS.OA_AUTOMATION('C++');
+            let voicePrompt = PROMPTS.VOICE_CONTEXT;
+            
+            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+
             await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
             setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
             return true;
@@ -719,6 +763,63 @@ function setupGeneralIpcHandlers() {
         } catch (err) { return false; }
     });
 
+    // 🟢 THE NATIVE TEXT-INJECTOR TYPING SEQUENCE
+    ipcMain.handle('toggle-ai-mode', async () => {
+        try {
+            global.isThinkModeActive = !global.isThinkModeActive;
+            const modeWord = global.isThinkModeActive ? 'Pro' : 'Fast';
+
+            // Sync the UI instantly so Radial Minimap updates
+            BrowserWindow.getAllWindows().forEach(w => {
+                if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', global.isThinkModeActive);
+            });
+
+            const injectModeNative = async (win) => {
+                if (!win || win.isDestroyed()) return;
+                
+                await win.webContents.executeJavaScript(`
+                    (() => {
+                        const box = document.querySelector('rich-textarea p, p.text-input-field-paragraph, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
+                        if (box) {
+                            box.focus();
+                            // Shift cursor to the end
+                            if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
+                                const range = document.createRange();
+                                range.selectNodeContents(box);
+                                range.collapse(false);
+                                const sel = window.getSelection();
+                                sel.removeAllRanges();
+                                sel.addRange(range);
+                            }
+                        }
+                    })();
+                `);
+
+                // 1. Type '@'
+                win.webContents.insertText('@');
+                
+                // 2. Wait 600ms for Gemini to process the '@' and pop up the menu
+                await new Promise(r => setTimeout(r, 600)); 
+                
+                // 3. Type the word ('Pro' or 'Fast')
+                win.webContents.insertText(modeWord);
+                
+                // 4. Wait 400ms for options to filter in the menu
+                await new Promise(r => setTimeout(r, 400));
+                
+                // 5. Press Enter to lock it into the Blue UI Chip!
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+            };
+
+            // Execute on Gemini windows
+            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') await injectModeNative(codeWebWindow);
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') await injectModeNative(voiceWebWindow);
+
+            return true;
+        } catch(e) { return false; }
+    });
+
     ipcMain.handle('set-ai-provider', async (event, targetIdx) => { return AI_CONFIGS[targetIdx].name; });
 
     ipcMain.handle('check-active-ai', () => {
@@ -726,21 +827,16 @@ function setupGeneralIpcHandlers() {
         return {name: AI_CONFIGS[activeLoadout.voiceEngine].name, url: voiceWebWindow.webContents.getURL() };
     });
 
-    ipcMain.handle('send-oa-automation', async (event, language) => {
-        try {
-            if (accumulatedScreenshots.length === 0) return false;
-            const codePrompt = PROMPTS.OA_AUTOMATION(language);
-            const voicePrompt = PROMPTS.VOICE_CONTEXT;
-            await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
-            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
-            return true;
-        } catch(e) { return false; }
-    });
-
     ipcMain.handle('send-oa-refactor', async () => {
         try {
-            await sendPayloadToWindow(codeWebWindow, PROMPTS.REFACTOR, []);
-            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, PROMPTS.VOICE_CONTEXT, []); }, 1500);
+            let codePrompt = PROMPTS.REFACTOR;
+            let voicePrompt = PROMPTS.VOICE_CONTEXT;
+            
+            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+
+            await sendPayloadToWindow(codeWebWindow, codePrompt, []);
+            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, []); }, 1500);
             return true;
         } catch(e) { return false; }
     });
@@ -748,8 +844,14 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('send-oa-fix-error', async () => {
         try {
             if (accumulatedScreenshots.length === 0) return false;
-            await sendPayloadToWindow(codeWebWindow, PROMPTS.FIX_ERROR, accumulatedScreenshots);
-            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, PROMPTS.VOICE_CONTEXT, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
+            let codePrompt = PROMPTS.FIX_ERROR;
+            let voicePrompt = PROMPTS.VOICE_CONTEXT;
+            
+            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+
+            await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
+            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
             return true;
         } catch(e) { return false; }
     });
@@ -764,7 +866,13 @@ function setupGeneralIpcHandlers() {
     });
 
     ipcMain.handle('send-manual-text', async (event, text) => {
-        try { if (!text) return; await sendPayloadToWindow(voiceWebWindow, text, []); return true; } catch(e) { return false; }
+        try { 
+            if (!text) return; 
+            let finalPrompt = text;
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') finalPrompt = getModePrefix() + text;
+            await sendPayloadToWindow(voiceWebWindow, finalPrompt, []); 
+            return true; 
+        } catch(e) { return false; }
     });
 
     ipcMain.handle('set-ai-brain-mode', async (event, mode, isManualClick = false) => { currentBrainMode = mode; return true; });
@@ -979,7 +1087,6 @@ function setupGeneralIpcHandlers() {
     });
     ipcMain.handle('update-sizes', async event => { return { success: true }; });
 
-    // Companion Chat
     let companionChatWindow = null;
     ipcMain.on('open-companion-window', (event, data) => {
         if (!companionChatWindow || companionChatWindow.isDestroyed()) {
