@@ -61,6 +61,19 @@ export class LiveInterview extends LitElement {
 
     async connectedCallback() {
         super.connectedCallback();
+
+        this.wheelHandler = (e) => {
+            if (e.ctrlKey) {
+                e.preventDefault(); // Stop the whole page from zooming
+                const halfWidth = window.innerWidth / 2;
+                const wrapperId = e.clientX < halfWidth ? 'code-feed-wrapper' : 'voice-feed-wrapper';
+                const wrapper = this.shadowRoot.getElementById(wrapperId);
+                if (wrapper) {
+                    wrapper.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                }
+            }
+        };
+        window.addEventListener('wheel', this.wheelHandler, { passive: false });
         
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
             const raw = await window.cheatingDaddy.storage.getPreferences();
@@ -186,6 +199,7 @@ export class LiveInterview extends LitElement {
     disconnectedCallback() {
         super.disconnectedCallback();
         window.removeEventListener('sync-preference', this.syncPrefHandler);
+        window.removeEventListener('wheel', this.wheelHandler);
         if (this.autoMicTimer) clearTimeout(this.autoMicTimer);
         
         if (window.require) {

@@ -620,6 +620,12 @@ function setupGeneralIpcHandlers() {
                         output = output.trim();
                         if (output === 'CTRL_DOWN') {
                             if (global.isGhostHidden) return;
+                            
+                            // 🟢 NEW: Instantly drop the click-through wall to catch the scroll!
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.setIgnoreMouseEvents(false);
+                            }
+                            
                             if (global.ctrlHoldTimer) clearTimeout(global.ctrlHoldTimer);
 
                             const prefs = storage.getPreferences();
@@ -663,6 +669,11 @@ function setupGeneralIpcHandlers() {
                         }
 
                         if (output === 'CTRL_UP') {
+                            // 🟢 NEW: Restore the stealth click-through wall instantly!
+                            if (mainWindow && !mainWindow.isDestroyed()) {
+                                mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
+                            }
+
                             if (global.ctrlHoldTimer) { clearTimeout(global.ctrlHoldTimer); global.ctrlHoldTimer = null; }
                             
                             if (global.isRadialModeActive) {
