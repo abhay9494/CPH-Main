@@ -44,6 +44,7 @@ export class LiveInterview extends LitElement {
         this.activePage = 1; this.prefs = {}; this.trimTick = 0;
         this._isGhostHidden = false; this._isHoveringStealthDot = false;
         this.hoverTimer = null; this.autoMicTimer = null;
+        this.swipeCooldown = false;
     }
 
     getDefaultMap(page) {
@@ -64,12 +65,35 @@ export class LiveInterview extends LitElement {
 
         this.wheelHandler = (e) => {
             if (e.ctrlKey) {
-                e.preventDefault(); // Stop the whole page from zooming
+                e.preventDefault(); // Stop browser zooming/navigation
+
                 const halfWidth = window.innerWidth / 2;
-                const wrapperId = e.clientX < halfWidth ? 'code-feed-wrapper' : 'voice-feed-wrapper';
-                const wrapper = this.shadowRoot.getElementById(wrapperId);
-                if (wrapper) {
-                    wrapper.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                const isLeft = e.clientX < halfWidth;
+                
+                // 🟢 Sync hover state instantly so the router targets the correct Brain
+                this.paneHoverState = isLeft ? 'code' : 'voice';
+
+                if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
+                    // 🟢 Horizontal Swipe Detected
+                    if (!this.swipeCooldown && Math.abs(e.deltaX) > 20) {
+                        this.swipeCooldown = true;
+                        
+                        if (e.deltaX > 0) {
+                            this.executeHotCorner('next_resp'); // Swipe Right = Next
+                        } else {
+                            this.executeHotCorner('prev_resp'); // Swipe Left = Previous
+                        }
+                        
+                        // Lock swipes for 400ms so one gesture = one page turn
+                        setTimeout(() => { this.swipeCooldown = false; }, 400); 
+                    }
+                } else {
+                    // 🟢 Vertical Scroll Detected
+                    const wrapperId = isLeft ? 'code-feed-wrapper' : 'voice-feed-wrapper';
+                    const wrapper = this.shadowRoot.getElementById(wrapperId);
+                    if (wrapper) {
+                        wrapper.scrollBy({ top: e.deltaY, behavior: 'auto' });
+                    }
                 }
             }
         };
