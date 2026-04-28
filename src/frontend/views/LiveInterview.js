@@ -161,9 +161,13 @@ export class LiveInterview extends LitElement {
                 activeMap = { ...this.getDefaultMap(this.activePage), ...activeMap }; 
                 
                 const action = activeMap[clockWiseGrid[sliceIndex]];
-                if (['scroll_up', 'scroll_down', 'text_inc', 'text_dec', 'bg_inc', 'bg_dec'].includes(action)) {
+                
+                if (['scroll_up', 'scroll_down'].includes(action)) {
                     this.trimTick = (this.trimTick || 0) + 1;
                     if (this.trimTick >= 6) { this.executeHotCorner(action); this.trimTick = 0; }
+                } else if (['text_inc', 'text_dec', 'bg_inc', 'bg_dec'].includes(action)) {
+                    this.trimTick = (this.trimTick || 0) + 1;
+                    if (this.trimTick >= 15) { this.executeHotCorner(action); this.trimTick = 0; }
                 }
             };
 
@@ -338,12 +342,15 @@ export class LiveInterview extends LitElement {
                 break;
             case 'bg_inc':
             case 'bg_dec':
-                let newTrans = (this.prefs.backgroundTransparency || 0.8) + (action === 'bg_inc' ? 0.05 : -0.05);
+                let newTrans = (this.prefs.backgroundTransparency ?? 0.8) + (action === 'bg_inc' ? 0.02 : -0.02);
                 newTrans = Math.max(0, Math.min(1, Math.round(newTrans * 100) / 100));
                 this.showToast(action === 'bg_inc' ? '⬛ Opacity Increased' : '⬜ Opacity Decreased');
                 if (window.cheatingDaddy && window.cheatingDaddy.storage) {
                     window.cheatingDaddy.storage.updatePreference('backgroundTransparency', newTrans);
                     window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: newTrans } })); 
+                    if (window.require) {
+                        window.require('electron').ipcRenderer.send('update-radial-alpha', newTrans);
+                    }
                 }
                 break;
             case 'abort_oa':

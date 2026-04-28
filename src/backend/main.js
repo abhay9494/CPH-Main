@@ -131,6 +131,10 @@ global.createRadialWindow = () => {
             }
         });
         ipcRenderer.on('set-ghost-dot', (e, isVisible) => { ghostDot.style.opacity = isVisible ? '1' : '0'; });
+        
+        ipcRenderer.on('update-bg-alpha', (e, alpha) => {
+            container.style.background = \`rgba(30,30,30,\${alpha})\`;
+        });
         </script>
         </body></html>
         `;
@@ -447,6 +451,12 @@ function setupGeneralIpcHandlers() {
     });
 
     ipcMain.handle('get-app-version', async () => { return app.getVersion(); });
+
+    ipcMain.on('update-radial-alpha', (event, alpha) => {
+        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+            global.radialHudWindow.webContents.send('update-bg-alpha', alpha);
+        }
+    });
 
     ipcMain.on('view-changed', (event, view) => {
         if (view !== 'assistant') {
