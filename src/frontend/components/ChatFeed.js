@@ -4,7 +4,14 @@ export class ChatFeed extends LitElement {
     static styles = css`
         * { box-sizing: border-box; font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; cursor: default !important; user-select: text; }
         
-        .markdown-body { width: 100%; padding: 20px 25px; font-size: var(--response-font-size, 13px); line-height: 1.6; color: var(--text-color); overflow-x: hidden; word-wrap: break-word; }
+        .markdown-body { 
+            width: 100%; 
+            padding: calc(50vh - 100px) 25px; 
+            font-size: var(--response-font-size, 13px); 
+            line-height: 1.6; color: var(--text-color); 
+            overflow-x: hidden; word-wrap: break-word; 
+            min-height: 100%;
+        }
         .markdown-body br { display: none; }
         .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { margin: 1em 0 0.5em 0; color: var(--text-color); font-weight: 600; }
         .markdown-body p { margin: 0.8em 0; }

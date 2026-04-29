@@ -19,7 +19,12 @@ export class LiveInterview extends LitElement {
         .mic-btn { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: bold; transition: 0.2s; cursor: pointer !important; }
         .mic-btn.on { background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid rgba(0, 204, 102, 0.4); }
         .mic-btn.off { background: rgba(241, 76, 76, 0.15); color: #f14c4c; border: 1px solid rgba(241, 76, 76, 0.4); }
-        .chat-feed-wrapper { flex: 1; overflow-y: auto; }
+        .chat-feed-wrapper { 
+            flex: 1; 
+            overflow-y: auto; 
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
+        }
         .toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: bold; opacity: 0; transition: opacity 0.3s; z-index: 1000; pointer-events: none; text-transform: uppercase; }
         .toast.visible { opacity: 1; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
@@ -408,7 +413,9 @@ export class LiveInterview extends LitElement {
                 const container = feed.shadowRoot.querySelector('.markdown-body');
                 if (container) {
                     const wrapper = this.shadowRoot.getElementById(feedId + '-wrapper');
-                    if (wrapper) wrapper.scrollTop = wrapper.scrollHeight;
+                    if (wrapper) {
+                        wrapper.scrollTo({ top: wrapper.scrollHeight, behavior: 'smooth' });
+                    }
                 }
             }
         }, 50);
