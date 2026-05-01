@@ -37,7 +37,8 @@ export class LiveInterview extends LitElement {
         codeChatIndex: { type: Number }, voiceChatIndex: { type: Number },
         paneHoverState: { type: String }, isMicOn: { type: Boolean },
         tacThinkMode: { type: Boolean }, toastMessage: { type: String },
-        activePage: { type: Number }, prefs: { type: Object }
+        activePage: { type: Number }, prefs: { type: Object },
+        optimizedReady: { type: Boolean }
     };
 
     constructor() {
@@ -50,6 +51,7 @@ export class LiveInterview extends LitElement {
         this._isGhostHidden = false; this._isHoveringStealthDot = false;
         this.hoverTimer = null; this.autoMicTimer = null;
         this.swipeCooldown = false;
+        this.optimizedReady = false;
     }
 
     getDefaultMap(page) {
@@ -170,8 +172,35 @@ export class LiveInterview extends LitElement {
 
             this.voiceNewHandler = (_, text) => { this.voiceChatHistory = [...this.voiceChatHistory, `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`]; this.voiceChatIndex = this.voiceChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
             this.voiceUpdateHandler = (_, text) => { if (this.voiceChatHistory.length > 0) { const a = [...this.voiceChatHistory]; a[a.length - 1] = `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`; this.voiceChatHistory = a; } else { this.voiceChatHistory = [`🤖 AI:\n${text}`]; this.voiceChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('voice-feed'); };
-            this.codeNewHandler = (_, text) => { this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; this.codeChatIndex = this.codeChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('code-feed'); };
-            this.codeUpdateHandler = (_, text) => { if (this.codeChatHistory.length > 0) { const a = [...this.codeChatHistory]; a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; this.codeChatHistory = a; } else { this.codeChatHistory = [`🤖 AI:\n${text}`]; this.codeChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('code-feed'); };
+            // this.codeNewHandler = (_, text) => { this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; this.codeChatIndex = this.codeChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('code-feed'); };
+            // this.codeUpdateHandler = (_, text) => { if (this.codeChatHistory.length > 0) { const a = [...this.codeChatHistory]; a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; this.codeChatHistory = a; } else { this.codeChatHistory = [`🤖 AI:\n${text}`]; this.codeChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('code-feed'); };
+            // 🟢 NEW: Freeze View if Shadow Optimization is generating!
+            this.codeNewHandler = (_, text) => { 
+                this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; 
+                if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
+                    this.optimizedReady = true; // Lock view on Brute Force, trigger badge
+                } else {
+                    this.codeChatIndex = this.codeChatHistory.length - 1; 
+                    this.scrollToBottom('code-feed'); 
+                }
+                this.requestUpdate(); 
+            };
+            this.codeUpdateHandler = (_, text) => { 
+                if (this.codeChatHistory.length > 0) { 
+                    const a = [...this.codeChatHistory]; 
+                    a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; 
+                    this.codeChatHistory = a; 
+                } else { 
+                    this.codeChatHistory = [`🤖 AI:\n${text}`]; 
+                    this.codeChatIndex = 0; 
+                } 
+                if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
+                    this.optimizedReady = true;
+                } else {
+                    this.scrollToBottom('code-feed'); 
+                }
+                this.requestUpdate(); 
+            };
             this.micSyncHandler = (_, state) => { this.isMicOn = state; this.requestUpdate(); };
 
             // 🟢 NEW: Sync local UI to backend DOM Scraper Truth
@@ -285,7 +314,7 @@ export class LiveInterview extends LitElement {
             'refactor': '🛠️ Refactor',
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
-            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
+            'fix_error': '🌟 Sync Optimized', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort'
         };
         return labels[action] || action || '—';
@@ -313,9 +342,18 @@ export class LiveInterview extends LitElement {
                 this.showToast('🚀 Firing to AI');
                 ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text');
                 break;
-            case 'fix_error': 
-                this.showToast('🔧 Fixing Error...');
-                ipcRenderer.invoke('send-oa-fix-error');
+            case 'fix_error': // 🟢 Hijacked to trigger Sync Optimized
+                if (this.optimizedReady || this.codeChatHistory.length > 1) {
+                    this.showToast('🌟 Synced Optimized Code to Voice Brain!');
+                    this.optimizedReady = false;
+                    this.codeChatIndex = this.codeChatHistory.length - 1; // Snap view to optimized code
+                    this.scrollToBottom('code-feed');
+                    this.requestUpdate();
+                    // Blast context to Voice Brain
+                    ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
+                } else {
+                    this.showToast('⏳ Optimization not ready yet...');
+                }
                 break;
             case 'regenerate':
                 this.showToast('🔄 Regenerating...');
@@ -438,6 +476,7 @@ export class LiveInterview extends LitElement {
                     <div class="pane-header">
                         <span class="header-title code-title">💻 Code Brain</span>
                         <div class="header-controls">
+                            ${this.optimizedReady ? html`<span style="background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; animation: pulse 1.5s infinite;">🌟 OPTIMIZED READY</span>` : ''}
                             <span class="status-badge" style="color: ${this.tacThinkMode ? '#f59e0b' : '#00cc66'};">${this.tacThinkMode ? '🧠 Think' : '⚡ Fast'}</span>
                             <span class="count-badge">${this.codeChatHistory.length ? `${this.codeChatIndex + 1}/${this.codeChatHistory.length}` : '0/0'}</span>
                         </div>

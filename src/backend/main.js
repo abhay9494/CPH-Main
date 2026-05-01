@@ -1,10 +1,48 @@
 if (require('electron-squirrel-startup')) process.exit(0);
 
 const PROMPTS = {
-    OA_AUTOMATION: (language) => `Output ONLY functional code in ${language || 'c++'}. CRITICAL RULES:\n- Do NOT output any greetings, explanations, or comments.\n- Use single letter variable names.\n- Give me code with a main function so that I can run locally.\n- Don't change the function signature given in the image. See function signature and test cases from the image.\n- Give me test cases to be put in cph extension of vs code (only those test cases which are visible in the image) like this:\ntest case1\ninput\nexpected output\n- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
-    REFACTOR: `Refactor the above code. Output ONLY functional code. CRITICAL RULES:\n- Do NOT output any greetings, explanations, or comments.\n- If the original code uses a for loop, see if a while loop or a higher-order function (like map or filter) fits better.\n- Break large functions into smaller helper functions.\n- If specific independent tasks happen in a sequence, change the order of initialization if it doesn't affect the output.\n- Structurally invert nested if statements by checking for invalid conditions and returning early.\n- Replace long switch statements or if-else chains with a Map (Dictionary) or Array lookup.\n- Algorithms often iterate forward (0 to N). Change this to backward iteration (N to 0) or use recursion.\n- Extract complex conditions into variables with semantic names.\n- Do not use classes.\n- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
-    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error or wrong answer present. CRITICAL RULES:\n- Output ONLY the fully corrected functional code.\n- Do NOT output any greetings, general explanations, or extra text.\n- Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
-    VOICE_CONTEXT: `Read the attached problem or code. Do NOT output the solution or read it out loud. Just ingest the context silently. Be prepared to answer verbal questions about its logic, approach, or time complexity if I ask you through the microphone. Reply with a short confirmation that you understand.`
+    // 🟢 OA PROMPTS
+    OA_AUTOMATION: (language) => `Output ONLY functional code in ${language || 'c++'}. CRITICAL RULES:\n
+    - Do NOT output any greetings, explanations, or comments.\n
+    - Use single letter variable names.\n
+    - Give me code with a main function so that I can run locally.\n
+    - Don't change the function signature given in the image. See function signature and test cases from the image.\n
+    - Give me test cases to be put in cph extension of vs code (only those test cases which are visible in the image) like this:\n
+    test case1\n
+    input\n
+    expected output\n
+    - Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
+
+    REFACTOR: `Refactor the above code. Output ONLY functional code. Do NOT output any greetings, explanations, or comments. Replace long switch statements or if-else chains with a Map/Array lookup. Extract complex conditions into variables with semantic names. Do not use classes. Format code using standard Markdown backticks.`,
+
+    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error present. Output ONLY the fully corrected functional code. Do NOT output any greetings or extra text. Format code using standard Markdown backticks.`,
+    
+    // 🟢 LIVE INTERVIEW PROMPTS (1st Person, Shadow Optimization & Strict Formatting)
+    INTERVIEW_BRUTE_FORCE: `Output a working brute-force coding solution for the attached image. 
+    CRITICAL RULES:\n
+    - Examine the screenshot carefully for a programming language selector dropdown, file extension, or existing boilerplate code (e.g., 'C++' or 'Java'). You MUST write your solution in that exact language. If absolutely no language is visible, default to C++.\n
+    - Speak entirely in the 1st person ("I", "my", "me"). Act as a software engineering candidate.\n
+    - Provide line-by-line comments explaining the logic.\n
+    - Use highly descriptive variable names and DO NOT change them midway through the interview.\n
+    - Provide Time and Space Complexity for EVERY single loop and an overall complexity at the end.\n
+    - Output code ready to run locally with a main function.\n
+    - Provide a dry-run explanation with test cases.\n
+    - CRITICAL FORMATTING: You MUST use Markdown headers (###) for sections. You MUST use bolding (**text**) for emphasis. Do NOT use LaTeX math formatting (like $O(N)$ or $t$), use plain text (like O(N) and t).`,
+
+    INTERVIEW_OPTIMIZED: `Now, I need to optimize my previous solution. Provide a highly optimal solution with better Time/Space complexity. CRITICAL RULES:\n
+    - Speak entirely in the 1st person ("I", "my", "me"). Act as a software engineering candidate.\n
+    - Provide line-by-line comments explaining the logic.\n
+    - Keep core variable names consistent with the previous solution.\n
+    - Provide Time and Space Complexity for EVERY single loop and an overall complexity at the end.\n
+    - Explain the new logic, provide line-by-line comments, and the new time/space complexity per loop.\n
+    - Output code ready to run locally with a main function.\n
+    - Provide a dry-run explanation with test cases.\n
+    - CRITICAL FORMATTING: You MUST use Markdown headers (###) for sections. You MUST use bolding (**text**) for emphasis. Do NOT use LaTeX math formatting (like $O(N)$ or $t$), use plain text (like O(N) and t).`,
+    
+    // 🟢 VOICE BRAIN METHOD ACTING
+    VOICE_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are roleplaying as ME, the candidate taking a technical interview. Every single explanation, thought process, and answer you give MUST be strictly in the 1st person ('I', 'me', 'my'). Never break character. Never refer to 'the candidate' or 'the user'.\n\nSILENT DIRECTIVE: Read the attached coding problem. Do NOT output a solution. Just acknowledge you understand the constraints. Be prepared to act as my conversational partner to discuss brute-force vs optimal approaches.`,
+    VOICE_SYNC_BRUTE_FORCE: `SYSTEM DIRECTIVE: You are roleplaying as ME, the candidate taking a technical interview. Every single explanation, thought process, and answer you give MUST be strictly in the 1st person ('I', 'me', 'my'). Never break character. Never refer to 'the candidate' or 'the user'.\n\nI just wrote this brute-force code. Acknowledge silently. Base your initial conversational explanations strictly on this exact logic:\n\n`,
+    VOICE_SYNC_OPTIMIZED: `SYSTEM DIRECTIVE: You are roleplaying as ME, the candidate taking a technical interview. Every single explanation, thought process, and answer you give MUST be strictly in the 1st person ('I', 'me', 'my'). Never break character. Never refer to 'the candidate' or 'the user'.\n\nI have just presented a highly optimized approach to the interviewer. Acknowledge this silently. Base all future explanations strictly on this new logic:\n\n`
 };
 
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen } = require('electron');
@@ -151,7 +189,9 @@ global.createRadialWindow = () => {
 function launchDualBrains() {
     const prefs = storage.getPreferences();
     const loadouts = prefs.dualBrainLoadouts || [];
+    // 🟢 BUG FIX: Look for exact ID, fallback to the first saved loadout, then fallback to ChatGPT default
     activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || 
+                    loadouts[0] ||
                     { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
 
     const voiceProvider = AI_CONFIGS[activeLoadout.voiceEngine];
@@ -172,45 +212,87 @@ function launchDualBrains() {
     voiceWebWindow.webContents.on('dom-ready', async () => {
         voiceWebWindow.webContents.insertCSS('* { cursor: default !important; }');
         try {
+            // 🟢 1. Read user preferences for the Virtual Mixer
+            const currentPrefs = storage.getPreferences();
+            const targetAudioMode = currentPrefs.audioMode || 'speaker_only';
+
+            // 🟢 2. Securely fetch Screen ID BEFORE injecting WebRTC script to eliminate race conditions
             const sources = await desktopCapturer.getSources({ types: ['screen'] });
             if (!sources || sources.length === 0) return;
             const screenSourceId = sources[0].id;
+
+            // 🟢 3. The Ultimate Virtual Audio Mixer (Double-Fallback Architecture)
             const hijackScript = `
                 if (!window.__micHijacked) {
                     window.__micHijacked = true;
+                    const mode = '${targetAudioMode}';
+                    const sourceId = '${screenSourceId}';
                     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+                    const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia ? navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices) : null;
+                    
                     navigator.mediaDevices.getUserMedia = async (constraints) => {
                         if (constraints && constraints.audio) {
                             try {
-                                const stream = await originalGetUserMedia({ audio: { mandatory: { chromeMediaSource: 'desktop' } }, video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: '${screenSourceId}' } } });
-                                const audioTrack = stream.getAudioTracks()[0];
-                                if (!audioTrack) throw new Error('No track');
-                                const videoTrack = stream.getVideoTracks()[0];
-                                if (videoTrack) videoTrack.stop();
-                                
                                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                                // WAKE UP the audio context in case Chromium suspended it due to lack of human clicking
+                                if (ctx.state === 'suspended') await ctx.resume();
                                 const dest = ctx.createMediaStreamDestination();
                                 
-                                const source = ctx.createMediaStreamSource(new MediaStream([audioTrack]));
-                                source.connect(dest);
+                                // Route 1: Desktop / System Audio (Speaker)
+                                if (mode === 'speaker_only' || mode === 'both') {
+                                    try {
+                                        let sysStream;
+                                        try {
+                                            // Primary: High-privilege Electron Desktop Capture
+                                            sysStream = await originalGetUserMedia({ 
+                                                audio: { mandatory: { chromeMediaSource: 'desktop' } }, 
+                                                video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } 
+                                            });
+                                        } catch (err1) {
+                                            console.warn('[VirtualMixer] Legacy capture failed, falling back to getDisplayMedia...', err1);
+                                            // Fallback: Modern DisplayMedia API natively intercepted by backend loopback handler!
+                                            if (originalGetDisplayMedia) {
+                                                sysStream = await originalGetDisplayMedia({ audio: true, video: true });
+                                            }
+                                        }
+
+                                        if (sysStream) {
+                                            const sysAudioTrack = sysStream.getAudioTracks()[0];
+                                            if (sysAudioTrack) {
+                                                const sysSource = ctx.createMediaStreamSource(new MediaStream([sysAudioTrack]));
+                                                sysSource.connect(dest);
+                                            }
+                                            // Instantly stop video track to save CPU/Bandwidth
+                                            sysStream.getVideoTracks().forEach(t => t.stop());
+                                        }
+                                    } catch(e) { console.error('[VirtualMixer] Desktop audio capture completely failed:', e); }
+                                }
+
+                                // Route 2: Physical Hardware Microphone
+                                if (mode === 'mic_only' || mode === 'both') {
+                                    try {
+                                        const micStream = await originalGetUserMedia({ audio: true });
+                                        const micTrack = micStream.getAudioTracks()[0];
+                                        if (micTrack) {
+                                            const micSource = ctx.createMediaStreamSource(new MediaStream([micTrack]));
+                                            micSource.connect(dest);
+                                        }
+                                    } catch(e) { console.error('[VirtualMixer] Hardware Mic failed:', e); }
+                                }
                                 
+                                // Route 3: Anti-Silence Keepalive (20kHz sine wave)
                                 const osc = ctx.createOscillator();
                                 osc.frequency.value = 20000; 
                                 const gain = ctx.createGain();
-                                gain.gain.value = 0.02; 
+                                gain.gain.value = 0.01; 
                                 osc.connect(gain);
                                 gain.connect(dest);
                                 osc.start();
                                 
                                 return dest.stream;
-                            } catch (e) {
-                                const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                const dest = ctx.createMediaStreamDestination();
-                                const osc = ctx.createOscillator();
-                                osc.frequency.value = 20000;
-                                osc.connect(dest);
-                                osc.start();
-                                return dest.stream; 
+                            } catch (err) {
+                                console.error('[VirtualMixer] Core mixer failure, returning raw mic:', err);
+                                return originalGetUserMedia(constraints);
                             }
                         }
                         return originalGetUserMedia(constraints);
@@ -218,8 +300,25 @@ function launchDualBrains() {
                 }
                 true;
             `;
+            
             await voiceWebWindow.webContents.executeJavaScript(hijackScript);
-        } catch (err) { }
+
+            // 🟢 4. ChatGPT Popup Assassin
+            const assassinScript = `
+                setInterval(() => {
+                    try {
+                        const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                        const badBtns = btns.filter(b => {
+                            const txt = (b.innerText || '').toLowerCase();
+                            return txt.includes('keep talking') || txt.includes('continue') || txt === 'x' || txt === 'close' || txt.includes('stay logged in');
+                        });
+                        badBtns.forEach(b => b.click());
+                    } catch(e) {}
+                }, 3000);
+            `;
+            voiceWebWindow.webContents.executeJavaScript(assassinScript).catch(()=>{});
+            
+        } catch (err) { console.error('Failed to init Voice WebRTC:', err); }
     });
 
     if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.destroy();
@@ -256,7 +355,10 @@ function launchDualBrains() {
 
 function startDualScrapers(voiceProvider, codeProvider) {
     if (scrapingInterval) clearInterval(scrapingInterval);
+    
     let lastVoiceMsg = { count: 0, text: "" }, lastCodeMsg = { count: 0, text: "" }, lastMicState = null;
+    let codeStableTicks = 0; 
+    global.bruteForceSyncPending = false; // 🟢 ONE-SHOT LOCK: Prevents the 2nd response from auto-syncing!
 
     scrapingInterval = setInterval(async () => {
         const scrape = async (win, provider) => {
@@ -269,7 +371,27 @@ function startDualScrapers(voiceProvider, codeProvider) {
                             return (el.innerText || el.textContent || '').trim().length > 0;
                         });
                         if (msgs.length === 0) return null;
-                        return { count: msgs.length, text: (msgs[msgs.length - 1].innerText || msgs[msgs.length - 1].textContent || '').trim() };
+                        
+                        // 🟢 BUG 1 FIX: Smart Text Extractor (Preserves <pre>, <p>, and <br>!)
+                        let targetMsg = msgs[msgs.length - 1].cloneNode(true);
+                        
+                        // 1. Preserve Code Blocks
+                        const codeBlocks = targetMsg.querySelectorAll('pre');
+                        codeBlocks.forEach(block => {
+                            const codeText = block.innerText || block.textContent || '';
+                            const textNode = document.createTextNode('\\n\`\`\`\\n' + codeText.trim() + '\\n\`\`\`\\n');
+                            block.parentNode.replaceChild(textNode, block);
+                        });
+
+                        // 2. Preserve Paragraphs and Line Breaks
+                        const paragraphs = targetMsg.querySelectorAll('p');
+                        paragraphs.forEach(p => { p.appendChild(document.createTextNode('\\n\\n')); });
+                        const breaks = targetMsg.querySelectorAll('br');
+                        breaks.forEach(br => { br.parentNode.replaceChild(document.createTextNode('\\n'), br); });
+                        
+                        // Clean up excess newlines
+                        let finalText = (targetMsg.textContent || '').trim().replace(/\\n{3,}/g, '\\n\\n');
+                        return { count: msgs.length, text: finalText };
                     } catch(e) { return null; }
                 })();
             `);
@@ -284,23 +406,54 @@ function startDualScrapers(voiceProvider, codeProvider) {
 
         const cData = await scrape(codeWebWindow, codeProvider).catch(() => null);
         if (cData) {
-            if (cData.count > lastCodeMsg.count) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text); });
-            else if (cData.count === lastCodeMsg.count && cData.text !== lastCodeMsg.text) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-update-message', cData.text); });
+            if (cData.count > lastCodeMsg.count) {
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text); });
+                codeStableTicks = 0; // Reset tracker for new message
+            } 
+            else if (cData.count === lastCodeMsg.count && cData.text !== lastCodeMsg.text) {
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-update-message', cData.text); });
+                codeStableTicks = 0; // Reset tracker because it's actively typing
+            }
+            else if (cData.count === lastCodeMsg.count && cData.text === lastCodeMsg.text && cData.text.length > 50) {
+                // 🟢 The Code Brain has stopped typing. Wait ~3 seconds (3 ticks) then Auto-Sync!
+                codeStableTicks++;
+                if (codeStableTicks === 3 && global.currentSessionMode === 'proctored_live_interview' && global.bruteForceSyncPending) {
+                    global.bruteForceSyncPending = false; // 🟢 SNAP THE LOCK SHUT! The 2nd response will no longer auto-sync.
+                    
+                    let syncPrompt = PROMPTS.VOICE_SYNC_BRUTE_FORCE + cData.text;
+                    if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') syncPrompt = '@Fast ' + syncPrompt;
+                    
+                    // Beam the finalized Brute-Force code to the Voice Brain
+                    sendPayloadToWindow(voiceWebWindow, syncPrompt, []).catch(()=>{});
+                }
+            }
             lastCodeMsg = cData;
         }
 
         if (voiceWebWindow && !voiceWebWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+            // 🟢 BUG 3 FIX: Scrape the actual Mute/Unmute microphone icon state!
             const spyScript = `
                 (function() {
                     try {
-                        var btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
-                        var activeBtn = btns.find(function(b) { 
-                            var txt = (b.textContent || '').trim().toLowerCase(); 
-                            var aria = (b.getAttribute('aria-label') || '').toLowerCase(); 
-                            var testid = (b.getAttribute('data-testid') || '').toLowerCase(); 
-                            return txt === 'stop' || txt === 'end' || txt.includes('end call') || aria.includes('stop') || aria.includes('end') || testid.includes('end') || testid.includes('stop'); 
+                        let btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
+                        
+                        // If it says "Turn off microphone", it means it is currently ON and listening
+                        let micOnBtn = btns.find(b => {
+                            let a = (b.getAttribute('aria-label') || '').toLowerCase();
+                            let t = (b.getAttribute('title') || '').toLowerCase();
+                            return a.includes('turn off microphone') || t.includes('turn off microphone');
                         });
-                        return !!activeBtn;
+                        if (micOnBtn) return true;
+
+                        // If it says "Turn on microphone", the call is active but the mic is OFF
+                        let micOffBtn = btns.find(b => {
+                            let a = (b.getAttribute('aria-label') || '').toLowerCase();
+                            let t = (b.getAttribute('title') || '').toLowerCase();
+                            return a.includes('turn on microphone') || t.includes('turn on microphone');
+                        });
+                        if (micOffBtn) return false;
+
+                        return false;
                     } catch(e) { return false; }
                 })();
             `;
@@ -316,39 +469,144 @@ function startDualScrapers(voiceProvider, codeProvider) {
     }, 1000);
 }
 
+// 🟢 NEW: Smart Voice & Mic Helper (Slash Command + 45s Unmute Hunter)
+async function ensureVoiceAndMic(win) {
+    if (!win || win.isDestroyed()) return;
+
+    // 1. Check if the call is already active
+    const isCallActive = await win.webContents.executeJavaScript(`(() => {
+        let stopBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
+            let t = (b.textContent||'').toLowerCase(); 
+            let a = (b.getAttribute('aria-label')||'').toLowerCase();
+            return t === 'stop' || t === 'end' || t.includes('end call') || a.includes('stop') || a.includes('end') || a.includes('leave call');
+        });
+        return !!stopBtn;
+    })()`).catch(() => false);
+
+    if (!isCallActive) {
+        // Step 1: Intelligent Model Selection using the /thinking slash command!
+        const isThinkingMode = await win.webContents.executeJavaScript(`(() => {
+            // Look for the text 'Thinking' near the model dropdown area
+            let indicator = Array.from(document.querySelectorAll('*')).find(el => {
+                let txt = (el.textContent || '').trim().toLowerCase();
+                return txt === 'thinking' && el.children.length === 0;
+            });
+            if (indicator) return true;
+
+            // Fallback check on popup buttons
+            let btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => b.getAttribute('aria-haspopup'));
+            if (btn && (btn.textContent || '').toLowerCase().includes('thinking')) return true;
+
+            return false;
+        })()`).catch(() => false);
+
+        if (isThinkingMode) {
+            // Focus the chat box
+            await win.webContents.executeJavaScript(`(() => {
+                const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
+                if (el) el.focus();
+            })()`).catch(()=>{});
+
+            // Type the slash command to toggle Thinking OFF (switching to Instant)
+            win.webContents.insertText('/thinking');
+            await new Promise(r => setTimeout(r, 600)); // Wait for popup
+            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+            await new Promise(r => setTimeout(r, 800)); // Let UI settle into Instant mode
+        }
+
+        // Step 2: Trigger Voice Call (Ctrl+Alt+V + fallback)
+        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['ctrl', 'alt'], keyCode: 'V' });
+        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['ctrl', 'alt'], keyCode: 'V' });
+        await win.webContents.executeJavaScript(`(() => {
+            let btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
+                let a = (b.getAttribute('aria-label')||'').toLowerCase();
+                let d = (b.getAttribute('data-testid')||'').toLowerCase();
+                return a.includes('voice') || a.includes('start voice') || d.includes('voice');
+            });
+            if(btn) btn.click();
+        })()`).catch(()=>{});
+
+        await new Promise(r => setTimeout(r, 2500)); // Wait for connection
+    }
+
+    // Step 3: Robust Retry-Loop Unmute (Fixes Issue 2 - Post Prompt Auto-Unmute)
+    // ChatGPT can process/speak for a long time. We poll for up to 45 seconds to ensure it unmutes!
+    await win.webContents.executeJavaScript(`(async () => {
+        let attempts = 0;
+        while(attempts < 90) { // 90 * 500ms = 45 seconds
+            let unmute = Array.from(document.querySelectorAll('button')).find(b => {
+                let a = (b.getAttribute('aria-label')||'').toLowerCase();
+                let t = (b.getAttribute('title')||'').toLowerCase();
+                return a.includes('turn on microphone') || t.includes('turn on microphone') || a === 'unmute';
+            });
+            if(unmute) {
+                unmute.style.boxShadow = '0 0 10px #00cc66'; // Visual cue so you know it fired
+                setTimeout(() => unmute.click(), 200);
+                break;
+            }
+            attempts++;
+            await new Promise(r => setTimeout(r, 500));
+        }
+    })()`).catch(()=>{});
+}
+
 // 🟢 NEW: Synchronized Typing Simulator to ensure @Pro and @Fast chips register perfectly
 async function sendPayloadToWindow(win, customText, images = []) {
     if (!win || win.isDestroyed()) return;
     const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
     if (!isBoxReady) return;
-    
+
+    let modeTag = null;
+    let textToPaste = customText || '';
+
+    if (textToPaste.startsWith('@Pro ') || textToPaste.startsWith('@Fast ')) {
+        modeTag = textToPaste.startsWith('@Pro ') ? 'Pro' : 'Fast';
+        textToPaste = textToPaste.substring(modeTag === 'Pro' ? 5 : 6); 
+    }
+
+    // 1. Paste the massive prompt text FIRST
+    if (textToPaste) {
+        clipboard.writeText(textToPaste); 
+        win.webContents.paste(); 
+        await new Promise(r => setTimeout(r, 400));
+    }
+
+    // 2. Inject the @Fast / @Pro macro safely with Human Typing Simulation
+    if (modeTag) {
+        // Deselect text
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
+        await new Promise(r => setTimeout(r, 100));
+
+        // 🟢 FIXED: Fire a physical Shift+Enter keystroke to drop to a new line safely
+        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
+        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
+        await new Promise(r => setTimeout(r, 100));
+
+        // Type the @ symbol
+        win.webContents.insertText('@');
+        await new Promise(r => setTimeout(r, 600)); 
+        
+        // Type the word manually so event listeners catch it!
+        for (let i = 0; i < modeTag.length; i++) {
+            win.webContents.insertText(modeTag[i]);
+            await new Promise(r => setTimeout(r, 150)); // Human typing delay
+        }
+        await new Promise(r => setTimeout(r, 400)); 
+        
+        // Hit Space to lock the blue chip
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Space' }); 
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Space' }); 
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    // 3. Paste Images LAST
     for (let imgData of images) {
         const img = nativeImage.createFromDataURL(imgData);
         clipboard.writeImage(img);
         win.webContents.paste();
         await new Promise(r => setTimeout(r, 400));
-    }
-
-    if (customText) { 
-        let textToPaste = customText;
-
-        // If the payload explicitly begins with the mode override tag, we type it out slowly like a human first
-        if (customText.startsWith('@Pro ') || customText.startsWith('@Fast ')) {
-            const tag = customText.startsWith('@Pro ') ? 'Pro' : 'Fast';
-            textToPaste = customText.substring(tag.length + 2); 
-            
-            win.webContents.insertText('@');
-            await new Promise(r => setTimeout(r, 350)); // Wait for mention dropdown to open
-            win.webContents.insertText(tag);
-            await new Promise(r => setTimeout(r, 150)); // Wait for Angular to filter list
-            win.webContents.insertText(' ');
-            await new Promise(r => setTimeout(r, 150)); // Space converts text into the Blue Chip
-        }
-        
-        if (textToPaste) {
-            clipboard.writeText(textToPaste); 
-            win.webContents.paste(); 
-        }
     }
 
     const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
@@ -360,7 +618,17 @@ async function sendPayloadToWindow(win, customText, images = []) {
     
     await new Promise(r => setTimeout(r, 200));
     await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) btn.click(); return true; } catch(e) { return false; } })()`);
-    setTimeout(() => { if (!win.isDestroyed()) win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); }, 200);
+    
+    setTimeout(() => { 
+        if (!win.isDestroyed()) { win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); }
+        
+        // 🟢 BUG 2 FIX: Universal Post-Prompt Auto-Unmute
+        if (win === voiceWebWindow) {
+            setTimeout(async () => {
+                await ensureVoiceAndMic(win);
+            }, 3500);
+        }
+    }, 200);
 }
 
 app.whenReady().then(async () => {
@@ -720,17 +988,62 @@ function setupGeneralIpcHandlers() {
 
     const getModePrefix = () => global.isThinkModeActive ? '@Pro ' : '@Fast ';
 
-    ipcMain.handle('send-screenshots-to-ai', async (event, customPrompt) => {
+    // 🟢 FIXED: Properly handle the 'send-oa-automation' IPC route and Language string
+    ipcMain.handle('send-oa-automation', async (event, language) => {
         try {
             if (accumulatedScreenshots.length === 0) return false;
-            let codePrompt = customPrompt || PROMPTS.OA_AUTOMATION('C++');
-            let voicePrompt = PROMPTS.VOICE_CONTEXT;
-            
-            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
-            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
 
-            await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
-            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
+            if (global.currentSessionMode === 'proctored_live_interview') {
+                // 🟢 STAGE 1: BRUTE FORCE (Fast Mode)
+                global.isThinkModeActive = false;
+                global.bruteForceSyncPending = true; // 🟢 OPEN THE LOCK: Allow the 1st response to auto-sync!
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', false); });
+
+                // 🟢 Visual Language Detection enforced via prompt rules now
+                let codePrompt1 = PROMPTS.INTERVIEW_BRUTE_FORCE;
+                let voicePrompt = PROMPTS.VOICE_INITIAL_CONTEXT;
+
+                if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt1 = '@Fast ' + codePrompt1;
+                if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = '@Fast ' + voicePrompt;
+
+                await sendPayloadToWindow(codeWebWindow, codePrompt1, accumulatedScreenshots);
+                setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); }, 1500);
+
+                // 🟢 STAGE 2: SHADOW OPTIMIZATION (Think Mode) after 30 seconds
+                setTimeout(async () => {
+                    if (global.currentSessionMode !== 'proctored_live_interview') return; // Cancel if exited
+                    
+                    global.isThinkModeActive = true;
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', true); });
+
+                    let codePrompt2 = PROMPTS.INTERVIEW_OPTIMIZED;
+                    if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt2 = '@Pro ' + codePrompt2;
+
+                    // Send silently to Code Brain again (using the SAME screenshots)
+                    await sendPayloadToWindow(codeWebWindow, codePrompt2, accumulatedScreenshots);
+                    accumulatedScreenshots = []; // Clear them after the 2nd payload fires
+                }, 30000); 
+
+            } else {
+                // 🟢 STANDARD OA LOGIC
+                let codePrompt = PROMPTS.OA_AUTOMATION(language); // Fixed the language injection!
+                let voicePrompt = PROMPTS.VOICE_CONTEXT;
+                if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
+                if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+
+                await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
+                setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
+            }
+            return true;
+        } catch(e) { return false; }
+    });
+
+    // 🟢 NEW: Sync Optimized Code to Voice Brain
+    ipcMain.handle('sync-optimized-to-voice', async (event, optimizedCodeText) => {
+        try {
+            let finalPrompt = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') finalPrompt = '@Fast ' + finalPrompt; // Ensure voice stays fast
+            await sendPayloadToWindow(voiceWebWindow, finalPrompt, []);
             return true;
         } catch(e) { return false; }
     });
@@ -747,41 +1060,23 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.handle('toggle-ai-mic', async (event, isTurningOn) => {
         if (!voiceWebWindow || voiceWebWindow.isDestroyed()) return false;
-        const script = `
-            (function() {
-                try { 
-                    var btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
-                    var isTurnOn = ${isTurningOn};
-                    if (isTurnOn) {
-                        var stopBtn = btns.find(b => {
-                            var t = (b.textContent||'').toLowerCase(); var a = (b.getAttribute('aria-label')||'').toLowerCase(); var d = (b.getAttribute('data-testid')||'').toLowerCase();
-                            return t === 'stop' || t === 'end' || t.includes('end call') || a.includes('stop') || a.includes('end') || d.includes('stop') || d.includes('end');
-                        });
-                        if (stopBtn) return true; 
-                        
-                        var startBtn = btns.find(b => {
-                            var t = (b.textContent||'').toLowerCase(); var a = (b.getAttribute('aria-label')||'').toLowerCase(); var d = (b.getAttribute('data-testid')||'').toLowerCase();
-                            return a.includes('voice') || a.includes('microphone') || d.includes('voice') || t.includes('start voice');
-                        });
-                        if (startBtn) { startBtn.click(); return true; }
-                    } else {
-                        var stopBtn = btns.find(b => {
-                            var t = (b.textContent||'').toLowerCase(); var a = (b.getAttribute('aria-label')||'').toLowerCase(); var d = (b.getAttribute('data-testid')||'').toLowerCase();
-                            return t === 'stop' || t === 'end' || t.includes('end call') || a.includes('stop') || a.includes('end') || d.includes('stop') || d.includes('end');
-                        });
-                        if (stopBtn) { stopBtn.click(); return true; }
-                    }
-                    return false;
-                } catch(e) { return false; }
-            })();
-        `;
-        try {
-            const result = await Promise.race([
-                voiceWebWindow.webContents.executeJavaScript(script),
-                new Promise(r => setTimeout(() => r(false), 2000))
-            ]);
-            return result === true;
-        } catch (err) { return false; }
+        
+        if (isTurningOn) {
+            // 🟢 Use the universal Smart Helper for the Radial trigger!
+            await ensureVoiceAndMic(voiceWebWindow);
+            return true;
+        } else {
+            // Simply click the "Turn off microphone" button to mute
+            await voiceWebWindow.webContents.executeJavaScript(`(() => {
+                let mute = Array.from(document.querySelectorAll('button')).find(b => {
+                    let a = (b.getAttribute('aria-label')||'').toLowerCase();
+                    let t = (b.getAttribute('title')||'').toLowerCase();
+                    return a.includes('turn off microphone') || t.includes('turn off microphone') || a === 'mute';
+                });
+                if (mute) mute.click();
+            })()`).catch(()=>{});
+            return true;
+        }
     });
 
     // 🟢 THE NATIVE TEXT-INJECTOR TYPING SEQUENCE

@@ -552,7 +552,7 @@ export class SettingsView extends LitElement {
             'scroll_up': '⬆️',       'scroll_down': '⬇️',      'prev_resp': '◀',       'next_resp': '▶',
             'change_ai': '🤖',       'change_profile': '👤',   'fast_think': '⚡🧠',     'refactor': '🛠️',
             'reset': '✨',           'text_inc': 'A+',         'text_dec': 'A-',        'bg_inc': '⬛',      'bg_dec': '⬜',
-            'fix_error': '🔧',       'language': '💻',         'mic': '🎙️',            'toggle_ai_vis': '👁️', 
+            'fix_error': '🌟', 'language': '💻 Language', 'mic': '🎙️ Mic', 'toggle_ai_vis': '👁️',
             'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
             'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
             'toggle_page2': '🔄', 'regenerate': '🔄 Regen'
@@ -676,11 +676,13 @@ export class SettingsView extends LitElement {
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
                                         ${this.renderCustomDropdown('voiceEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine || 0, (val) => {
                                             let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].voiceEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                         ${this.renderCustomDropdown('voiceProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfileId || '', (val) => {
                                             let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].voiceProfileId = val; this.savePref('dualBrainLoadouts', l);
+                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceProfileId = val; this.savePref('dualBrainLoadouts', l);
+                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                     </div>
                                 </div>
@@ -689,11 +691,13 @@ export class SettingsView extends LitElement {
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
                                         ${this.renderCustomDropdown('codeEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine || 1, (val) => {
                                             let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                         ${this.renderCustomDropdown('codeProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.codeProfileId || '', (val) => {
                                             let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l);
+                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l);
+                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                     </div>
                                 </div>
@@ -857,7 +861,7 @@ export class SettingsView extends LitElement {
             case 'hotcorners': {
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🌟 Sync Optimized'},
                     {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
@@ -932,7 +936,7 @@ export class SettingsView extends LitElement {
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
-                                        <input type="range" min="1" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
+                                        <input type="range" min="0" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
@@ -1171,7 +1175,7 @@ export class SettingsView extends LitElement {
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
-                                        <input type="range" min="1" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
+                                        <input type="range" min="0" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
                                     </div>
                                     <div class="slider-row">
                                         <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
