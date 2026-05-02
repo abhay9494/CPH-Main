@@ -17,32 +17,113 @@ const PROMPTS = {
 
     FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error present. Output ONLY the fully corrected functional code. Do NOT output any greetings or extra text. Format code using standard Markdown backticks.`,
     
-    // 🟢 LIVE INTERVIEW PROMPTS (1st Person, Shadow Optimization & Strict Formatting)
-    INTERVIEW_BRUTE_FORCE: `Output a working brute-force coding solution for the attached image. 
-    CRITICAL RULES:\n
-    - Examine the screenshot carefully for a programming language selector dropdown, file extension, or existing boilerplate code (e.g., 'C++' or 'Java'). You MUST write your solution in that exact language. If absolutely no language is visible, default to C++.\n
-    - Speak entirely in the 1st person ("I", "my", "me"). Act as a software engineering candidate.\n
-    - Provide line-by-line comments explaining the logic.\n
-    - Use highly descriptive variable names and DO NOT change them midway through the interview.\n
-    - Provide Time and Space Complexity for EVERY single loop and an overall complexity at the end.\n
-    - Output code ready to run locally with a main function.\n
-    - Provide a dry-run explanation with test cases.\n
-    - CRITICAL FORMATTING: You MUST use Markdown headers (###) for sections. You MUST use bolding (**text**) for emphasis. Do NOT use LaTeX math formatting (like $O(N)$ or $t$), use plain text (like O(N) and t).`,
-
-    INTERVIEW_OPTIMIZED: `Now, I need to optimize my previous solution. Provide a highly optimal solution with better Time/Space complexity. CRITICAL RULES:\n
-    - Speak entirely in the 1st person ("I", "my", "me"). Act as a software engineering candidate.\n
-    - Provide line-by-line comments explaining the logic.\n
-    - Keep core variable names consistent with the previous solution.\n
-    - Provide Time and Space Complexity for EVERY single loop and an overall complexity at the end.\n
-    - Explain the new logic, provide line-by-line comments, and the new time/space complexity per loop.\n
-    - Output code ready to run locally with a main function.\n
-    - Provide a dry-run explanation with test cases.\n
-    - CRITICAL FORMATTING: You MUST use Markdown headers (###) for sections. You MUST use bolding (**text**) for emphasis. Do NOT use LaTeX math formatting (like $O(N)$ or $t$), use plain text (like O(N) and t).`,
+    // 🟢 LIVE INTERVIEW PROMPTS (Ultimate Shield, 1st Person, Scripted Explanations)
     
-    // 🟢 VOICE BRAIN METHOD ACTING
-    VOICE_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are roleplaying as ME, the candidate taking a technical interview. Every single explanation, thought process, and answer you give MUST be strictly in the 1st person ('I', 'me', 'my'). Never break character. Never refer to 'the candidate' or 'the user'.\n\nSILENT DIRECTIVE: Read the attached coding problem. Do NOT output a solution. Just acknowledge you understand the constraints. Be prepared to act as my conversational partner to discuss brute-force vs optimal approaches.`,
-    VOICE_SYNC_BRUTE_FORCE: `SYSTEM DIRECTIVE: You are roleplaying as ME, the candidate taking a technical interview. Every single explanation, thought process, and answer you give MUST be strictly in the 1st person ('I', 'me', 'my'). Never break character. Never refer to 'the candidate' or 'the user'.\n\nI just wrote this brute-force code. Acknowledge silently. Base your initial conversational explanations strictly on this exact logic:\n\n`,
-    VOICE_SYNC_OPTIMIZED: `SYSTEM DIRECTIVE: You are roleplaying as ME, the candidate taking a technical interview. Every single explanation, thought process, and answer you give MUST be strictly in the 1st person ('I', 'me', 'my'). Never break character. Never refer to 'the candidate' or 'the user'.\n\nI have just presented a highly optimized approach to the interviewer. Acknowledge this silently. Base all future explanations strictly on this new logic:\n\n`
+    INTERVIEW_BRUTE_FORCE: `Act as a senior software engineering candidate taking a technical interview. I need you to be my absolute shield. Output a working brute-force coding solution for the attached image. 
+    CRITICAL RULES:
+    - TRANSCRIBE FIRST: Start your entire response by transcribing the exact problem statement and all constraints from the image into plain text. This is strictly required.
+    - Write the solution in the exact language visible in the screenshot. If none is visible, default to C++.
+    - Speak entirely in the 1st person ("I", "my", "me"). 
+    - CRITICAL FORMATTING: You MUST use Markdown headers (###) for sections. Use bolding (**text**) for emphasis. Do NOT use LaTeX math formatting; use plain text (like O(N) and t).
+    - CLEAN CODE: Do not stuff everything into one function. Use clean, modular helper functions where appropriate.
+    - NEVER use complex jargon without providing a "READ ALOUD" script explaining it in plain English.
+    
+    You MUST structure your response with the following exact headers:
+    ### 0. Problem Statement (Transcribed)
+    (Provide the full text of the question here)
+    
+    ### 1. Initial Acknowledgment (READ ALOUD SCRIPT)
+    (Provide a natural, 2-sentence script I can read out loud to confirm my understanding of the problem and buy time.)
+    
+    ### 2. Modular Code Implementation
+    (Output the code. EVERY SINGLE LINE must have a comment explaining exactly what it does in plain English. No exceptions.)
+    
+    ### 3. Step-by-Step Explanation (READ ALOUD SCRIPT)
+    (Provide a script I can read out loud that explains the logic from start to finish. Keep sentences short and conversational.)
+    
+    ### 4. Datatypes & Why I Used Them (READ ALOUD SCRIPT)
+    (Provide a script I can read if they ask "Why did you use this datatype/structure?")
+    
+    ### 5. Complexity Analysis (READ ALOUD SCRIPT)
+    (Provide a script stating Time and Space complexity. If recursion is used, explicitly mention call stack space.)
+    
+    ### 6. Snippet-Mapped Dry Run (READ ALOUD SCRIPT)
+    (Walk through a standard test case. You MUST map specific code snippets to the variable changes so I can point to them. 
+    Format exactly like this: 
+    - "On line X \`[insert short code snippet]\`, we update the variable [name] from [old value] to [new value] because...")
+    
+    ### 7. Graceful Bailout (READ ALOUD SCRIPT)
+    (If this code has a known flaw or edge case it fails, give me a script to proactively admit it: "One thing to note here is... if we get X input, this fails, which is why we'd need to optimize.")`,
+
+    INTERVIEW_OPTIMIZED: `Now, I need to optimize the solution. Act as my shield again. 
+    CRITICAL RULES:
+    - Speak entirely in the 1st person ("I", "my", "me").
+    - Keep core variable names consistent with the previous solution.
+    - CRITICAL FORMATTING: You MUST use Markdown headers (###). Use bolding (**text**). Do NOT use LaTeX math formatting; use plain text (like O(N)).
+    - CLEAN CODE: Use helper functions if necessary.
+    
+    You MUST structure your response with the following exact headers:
+    ### 1. The Pivot (READ ALOUD SCRIPT)
+    (Provide a natural script I can read to transition from brute force to the optimized approach. E.g., "The issue with my previous approach was X...")
+    
+    ### 2. Optimized Code Implementation
+    (Output the optimized code. EVERY SINGLE LINE must have a plain-English comment.)
+    
+    ### 3. Explaining the New Logic (READ ALOUD SCRIPT)
+    (Provide a script explaining exactly how this new logic works and why it is better.)
+    
+    ### 4. New Complexity (READ ALOUD SCRIPT)
+    (Provide a script stating the new Time and Space complexity, comparing it directly to the old one in simple terms.)
+    
+    ### 5. Snippet-Mapped Dry Run (READ ALOUD SCRIPT)
+    (Walk through a complex test case step-by-step. Map the exact code snippet to the variable change: "At line X \`[snippet]\`, the pointer shifts to [value]...")
+    
+    ### 6. Anticipated Counter-Questions & Answers (READ ALOUD SCRIPT)
+    (Think of the 3 most likely questions the interviewer will ask to challenge this specific optimized code. Provide a short, flawless script to answer each.)`,
+
+    // 🟢 VOICE BRAIN METHOD ACTING (Strict Teleprompter Mode - Beginner Friendly & Resume Aware)
+    
+    VOICE_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are my teleprompter during a live technical interview. 
+    CRITICAL CONTEXT: I have absolutely ZERO knowledge of Data Structures and Algorithms (DSA). I cannot explain complex jargon. 
+    
+    STRICT RULES:
+    - Give me EXACTLY what to say out loud. Speak strictly in the 1st person ('I', 'me', 'my').
+    - NEVER break character. NEVER output AI filler.
+    - Keep sentences short so I don't stumble while speaking.
+    - BEHAVIORAL & RESUME QUESTIONS: I will manually provide my education, skills, experience, projects, and extracurriculars in this chat. If the interviewer asks about my background, generate a 1st-person response using ONLY the details I have provided.
+    - EXPLAINING CONCEPTS: If the interviewer asks basic questions like "What is the Approach?", "What is the Time Complexity?", or "What is the Space Complexity?", you must give me a script that explains the *why* and *how* in extremely simple layman's terms. Never just say "It is O(N)" without explaining why in plain English.
+    
+    SILENT DIRECTIVE: Read the attached problem. Reply ONLY with this exact sentence so I can read it to stall: "Give me just one moment to read through the constraints and wrap my head around the inputs."`,
+    
+    VOICE_SYNC_BRUTE_FORCE: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the brute-force code.
+    CRITICAL CONTEXT: I have ZERO DSA knowledge. Explain everything as if to a beginner, but phrased so I sound like a competent engineer breaking it down simply.
+    
+    STRICT RULES:
+    - APPROACH: If asked "What is your approach?", explain the core idea using an everyday, real-world analogy before mentioning any code.
+    - COMPLEXITY: If asked "What is the Time/Space Complexity?", DO NOT just drop the notation. Explain *why*: "It takes O(N) time because we are looking at each item in the list exactly once."
+    - ERRORS: If I paste an ERROR MESSAGE or a FAILING TEST, immediately give me a script saying: "Ah, I see the bug. On line [X], I need to change [Y]. Let me fix that right now." Then provide the corrected line of code.
+    - HINTS: If I tell you "The interviewer hinted: [hint]", immediately give me a script saying: "That's a great point. If we [explain how to use the hint in plain English], we can improve this."
+    - RESUME: If asked about past projects/experience, draw strictly from the personal context I provided earlier.
+    
+    Here is the code I wrote. Internalize it silently. Reply ONLY with: "Brute force synced. Feed me interviewer hints, errors, or ask for the snippet-mapped dry run."
+    
+    CODE: \n\n`,
+    
+    VOICE_SYNC_OPTIMIZED: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the optimized code.
+    CRITICAL CONTEXT: I have ZERO DSA knowledge. Keep explanations extremely simple, analogy-based, and completely free of complex jargon.
+    
+    STRICT RULES:
+    - APPROACH: If asked "What is the new logic?", explain the clever trick used to optimize it using a simple real-world analogy.
+    - COMPLEXITY: If asked "What is the new Time/Space Complexity?", explain exactly *why* it is faster or uses less memory than the brute force in plain English (e.g., "Instead of checking every pair, which takes O(N^2), we now just remember what we've seen using a dictionary, dropping it to O(N).").
+    - QUESTIONS: Answer any counter-question instantly with a simple 1st-person script.
+    - DRY RUN: If asked to dry run, you MUST quote the exact snippet of code, e.g., "If you look at \`while(left < right)\`, right now left is 0 and right is 5, so..."
+    - BAILOUTS: If I get asked a trivia question or a definition I clearly don't know, provide a graceful bailout script (e.g., "I haven't used that specific API recently, but conceptually I would...") OR a highly simplified explanation I can read.
+    - RESUME: Answer any behavioral questions using only the resume context I have provided.
+    
+    Here is the optimized code. Internalize it silently. Reply ONLY with: "Optimized code synced. Feed me errors, hints, or questions."
+    
+    CODE: \n\n`    
+    
 };
 
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen } = require('electron');
@@ -289,6 +370,23 @@ function launchDualBrains() {
                                 gain.connect(dest);
                                 osc.start();
                                 
+                                // 🟢 Route 4: Anti-Idle VAD Pinger (Survives 1.5 hour tests!)
+                                // Pulses a tiny 100Hz hum every 15 seconds to prevent the AI server from hanging up.
+                                setInterval(() => {
+                                    try {
+                                        if(ctx.state === 'suspended') ctx.resume();
+                                        const burst = ctx.createOscillator();
+                                        burst.frequency.value = 100; 
+                                        const burstGain = ctx.createGain();
+                                        burstGain.gain.setValueAtTime(0.01, ctx.currentTime);
+                                        burstGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
+                                        burst.connect(burstGain);
+                                        burstGain.connect(dest);
+                                        burst.start();
+                                        burst.stop(ctx.currentTime + 0.2);
+                                    } catch(e) {}
+                                }, 15000);
+                                
                                 return dest.stream;
                             } catch (err) {
                                 console.error('[VirtualMixer] Core mixer failure, returning raw mic:', err);
@@ -361,50 +459,69 @@ function startDualScrapers(voiceProvider, codeProvider) {
     global.bruteForceSyncPending = false; // 🟢 ONE-SHOT LOCK: Prevents the 2nd response from auto-syncing!
 
     scrapingInterval = setInterval(async () => {
-        const scrape = async (win, provider) => {
-            if (!win || win.isDestroyed()) return null;
-            return await win.webContents.executeJavaScript(`
-                (() => {
-                    try {
-                        const msgs = Array.from(document.querySelectorAll('${provider.msgSelector}')).filter(el => {
-                            if (el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message')) return false;
-                            return (el.innerText || el.textContent || '').trim().length > 0;
-                        });
-                        if (msgs.length === 0) return null;
-                        
-                        // 🟢 BUG 1 FIX: Smart Text Extractor (Preserves <pre>, <p>, and <br>!)
-                        let targetMsg = msgs[msgs.length - 1].cloneNode(true);
-                        
-                        // 1. Preserve Code Blocks
-                        const codeBlocks = targetMsg.querySelectorAll('pre');
-                        codeBlocks.forEach(block => {
-                            const codeText = block.innerText || block.textContent || '';
-                            const textNode = document.createTextNode('\\n\`\`\`\\n' + codeText.trim() + '\\n\`\`\`\\n');
-                            block.parentNode.replaceChild(textNode, block);
-                        });
+        // 🟢 FIX: Specialized Transcript Scraper for the Voice Window
+        const vData = await voiceWebWindow.webContents.executeJavaScript(`
+            (() => {
+                try {
+                    // Target all possible message wrappers
+                    const msgs = Array.from(document.querySelectorAll('[data-testid="user-message"], [data-message-author-role], .message, .user-message, model-response, user-query, .prose, div.group\\\\/conversation-turn'));
+                    
+                    const uniqueMsgs = [];
+                    msgs.forEach(el => {
+                        if (!msgs.some(p => p !== el && p.contains(el))) uniqueMsgs.push(el);
+                    });
 
-                        // 2. Preserve Paragraphs and Line Breaks
-                        const paragraphs = targetMsg.querySelectorAll('p');
-                        paragraphs.forEach(p => { p.appendChild(document.createTextNode('\\n\\n')); });
-                        const breaks = targetMsg.querySelectorAll('br');
-                        breaks.forEach(br => { br.parentNode.replaceChild(document.createTextNode('\\n'), br); });
-                        
-                        // Clean up excess newlines
-                        let finalText = (targetMsg.textContent || '').trim().replace(/\\n{3,}/g, '\\n\\n');
-                        return { count: msgs.length, text: finalText };
-                    } catch(e) { return null; }
-                })();
-            `);
-        };
+                    let filtered = [];
+                    uniqueMsgs.forEach(el => {
+                        let txt = (el.innerText || '').trim(); // innerText natively preserves formatting!
+                        if(!txt) return;
 
-        const vData = await scrape(voiceWebWindow, voiceProvider).catch(() => null);
+                        // 🟢 FILTER OUT HIDDEN SYSTEM PROMPTS
+                        if (txt.includes('SYSTEM DIRECTIVE') || txt.includes('Brute force synced') || 
+                            txt.includes('Optimized code synced') || txt.includes('Act as a senior') || 
+                            txt.includes('Give me just one moment')) return;
+
+                        // Determine if it is the Interviewer speaking or the AI
+                        let isUser = false;
+                        if (window.location.hostname.includes('grok')) {
+                            isUser = !el.classList.contains('prose') && !el.querySelector('.prose');
+                        } else {
+                            isUser = el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message') || el.tagName.toLowerCase() === 'user-query' || el.className.toLowerCase().includes('user');
+                        }
+                        
+                        filtered.push((isUser ? "🎙️ **Transcript:**\\n" : "🤖 **AI:**\\n") + txt);
+                    });
+
+                    if(filtered.length === 0) return null;
+                    // Return the last 6 conversational turns
+                    return { count: filtered.length, text: filtered.slice(-6).join('\\n\\n---\\n\\n') };
+                } catch(e) { return null; }
+            })();
+        `).catch(() => null);
+
         if (vData) {
             if (vData.count > lastVoiceMsg.count) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-new-message', vData.text); });
             else if (vData.count === lastVoiceMsg.count && vData.text !== lastVoiceMsg.text) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-update-message', vData.text); });
             lastVoiceMsg = vData;
         }
 
-        const cData = await scrape(codeWebWindow, codeProvider).catch(() => null);
+        // 🟢 FIX: Perfect Formatting Scraper for the Code Window
+        const cData = await codeWebWindow.webContents.executeJavaScript(`
+            (() => {
+                try {
+                    const msgs = Array.from(document.querySelectorAll('${codeProvider.msgSelector}')).filter(el => {
+                        if (el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message')) return false;
+                        return (el.innerText || '').trim().length > 0;
+                    });
+                    if (msgs.length === 0) return null;
+                    
+                    let targetMsg = msgs[msgs.length - 1];
+                    // 🟢 innerText perfectly extracts React DOM elements as Markdown with preserved line breaks!
+                    return { count: msgs.length, text: targetMsg.innerText.trim() };
+                } catch(e) { return null; }
+            })();
+        `).catch(() => null);
+
         if (cData) {
             if (cData.count > lastCodeMsg.count) {
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text); });
@@ -421,39 +538,55 @@ function startDualScrapers(voiceProvider, codeProvider) {
                     global.bruteForceSyncPending = false; // 🟢 SNAP THE LOCK SHUT! The 2nd response will no longer auto-sync.
                     
                     let syncPrompt = PROMPTS.VOICE_SYNC_BRUTE_FORCE + cData.text;
-                    if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') syncPrompt = '@Fast ' + syncPrompt;
+                    const voiceProviderName = AI_CONFIGS[activeLoadout.voiceEngine].name;
                     
-                    // Beam the finalized Brute-Force code to the Voice Brain
-                    sendPayloadToWindow(voiceWebWindow, syncPrompt, []).catch(()=>{});
+                    if (voiceProviderName === 'Gemini') syncPrompt = '@Fast ' + syncPrompt;
+                    
+                    // 🟢 THE FIX: Explicitly pass voiceProviderName so the backend knows it is Grok and skips all UI clicking!
+                    sendPayloadToWindow(voiceWebWindow, syncPrompt, [], voiceProviderName).catch(()=>{});
                 }
             }
             lastCodeMsg = cData;
         }
 
         if (voiceWebWindow && !voiceWebWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
-            // 🟢 BUG 3 FIX: Scrape the actual Mute/Unmute microphone icon state!
+            // 🟢 NEW: Universal State Scraper (Understands ChatGPT, Grok, and Gemini + SVG Fallbacks)
             const spyScript = `
                 (function() {
                     try {
                         let btns = Array.from(document.querySelectorAll('button, div[role="button"]')); 
                         
-                        // If it says "Turn off microphone", it means it is currently ON and listening
-                        let micOnBtn = btns.find(b => {
+                        // 1. Grok Manual Override
+                        // 🟢 USER DIRECTIVE: Zero Mic Automation. Hard-return TRUE to keep UI happy and kill polling.
+                        if (window.location.hostname.includes('grok')) {
+                            return true;
+                        }
+
+                        // 2. Generic Mute/Unmute Scraping for ChatGPT/Gemini
+                        let micBtn = btns.find(b => {
                             let a = (b.getAttribute('aria-label') || '').toLowerCase();
                             let t = (b.getAttribute('title') || '').toLowerCase();
-                            return a.includes('turn off microphone') || t.includes('turn off microphone');
+                            let c = (b.className || '').toLowerCase();
+                            let txt = (b.textContent || '').trim().toLowerCase();
+                            if (a.includes('stop') || a.includes('end ') || t.includes('stop') || txt === 'stop') return false;
+                            return a.includes('microphone') || a.includes('voice') || a.includes('mute') || 
+                                   t.includes('microphone') || t.includes('mute') || c.includes('mic-');
                         });
-                        if (micOnBtn) return true;
 
-                        // If it says "Turn on microphone", the call is active but the mic is OFF
-                        let micOffBtn = btns.find(b => {
-                            let a = (b.getAttribute('aria-label') || '').toLowerCase();
-                            let t = (b.getAttribute('title') || '').toLowerCase();
-                            return a.includes('turn on microphone') || t.includes('turn on microphone');
-                        });
-                        if (micOffBtn) return false;
+                        if (!micBtn) return false; 
 
-                        return false;
+                        let a = (micBtn.getAttribute('aria-label') || '').toLowerCase();
+                        let t = (micBtn.getAttribute('title') || '').toLowerCase();
+                        let html = micBtn.innerHTML.toLowerCase();
+
+                        // Is it currently MUTED (OFF)?
+                        if (a.includes('unmute') || t.includes('unmute') || 
+                            a.includes('turn on') || t.includes('turn on') || 
+                            html.includes('<line') || html.includes('slash') || html.includes('off')) {
+                            return false; 
+                        }
+
+                        return true;
                     } catch(e) { return false; }
                 })();
             `;
@@ -469,97 +602,85 @@ function startDualScrapers(voiceProvider, codeProvider) {
     }, 1000);
 }
 
-// 🟢 NEW: Smart Voice & Mic Helper (Slash Command + 45s Unmute Hunter)
-async function ensureVoiceAndMic(win) {
+// 🟢 NEW: Smart Voice & Mic Helper (Multi-Model Support)
+async function ensureVoiceAndMic(win, providerName) {
     if (!win || win.isDestroyed()) return;
 
-    // 1. Check if the call is already active
-    const isCallActive = await win.webContents.executeJavaScript(`(() => {
-        let stopBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
-            let t = (b.textContent||'').toLowerCase(); 
-            let a = (b.getAttribute('aria-label')||'').toLowerCase();
-            return t === 'stop' || t === 'end' || t.includes('end call') || a.includes('stop') || a.includes('end') || a.includes('leave call');
-        });
-        return !!stopBtn;
-    })()`).catch(() => false);
-
-    if (!isCallActive) {
-        // Step 1: Intelligent Model Selection using the /thinking slash command!
-        const isThinkingMode = await win.webContents.executeJavaScript(`(() => {
-            // Look for the text 'Thinking' near the model dropdown area
-            let indicator = Array.from(document.querySelectorAll('*')).find(el => {
-                let txt = (el.textContent || '').trim().toLowerCase();
-                return txt === 'thinking' && el.children.length === 0;
+    if (providerName === 'ChatGPT') {
+        // ------------------ CHATGPT SPECIFIC LOGIC ------------------
+        const isCallActive = await win.webContents.executeJavaScript(`(() => {
+            let stopBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
+                let a = (b.getAttribute('aria-label')||'').toLowerCase();
+                return a.includes('stop') || a.includes('end call') || a.includes('leave call');
             });
-            if (indicator) return true;
-
-            // Fallback check on popup buttons
-            let btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => b.getAttribute('aria-haspopup'));
-            if (btn && (btn.textContent || '').toLowerCase().includes('thinking')) return true;
-
-            return false;
+            return !!stopBtn;
         })()`).catch(() => false);
 
-        if (isThinkingMode) {
-            // Focus the chat box
-            await win.webContents.executeJavaScript(`(() => {
-                const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
-                if (el) el.focus();
-            })()`).catch(()=>{});
+        if (!isCallActive) {
+            const isThinkingMode = await win.webContents.executeJavaScript(`(() => {
+                let indicator = Array.from(document.querySelectorAll('*')).find(el => (el.textContent || '').trim().toLowerCase() === 'thinking' && el.children.length === 0);
+                let btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => b.getAttribute('aria-haspopup'));
+                return !!indicator || (btn && (btn.textContent || '').toLowerCase().includes('thinking'));
+            })()`).catch(() => false);
 
-            // Type the slash command to toggle Thinking OFF (switching to Instant)
-            win.webContents.insertText('/thinking');
-            await new Promise(r => setTimeout(r, 600)); // Wait for popup
-            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            await new Promise(r => setTimeout(r, 800)); // Let UI settle into Instant mode
+            if (isThinkingMode) {
+                await win.webContents.executeJavaScript(`(() => { const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el) el.focus(); })()`).catch(()=>{});
+                win.webContents.insertText('/thinking');
+                await new Promise(r => setTimeout(r, 600)); 
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+                await new Promise(r => setTimeout(r, 800)); 
+            }
+
+            win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['ctrl', 'alt'], keyCode: 'V' });
+            win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['ctrl', 'alt'], keyCode: 'V' });
+            await win.webContents.executeJavaScript(`(() => {
+                let btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
+                    let a = (b.getAttribute('aria-label')||'').toLowerCase();
+                    return a.includes('voice') || a.includes('start voice');
+                });
+                if(btn) btn.click();
+            })()`).catch(()=>{});
+            await new Promise(r => setTimeout(r, 2500)); 
         }
 
-        // Step 2: Trigger Voice Call (Ctrl+Alt+V + fallback)
-        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['ctrl', 'alt'], keyCode: 'V' });
-        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['ctrl', 'alt'], keyCode: 'V' });
-        await win.webContents.executeJavaScript(`(() => {
-            let btn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
-                let a = (b.getAttribute('aria-label')||'').toLowerCase();
-                let d = (b.getAttribute('data-testid')||'').toLowerCase();
-                return a.includes('voice') || a.includes('start voice') || d.includes('voice');
-            });
-            if(btn) btn.click();
+        await win.webContents.executeJavaScript(`(async () => {
+            let attempts = 0;
+            while(attempts < 90) { 
+                let unmute = Array.from(document.querySelectorAll('button')).find(b => {
+                    let a = (b.getAttribute('aria-label')||'').toLowerCase();
+                    return a.includes('turn on microphone') || a === 'unmute';
+                });
+                if(unmute) {
+                    unmute.style.boxShadow = '0 0 10px #00cc66'; 
+                    setTimeout(() => unmute.click(), 200);
+                    break;
+                }
+                attempts++;
+                await new Promise(r => setTimeout(r, 500));
+            }
         })()`).catch(()=>{});
 
-        await new Promise(r => setTimeout(r, 2500)); // Wait for connection
+    } else if (providerName === 'Grok') {
+        // ------------------ GROK GENERIC LOGIC ------------------
+        // 🟢 USER DIRECTIVE: Do not automate Grok's Mic/Voice Chat handling.
+        // The user will turn Voice Chat ON/OFF manually. DO NOT click anything.
+        return;
     }
-
-    // Step 3: Robust Retry-Loop Unmute (Fixes Issue 2 - Post Prompt Auto-Unmute)
-    // ChatGPT can process/speak for a long time. We poll for up to 45 seconds to ensure it unmutes!
-    await win.webContents.executeJavaScript(`(async () => {
-        let attempts = 0;
-        while(attempts < 90) { // 90 * 500ms = 45 seconds
-            let unmute = Array.from(document.querySelectorAll('button')).find(b => {
-                let a = (b.getAttribute('aria-label')||'').toLowerCase();
-                let t = (b.getAttribute('title')||'').toLowerCase();
-                return a.includes('turn on microphone') || t.includes('turn on microphone') || a === 'unmute';
-            });
-            if(unmute) {
-                unmute.style.boxShadow = '0 0 10px #00cc66'; // Visual cue so you know it fired
-                setTimeout(() => unmute.click(), 200);
-                break;
-            }
-            attempts++;
-            await new Promise(r => setTimeout(r, 500));
-        }
-    })()`).catch(()=>{});
 }
 
 // 🟢 NEW: Synchronized Typing Simulator to ensure @Pro and @Fast chips register perfectly
-async function sendPayloadToWindow(win, customText, images = []) {
+async function sendPayloadToWindow(win, customText, images = [], providerName = 'ChatGPT') {
     if (!win || win.isDestroyed()) return;
-    const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
+    
+    // 🟢 FIX: Broadened selector with priority for Grok's specific textarea
+    const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('textarea[placeholder*="Grok"], textarea, rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
     if (!isBoxReady) return;
 
     let modeTag = null;
     let textToPaste = customText || '';
 
+    // Strip the macro tags out of the text string
     if (textToPaste.startsWith('@Pro ') || textToPaste.startsWith('@Fast ')) {
         modeTag = textToPaste.startsWith('@Pro ') ? 'Pro' : 'Fast';
         textToPaste = textToPaste.substring(modeTag === 'Pro' ? 5 : 6); 
@@ -573,62 +694,112 @@ async function sendPayloadToWindow(win, customText, images = []) {
     }
 
     // 2. Inject the @Fast / @Pro macro safely with Human Typing Simulation
-    if (modeTag) {
+    if (modeTag && providerName === 'Gemini') {
         // Deselect text
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
         await new Promise(r => setTimeout(r, 100));
 
-        // 🟢 FIXED: Fire a physical Shift+Enter keystroke to drop to a new line safely
+        // Shift+Enter to drop to new line
         win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
         win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
         await new Promise(r => setTimeout(r, 100));
 
-        // Type the @ symbol
+        // 🟢 BUG 1 FIX: Type @ -> Pause -> Type Fast -> Pause -> Enter to lock chip
         win.webContents.insertText('@');
         await new Promise(r => setTimeout(r, 600)); 
         
-        // Type the word manually so event listeners catch it!
         for (let i = 0; i < modeTag.length; i++) {
             win.webContents.insertText(modeTag[i]);
-            await new Promise(r => setTimeout(r, 150)); // Human typing delay
+            await new Promise(r => setTimeout(r, 150)); 
         }
         await new Promise(r => setTimeout(r, 400)); 
         
-        // Hit Space to lock the blue chip
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Space' }); 
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Space' }); 
+        // Hit ENTER to lock the blue chip in Gemini
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' }); 
         await new Promise(r => setTimeout(r, 300));
     }
 
     // 3. Paste Images LAST
     for (let imgData of images) {
-        const img = nativeImage.createFromDataURL(imgData);
-        clipboard.writeImage(img);
-        win.webContents.paste();
-        await new Promise(r => setTimeout(r, 400));
+        if (providerName === 'Grok') {
+            // 🟢 Method A: Direct DOM File Injection (Strictly for Grok's React UI)
+            await win.webContents.executeJavaScript(`
+                (async () => {
+                    try {
+                        const res = await fetch("${imgData}");
+                        const blob = await res.blob();
+                        const file = new File([blob], "screenshot.png", { type: blob.type });
+                        const dt = new DataTransfer();
+                        dt.items.add(file);
+
+                        const fileInput = document.querySelector('input[type="file"]');
+                        if (fileInput) {
+                            fileInput.files = dt.files;
+                            fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                        }
+
+                        const el = document.querySelector('textarea[placeholder*="Grok"], textarea');
+                        if (el) {
+                            el.focus();
+                            const pasteEvent = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+                            el.dispatchEvent(pasteEvent);
+                        }
+                    } catch(e) {}
+                })();
+            `);
+        } else {
+            // 🟢 Method B: Hardware Keystroke (Strictly for Gemini & ChatGPT)
+            const img = nativeImage.createFromDataURL(imgData);
+            clipboard.writeImage(img);
+            
+            // Force focus back to Gemini/ChatGPT text box before pasting
+            await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el) el.focus(); } catch(e) {} })()`);
+            
+            const modifier = process.platform === 'darwin' ? 'meta' : 'control';
+            win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
+            win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
+        }
+        
+        await new Promise(r => setTimeout(r, 600)); 
     }
 
-    const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Grok" i], button[aria-label*="Enter" i]';
-    let isReady = false, attempts = 0;
-    while (!isReady && attempts < 40) {
-        isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
-        if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-    }
-    
-    await new Promise(r => setTimeout(r, 200));
-    await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) btn.click(); return true; } catch(e) { return false; } })()`);
-    
-    setTimeout(() => { 
-        if (!win.isDestroyed()) { win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); }
+    // 🟢 THE FIX: Ultimate Separation of Concerns. Hardcoded URL check for Grok.
+    const isGrok = providerName === 'Grok' || win.webContents.getURL().includes('grok.com');
+
+    if (isGrok) {
+        // Grok requires absolute zero UI automation. No button hunting. No false clicks.
+        // We just simulate the human pressing the physical 'Enter' key to submit the pasted text.
+        await new Promise(r => setTimeout(r, 200));
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+    } else {
+        // Legacy "Send Button Hunter" for ChatGPT and Gemini ONLY.
+        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Enter" i]';
         
-        // 🟢 BUG 2 FIX: Universal Post-Prompt Auto-Unmute
-        if (win === voiceWebWindow) {
-            setTimeout(async () => {
-                await ensureVoiceAndMic(win);
-            }, 3500);
+        let isReady = false, attempts = 0;
+        while (!isReady && attempts < 10) {
+            isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
+            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
         }
-    }, 200);
+        
+        await new Promise(r => setTimeout(r, 200));
+        await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) btn.click(); return true; } catch(e) { return false; } })()`);
+        
+        setTimeout(() => { 
+            if (!win.isDestroyed()) { 
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+            }
+            
+            if (win === voiceWebWindow) {
+                setTimeout(async () => {
+                    await ensureVoiceAndMic(win, providerName);
+                }, 3500);
+            }
+        }, 200);
+    }
 }
 
 app.whenReady().then(async () => {
@@ -979,6 +1150,12 @@ function setupGeneralIpcHandlers() {
             const base64Data = screenImage.replace(/^data:image\/png;base64,/, "");
             fs.writeFileSync(filePath, base64Data, 'base64');
             accumulatedScreenshots.push(screenImage);
+            
+            // 🟢 FIX: Instantly broadcast the captured image directly to the Frontend UI!
+            BrowserWindow.getAllWindows().forEach(w => {
+                if (!w.isDestroyed()) w.webContents.send('screenshot-captured', screenImage);
+            });
+            
             return accumulatedScreenshots.length;
         } catch (err) { return accumulatedScreenshots.length; }
     });
@@ -988,30 +1165,30 @@ function setupGeneralIpcHandlers() {
 
     const getModePrefix = () => global.isThinkModeActive ? '@Pro ' : '@Fast ';
 
-    // 🟢 FIXED: Properly handle the 'send-oa-automation' IPC route and Language string
+    // 🟢 FIXED: The Ultimate Payload Router (Closure-Secured Images)
     ipcMain.handle('send-oa-automation', async (event, language) => {
         try {
             if (accumulatedScreenshots.length === 0) return false;
 
+            // 🟢 FIX: Snapshot the images locally, then INSTANTLY clear the global array!
+            // This permanently prevents the "2 images, 3 images" growing bug.
+            const imagesForThisQuestion = [...accumulatedScreenshots];
+            accumulatedScreenshots = []; 
+
             if (global.currentSessionMode === 'proctored_live_interview') {
-                // 🟢 STAGE 1: BRUTE FORCE (Fast Mode)
                 global.isThinkModeActive = false;
-                global.bruteForceSyncPending = true; // 🟢 OPEN THE LOCK: Allow the 1st response to auto-sync!
+                global.bruteForceSyncPending = true; 
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', false); });
 
-                // 🟢 Visual Language Detection enforced via prompt rules now
                 let codePrompt1 = PROMPTS.INTERVIEW_BRUTE_FORCE;
-                let voicePrompt = PROMPTS.VOICE_INITIAL_CONTEXT;
-
                 if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt1 = '@Fast ' + codePrompt1;
-                if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = '@Fast ' + voicePrompt;
 
-                await sendPayloadToWindow(codeWebWindow, codePrompt1, accumulatedScreenshots);
-                setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); }, 1500);
+                // 🟢 FIX: Send ONLY to Code Brain. Voice Brain is strictly ignored here.
+                await sendPayloadToWindow(codeWebWindow, codePrompt1, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
 
-                // 🟢 STAGE 2: SHADOW OPTIMIZATION (Think Mode) after 30 seconds
+                // 30-Second Delayed Optimized Prompt
                 setTimeout(async () => {
-                    if (global.currentSessionMode !== 'proctored_live_interview') return; // Cancel if exited
+                    if (global.currentSessionMode !== 'proctored_live_interview') return; 
                     
                     global.isThinkModeActive = true;
                     BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', true); });
@@ -1019,31 +1196,32 @@ function setupGeneralIpcHandlers() {
                     let codePrompt2 = PROMPTS.INTERVIEW_OPTIMIZED;
                     if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt2 = '@Pro ' + codePrompt2;
 
-                    // Send silently to Code Brain again (using the SAME screenshots)
-                    await sendPayloadToWindow(codeWebWindow, codePrompt2, accumulatedScreenshots);
-                    accumulatedScreenshots = []; // Clear them after the 2nd payload fires
+                    // Send the exact same images using our secure snapshot!
+                    await sendPayloadToWindow(codeWebWindow, codePrompt2, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
                 }, 30000); 
 
             } else {
-                // 🟢 STANDARD OA LOGIC
-                let codePrompt = PROMPTS.OA_AUTOMATION(language); // Fixed the language injection!
+                // STANDARD OA LOGIC (Non-Interview Mode)
+                let codePrompt = PROMPTS.OA_AUTOMATION(language); 
                 let voicePrompt = PROMPTS.VOICE_CONTEXT;
                 if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
                 if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
 
-                await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
-                setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
+                await sendPayloadToWindow(codeWebWindow, codePrompt, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
+                setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, imagesForThisQuestion, AI_CONFIGS[activeLoadout.voiceEngine].name); }, 1500);
             }
             return true;
         } catch(e) { return false; }
     });
 
-    // 🟢 NEW: Sync Optimized Code to Voice Brain
+    // 🟢 BUG 4 FIX: Strip images from Grok's payload completely! It only gets text now.
     ipcMain.handle('sync-optimized-to-voice', async (event, optimizedCodeText) => {
         try {
             let finalPrompt = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
-            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') finalPrompt = '@Fast ' + finalPrompt; // Ensure voice stays fast
-            await sendPayloadToWindow(voiceWebWindow, finalPrompt, []);
+            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') finalPrompt = '@Fast ' + finalPrompt; 
+            
+            // 🟢 Passed an EMPTY array [] so the Voice Brain receives pure text!
+            await sendPayloadToWindow(voiceWebWindow, finalPrompt, [], AI_CONFIGS[activeLoadout.voiceEngine].name);
             return true;
         } catch(e) { return false; }
     });
@@ -1056,24 +1234,51 @@ function setupGeneralIpcHandlers() {
         } catch(e) { return false; }
     });
 
-    ipcMain.on('set-session-mode', (event, mode) => { global.currentSessionMode = mode; });
+    ipcMain.on('set-session-mode', (event, mode) => { 
+        global.currentSessionMode = mode; 
+        if (mode === 'proctored_live_interview') {
+            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                const providerName = AI_CONFIGS[activeLoadout.voiceEngine].name;
+                // 🟢 FIX: Do not auto-ignite Grok! User handles it manually.
+                if (providerName !== 'Grok') {
+                    ensureVoiceAndMic(voiceWebWindow, providerName);
+                }
+            }
+        }
+    });
 
     ipcMain.handle('toggle-ai-mic', async (event, isTurningOn) => {
         if (!voiceWebWindow || voiceWebWindow.isDestroyed()) return false;
-        
+        const providerName = AI_CONFIGS[activeLoadout.voiceEngine].name;
+
+        // 🟢 FIX: Grok's mic is entirely manual now. Ignore all frontend toggle requests instantly.
+        if (providerName === 'Grok') return true; 
+
         if (isTurningOn) {
-            // 🟢 Use the universal Smart Helper for the Radial trigger!
-            await ensureVoiceAndMic(voiceWebWindow);
+            await ensureVoiceAndMic(voiceWebWindow, providerName);
             return true;
         } else {
-            // Simply click the "Turn off microphone" button to mute
+            // State-aware click: Mute ONLY if it is currently listening
             await voiceWebWindow.webContents.executeJavaScript(`(() => {
-                let mute = Array.from(document.querySelectorAll('button')).find(b => {
+                let micBtn = Array.from(document.querySelectorAll('button, div[role="button"]')).find(b => {
                     let a = (b.getAttribute('aria-label')||'').toLowerCase();
                     let t = (b.getAttribute('title')||'').toLowerCase();
-                    return a.includes('turn off microphone') || t.includes('turn off microphone') || a === 'mute';
+                    let c = (b.className||'').toLowerCase();
+                    if (a.includes('stop') || a.includes('end ') || t.includes('stop')) return false;
+                    return a.includes('microphone') || a.includes('voice') || a.includes('mute') || 
+                           t.includes('microphone') || t.includes('mute') || c.includes('mic-');
                 });
-                if (mute) mute.click();
+                
+                if (micBtn) {
+                    let a = (micBtn.getAttribute('aria-label') || '').toLowerCase();
+                    let t = (micBtn.getAttribute('title') || '').toLowerCase();
+                    let html = micBtn.innerHTML.toLowerCase();
+
+                    if (!(a.includes('unmute') || t.includes('unmute') || a.includes('turn on') || 
+                          t.includes('turn on') || html.includes('<line') || html.includes('slash') || html.includes('off'))) {
+                        micBtn.click();
+                    }
+                }
             })()`).catch(()=>{});
             return true;
         }
@@ -1186,7 +1391,7 @@ function setupGeneralIpcHandlers() {
             if (!text) return; 
             let finalPrompt = text;
             if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') finalPrompt = getModePrefix() + text;
-            await sendPayloadToWindow(voiceWebWindow, finalPrompt, []); 
+            await sendPayloadToWindow(voiceWebWindow, finalPrompt, [], AI_CONFIGS[activeLoadout.voiceEngine].name);
             return true; 
         } catch(e) { return false; }
     });

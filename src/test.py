@@ -146,4 +146,4 @@ interview_questions = [
 
 if __name__ == "__main__":
     # Runs the interview loop
-    run_interview(interview_questions, wait_minutes=3)
+    run_interview(interview_questions, wait_minutes=1)

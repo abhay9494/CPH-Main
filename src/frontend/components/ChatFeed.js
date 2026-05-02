@@ -33,9 +33,11 @@ export class ChatFeed extends LitElement {
         /* Code Blocks */
         .code-block-wrapper { background: var(--bg-secondary); border: 1px solid var(--border-color, #333); border-radius: 6px; margin-bottom: 15px; overflow: hidden; position: relative; }
         .code-header { display: flex; justify-content: space-between; align-items: center; background: var(--bg-tertiary); padding: 5px 10px; border-bottom: 1px solid var(--border-color, #333); }
-        .lang-label { font-size: 11px; color: #888; text-transform: uppercase; font-weight: bold; }
-        .copy-code-btn, .type-code-btn { background: transparent; border: 1px solid #555; color: #ccc; padding: 3px 8px; border-radius: 4px; font-size: 11px; transition: 0.2s; margin-left: 5px; cursor: default !important; }
-        .copy-code-btn:hover, .type-code-btn:hover { background: var(--bg-hover); color: #fff; }
+        
+        /* 🟢 FIX: Allow the code block headers and buttons to flip colors dynamically */
+        .lang-label { font-size: 11px; color: var(--text-muted, #888); text-transform: uppercase; font-weight: bold; }
+        .copy-code-btn, .type-code-btn { background: transparent; border: 1px solid var(--border-color, #555); color: var(--text-secondary, #ccc); padding: 3px 8px; border-radius: 4px; font-size: 11px; transition: 0.2s; margin-left: 5px; cursor: default !important; }
+        .copy-code-btn:hover, .type-code-btn:hover { background: var(--bg-hover); color: var(--text-color, #fff); }
         .code-block-wrapper pre { margin: 0; padding: 15px; overflow-x: hidden; white-space: pre-wrap; word-wrap: break-word; }
         .code-block-wrapper pre code { background: transparent; padding: 0; border-radius: 0; white-space: pre-wrap; }
 

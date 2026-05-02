@@ -871,7 +871,8 @@ export class SettingsView extends LitElement {
                     {value: 'refactor', label: '🛠️ Refactor Code'}, {value: 'mic', label: '🎙️ Toggle Mic'},
                     {value: 'reset', label: '✨ Reset Session'}, {value: 'text_inc', label: 'A+ Text Size'},
                     {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
-                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'} // 🟢 NEW
+                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'}
                 ];
                 
                 this.editingPage = this.editingPage || 1; // Default to Page 1
@@ -992,7 +993,8 @@ export class SettingsView extends LitElement {
                     {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'},
-                    {value: 'scroll_down', label: '⬇️ Scroll Down'}
+                    {value: 'scroll_down', label: '⬇️ Scroll Down'},
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'}
                 ];
                 
                 const tb = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
@@ -1096,7 +1098,8 @@ export class SettingsView extends LitElement {
                     {value: 'text_dec', label: 'A- Text Size'}, 
                     {value: 'bg_inc', label: '⬛ Opacity +'}, 
                     {value: 'bg_dec', label: '⬜ Opacity -'},
-                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'}
+                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'}
                 ];
                 this.editingPage = this.editingPage || 1;
                 const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';

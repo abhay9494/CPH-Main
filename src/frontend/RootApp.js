@@ -54,7 +54,6 @@ export class RootApp extends LitElement {
     async connectedCallback() {
         super.connectedCallback();
         
-        // 🟢 Clean Navigation Handler
         window.addEventListener('return-to-main', () => this.handleHubNavigation('main'));
 
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
@@ -63,8 +62,9 @@ export class RootApp extends LitElement {
             
             this.bgTransparency = prefs.backgroundTransparency ?? 0.8;
             this.fontSize = prefs.fontSize ?? 12;
+            this.theme = prefs.theme || 'dark'; // 🟢 Load saved theme
             
-            this.applyBackgroundAppearance(prefs.backgroundColor ?? '#1e1e1e', this.bgTransparency);
+            this.applyBackgroundAppearance(prefs.backgroundColor ?? '#1e1e1e', this.bgTransparency, this.theme);
             document.documentElement.style.setProperty('--response-font-size', `${this.fontSize}px`);
             
             this.checkSetupState(prefs);
@@ -78,11 +78,15 @@ export class RootApp extends LitElement {
         window.addEventListener('sync-preference', (e) => {
             if (e.detail.key === 'backgroundTransparency') {
                 this.bgTransparency = e.detail.value;
-                this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency);
+                this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency, this.theme);
             }
             if (e.detail.key === 'fontSize') {
                 this.fontSize = e.detail.value;
                 document.documentElement.style.setProperty('--response-font-size', `${this.fontSize}px`);
+            }
+            if (e.detail.key === 'theme') {
+                this.theme = e.detail.value;
+                this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency, this.theme);
             }
         });
     }
@@ -107,9 +111,26 @@ export class RootApp extends LitElement {
         return { r: Math.min(255, rgb.r + amount), g: Math.min(255, rgb.g + amount), b: Math.min(255, rgb.b + amount) };
     }
 
-    applyBackgroundAppearance(backgroundColor, alpha) {
+    applyBackgroundAppearance(backgroundColor, alpha, theme = 'dark') {
         const root = document.documentElement;
-        const baseRgb = this.hexToRgb(backgroundColor);
+        
+        // 🟢 FIX: Always keep the background consistent (dark transparent)
+        const baseRgb = this.hexToRgb(backgroundColor || '#1e1e1e');
+        
+        let textColor, textSecondary, textMuted;
+        
+        // 🟢 THEME INJECTOR: Flip ONLY the text colors based on the toggle!
+        if (theme === 'light') {
+            textColor = '#000000'; // Pure Black text for white IDEs
+            textSecondary = '#222222';
+            textMuted = '#444444';
+        } else {
+            textColor = '#ffffff'; // Pure White text for dark IDEs
+            textSecondary = '#cccccc';
+            textMuted = '#888888';
+        }
+
+        // Backgrounds remain locked to your preferences so the UI doesn't visually jump
         const secondary = this.lightenColor(baseRgb, 7);
         const tertiary = this.lightenColor(baseRgb, 15);
         const hover = this.lightenColor(baseRgb, 20);
@@ -124,6 +145,11 @@ export class RootApp extends LitElement {
         root.style.setProperty('--bg-hover', `rgba(${hover.r}, ${hover.g}, ${hover.b}, ${alpha})`);
         root.style.setProperty('--input-background', `rgba(${tertiary.r}, ${tertiary.g}, ${tertiary.b}, ${alpha})`);
         root.style.setProperty('--border-color', `rgba(60, 60, 60, ${alpha})`);
+        
+        // Push the dynamic text colors!
+        root.style.setProperty('--text-color', textColor);
+        root.style.setProperty('--text-secondary', textSecondary);
+        root.style.setProperty('--text-muted', textMuted);
     }
 
     async handleHubNavigation(destination) {

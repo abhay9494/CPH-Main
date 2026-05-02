@@ -170,28 +170,49 @@ export class LiveInterview extends LitElement {
             };
             ipcRenderer.on('hot-corner-hover', this.hoverHandler);
 
-            this.voiceNewHandler = (_, text) => { this.voiceChatHistory = [...this.voiceChatHistory, `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`]; this.voiceChatIndex = this.voiceChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
-            this.voiceUpdateHandler = (_, text) => { if (this.voiceChatHistory.length > 0) { const a = [...this.voiceChatHistory]; a[a.length - 1] = `🗣️ **Voice Input Detected**\n\n🤖 AI:\n${text}`; this.voiceChatHistory = a; } else { this.voiceChatHistory = [`🤖 AI:\n${text}`]; this.voiceChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('voice-feed'); };
+            // 🟢 FIX: Voice is now a continuous scrollable transcript on a single page!
+            this.voiceNewHandler = (_, text) => { this.voiceChatHistory = [text]; this.voiceChatIndex = 0; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
+            this.voiceUpdateHandler = (_, text) => { this.voiceChatHistory = [text]; this.voiceChatIndex = 0; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
             // this.codeNewHandler = (_, text) => { this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; this.codeChatIndex = this.codeChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('code-feed'); };
             // this.codeUpdateHandler = (_, text) => { if (this.codeChatHistory.length > 0) { const a = [...this.codeChatHistory]; a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; this.codeChatHistory = a; } else { this.codeChatHistory = [`🤖 AI:\n${text}`]; this.codeChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('code-feed'); };
-            // 🟢 NEW: Freeze View if Shadow Optimization is generating!
+            // 🟢 SMART FORMATTER: Keeps images and code on the same page without destruction!
             this.codeNewHandler = (_, text) => { 
-                this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; 
-                if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
-                    this.optimizedReady = true; // Lock view on Brute Force, trigger badge
+                if (this.codeChatHistory.length > 0) {
+                    const currentBlock = this.codeChatHistory[this.codeChatIndex] || "";
+                    const images = currentBlock.match(/<img[^>]+>/g) || [];
+                    
+                    // If the current page ONLY contains images, append the code directly below them (Page 1 Fix)
+                    if (images.length > 0 && currentBlock.replace(/<img[^>]+>/g, '').replace(/🟢 \*\*Code Engine Online\*\*\nWaiting for captures.../g, '').trim() === "") {
+                        this.codeChatHistory[this.codeChatIndex] = images.join("") + "\n\n" + text;
+                    } else {
+                        // This is a completely new response (Page 2)
+                        this.codeChatHistory = [...this.codeChatHistory, text]; 
+                        this.codeChatIndex = this.codeChatHistory.length - 1; 
+                    }
                 } else {
-                    this.codeChatIndex = this.codeChatHistory.length - 1; 
+                    this.codeChatHistory = [text];
+                    this.codeChatIndex = 0;
+                }
+                
+                if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
+                    this.optimizedReady = true; 
+                } else {
                     this.scrollToBottom('code-feed'); 
                 }
                 this.requestUpdate(); 
             };
+
             this.codeUpdateHandler = (_, text) => { 
                 if (this.codeChatHistory.length > 0) { 
                     const a = [...this.codeChatHistory]; 
-                    a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; 
+                    const currentBlock = a[a.length - 1] || "";
+                    const images = currentBlock.match(/<img[^>]+>/g) || [];
+                    
+                    // Preserve the images at the top of the block while updating the text
+                    a[a.length - 1] = images.join("") + "\n\n" + text; 
                     this.codeChatHistory = a; 
                 } else { 
-                    this.codeChatHistory = [`🤖 AI:\n${text}`]; 
+                    this.codeChatHistory = [text]; 
                     this.codeChatIndex = 0; 
                 } 
                 if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
@@ -202,6 +223,20 @@ export class LiveInterview extends LitElement {
                 this.requestUpdate(); 
             };
             this.micSyncHandler = (_, state) => { this.isMicOn = state; this.requestUpdate(); };
+
+            // 🟢 FIX: Small Inline Images + Removed from Voice Brain!
+            this.screenshotHandler = (_, base64Img) => {
+                const inlineStyle = "max-width: 140px; max-height: 100px; object-fit: cover; border-radius: 6px; margin: 4px; border: 1px solid #444; cursor: default !important; display: inline-block; vertical-align: top;";
+                const imgHTML = `<img src="${base64Img}" style="${inlineStyle}" />`;
+                
+                // Inject ONLY into Code Brain
+                if (this.codeChatHistory.length === 0) this.codeChatHistory = ["🟢 **Code Engine Online**\nWaiting for captures...\n\n"];
+                this.codeChatHistory[this.codeChatIndex] = (this.codeChatHistory[this.codeChatIndex] || "") + imgHTML;
+
+                this.requestUpdate();
+                this.scrollToBottom('code-feed');
+            };
+            ipcRenderer.on('screenshot-captured', this.screenshotHandler);
 
             // 🟢 NEW: Sync local UI to backend DOM Scraper Truth
             this.aiModeSyncHandler = (_, isThinkMode) => {
@@ -315,7 +350,8 @@ export class LiveInterview extends LitElement {
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🌟 Sync Optimized', 'language': '💻 Language', 'mic': '🎙️ Mic',
-            'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort'
+            'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort',
+            'toggle_theme': '🌓 Theme Flip'
         };
         return labels[action] || action || '—';
     }
@@ -344,7 +380,7 @@ export class LiveInterview extends LitElement {
                 break;
             case 'fix_error': // 🟢 Hijacked to trigger Sync Optimized
                 if (this.optimizedReady || this.codeChatHistory.length > 1) {
-                    this.showToast('🌟 Synced Optimized Code to Voice Brain!');
+                    this.showToast('🌟 Loaded 2nd Code & Synced Voice!');
                     this.optimizedReady = false;
                     this.codeChatIndex = this.codeChatHistory.length - 1; // Snap view to optimized code
                     this.scrollToBottom('code-feed');
@@ -352,7 +388,7 @@ export class LiveInterview extends LitElement {
                     // Blast context to Voice Brain
                     ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
                 } else {
-                    this.showToast('⏳ Optimization not ready yet...');
+                    this.showToast('⏳ 2nd Code not ready yet...');
                 }
                 break;
             case 'regenerate':
@@ -403,6 +439,19 @@ export class LiveInterview extends LitElement {
             case 'mic':
                 this.handleToggleMic();
                 break;
+            case 'toggle_theme':
+                // 🟢 NEW: Dynamic Flip Action
+                let currentTheme = this.prefs.theme || 'dark';
+                let newTheme = currentTheme === 'dark' ? 'light' : 'dark';
+                
+                this.showToast(newTheme === 'light' ? '☀️ Light Mode Active' : '🌙 Dark Mode Active');
+                
+                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                    window.cheatingDaddy.storage.updatePreference('theme', newTheme);
+                    window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'theme', value: newTheme } })); 
+                    this.prefs.theme = newTheme;
+                }
+                break;
             case 'reset':
                 this.showToast('✨ Session Reset');
                 this.codeChatHistory = []; this.voiceChatHistory = [];
@@ -435,7 +484,18 @@ export class LiveInterview extends LitElement {
                 }
                 break;
             case 'abort_oa':
-                this.showToast('🚪 Exiting...');
+                this.showToast('🚪 Exiting & Clearing Chat...');
+                
+                // 🟢 FIX: Wipe the frontend history so the UI is clean next time
+                this.codeChatHistory = []; 
+                this.voiceChatHistory = [];
+                this.codeChatIndex = 0; 
+                this.voiceChatIndex = 0;
+                
+                // 🟢 FIX: Tell the backend to force-reload the AI URLs, resetting their memory
+                ipcRenderer.invoke('new-chat');
+                
+                // Proceed with normal shutdown sequence
                 ipcRenderer.send('set-session-mode', 'main');
                 ipcRenderer.send('toggle-radial-permanent', false);
                 ipcRenderer.send('set-ignore-mouse-events', false);
