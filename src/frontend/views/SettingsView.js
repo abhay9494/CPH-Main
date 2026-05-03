@@ -555,7 +555,7 @@ export class SettingsView extends LitElement {
             'fix_error': '🌟', 'language': '💻 Language', 'mic': '🎙️ Mic', 'toggle_ai_vis': '👁️',
             'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
             'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
-            'toggle_page2': '🔄', 'regenerate': '🔄 Regen'
+            'toggle_page2': '🔄', 'regenerate': '🔄 Regen',    'toggle_theme': '🌓',   'sync_followup': '🔍',
         };
         return labels[action] || '—';
     }
@@ -572,7 +572,7 @@ export class SettingsView extends LitElement {
             'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
             'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
             'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2',
-            'regenerate': '🔄 Regen'
+            'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
         };
         return labels[action] || action || '—';
     }
@@ -872,7 +872,8 @@ export class SettingsView extends LitElement {
                     {value: 'reset', label: '✨ Reset Session'}, {value: 'text_inc', label: 'A+ Text Size'},
                     {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
-                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'}
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}
                 ];
                 
                 this.editingPage = this.editingPage || 1; // Default to Page 1
@@ -994,7 +995,8 @@ export class SettingsView extends LitElement {
                     {value: 'hide_unhide', label: '👻 Hide / Unhide'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'},
                     {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'}
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}
                 ];
                 
                 const tb = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
@@ -1080,7 +1082,7 @@ export class SettingsView extends LitElement {
                     {value: 'none', label: 'None (Disabled)'}, 
                     {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, 
-                    {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'fix_error', label: '🌟 Sync Optimized'},
                     {value: 'regenerate', label: '🔄 Regenerate Response'}, 
                     {value: 'abort_oa', label: '🚪 Abort Interview & Exit'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, 
@@ -1099,7 +1101,8 @@ export class SettingsView extends LitElement {
                     {value: 'bg_inc', label: '⬛ Opacity +'}, 
                     {value: 'bg_dec', label: '⬜ Opacity -'},
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
-                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'}
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}
                 ];
                 this.editingPage = this.editingPage || 1;
                 const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';

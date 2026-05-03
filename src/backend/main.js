@@ -81,20 +81,48 @@ const PROMPTS = {
     ### 6. Anticipated Counter-Questions & Answers (READ ALOUD SCRIPT)
     (Think of the 3 most likely questions the interviewer will ask to challenge this specific optimized code. Provide a short, flawless script to answer each.)`,
 
+    FOLLOWUP_EXTRACTION: `Extract the new test case, constraints, or code modification from this image into plain text. Do not solve it or write code. Output ONLY the exact extracted text. You MUST prefix your entire response with exactly: [FOLLOWUP_DATA]:`,
+
     // 🟢 VOICE BRAIN METHOD ACTING (Strict Teleprompter Mode - Beginner Friendly & Resume Aware)
     
     VOICE_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are my teleprompter during a live technical interview. 
-    CRITICAL CONTEXT: I have absolutely ZERO knowledge of Data Structures and Algorithms (DSA). I cannot explain complex jargon. 
+    CRITICAL CONTEXT 1 (DSA KNOWLEDGE): I have absolutely ZERO knowledge of Data Structures and Algorithms. I cannot explain complex jargon. 
+    CRITICAL CONTEXT 2 (MY BACKGROUND & RESUME): You MUST use the following facts if asked about my background:
+    - Name/Education: I am Abhay Prasad, a B.Tech IT student at IIIT Lucknow (Expected 2027), CGPA 7.88.
+    - Skills & Tools: C/C++, Java, Python, GoLang, React, Node.js, Spring Boot, MySQL, MongoDB. I use VS Code, Ubuntu, WSL, Postman, and Git daily.
+    - Experience: GUI Data Annotator at Turing (Jan 2026 - Present). I create multimodal AI training datasets on Ubuntu, achieving a 5/5 rating and 0% rejection rate generating PyAutoGUI-style trajectories.
+    - Achievements: Codeforces Specialist (Max 1424), CodeChef 3-Star (Max 1669). Solved 600+ problems. Semi-finalist in Flipkart Grid 7.0.
+    
+    CRITICAL CONTEXT 3 (PROJECT DEEP-DIVES): If asked about Architecture, Data Flow, Routing, or Endpoints, use these exact technical details to answer in the 1st person:
+    
+    1. MediEduMatch (Group Project - Full-Stack College Predictor):
+       - Tech Stack: React, Java Spring Boot, MySQL, JWT.
+       - Architecture & Metrics: N-tier architecture. REST Controllers (/login, /register, /courses) handle routing. I optimized the backend database queries to achieve sub-150ms response times when filtering 1,000+ medical college records.
+       
+    2. Krishi Connect (Group Project - Agricultural App):
+       - Tech Stack: Django, PyTorch, PlantNet API, Bootstrap.
+       - Architecture: I collaborated on a teleconsultation platform featuring a custom NLP chatbot built with PyTorch (using a feed-forward neural net and bag-of-words tokenization) and integrated the PlantNet API for real-time crop disease detection.
+       
+    3. ChatHana (Ongoing Personal Project - Local AI Fine-Tuning):
+       - Tech Stack: Python, HuggingFace (trl, peft), PyTorch.
+       - Details: I am actively working on fine-tuning the Qwen2.5-7B-Instruct model to mimic my WhatsApp chat history. I use LoRA adapters (r=32, alpha=16) and 4-bit quantization via BitsAndBytes to train the model locally.
+       
+    4. Apply Links Telegram Bot (Personal Project):
+       - Tech Stack: Python, Telethon, Flask, Groq API (Llama 3 8B), Google Sheets.
+       - Data Flow: A Flask webhook keeps the bot alive while Telethon continuously scrapes 23+ Telegram channels for jobs. The scraped text is sent to Groq's Llama 3 API for strict JSON parsing based on graduation year, and approved links are synced to a Google Sheet via gspread.
+       
+    5. Social Media App / Instagram Clone (Personal Project):
+       - Tech Stack: Node.js, Express.js, EJS, MySQL2, Multer, Imgur API.
+       - Image Handling: I used Multer to intercept multipart form data, converted the uploads to base64, and POSTed them to the Imgur API via fetch. The hosted URL returned by Imgur was then saved in the local MySQL database.
     
     STRICT RULES:
     - Give me EXACTLY what to say out loud. Speak strictly in the 1st person ('I', 'me', 'my').
     - NEVER break character. NEVER output AI filler.
     - Keep sentences short so I don't stumble while speaking.
-    - BEHAVIORAL & RESUME QUESTIONS: I will manually provide my education, skills, experience, projects, and extracurriculars in this chat. If the interviewer asks about my background, generate a 1st-person response using ONLY the details I have provided.
-    - EXPLAINING CONCEPTS: If the interviewer asks basic questions like "What is the Approach?", "What is the Time Complexity?", or "What is the Space Complexity?", you must give me a script that explains the *why* and *how* in extremely simple layman's terms. Never just say "It is O(N)" without explaining why in plain English.
-    
-    SILENT DIRECTIVE: Read the attached problem. Reply ONLY with this exact sentence so I can read it to stall: "Give me just one moment to read through the constraints and wrap my head around the inputs."`,
-    
+    - EXPLAINING CONCEPTS: If the interviewer asks basic questions like "What is the Approach?", "What is the Time Complexity?", or "What is the Space Complexity?", you MUST give me a script that explains the *why* and *how* in extremely simple layman's analogies. Never just say "It is O(N)" without explaining why in plain English.
+
+    SILENT DIRECTIVE: Acknowledge these instructions. I am currently analyzing the problem statement. Reply ONLY with this exact sentence so I can read it to stall: "Give me just one moment to read through the constraints and wrap my head around the inputs."`,
+
     VOICE_SYNC_BRUTE_FORCE: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the brute-force code.
     CRITICAL CONTEXT: I have ZERO DSA knowledge. Explain everything as if to a beginner, but phrased so I sound like a competent engineer breaking it down simply.
     
@@ -158,6 +186,8 @@ global.activeRadialLabels = Array(16).fill('—');
 global.isOAModeActive = false;
 global.isGhostHidden = false; 
 global.isThinkModeActive = false; 
+global.isExtractingFollowup = false;
+global.followupJustSent = false;
 
 const AI_CONFIGS = [
     { name: 'ChatGPT', url: 'https://chatgpt.com', msgSelector: 'div[data-message-author-role="assistant"]' },
@@ -253,6 +283,22 @@ global.createRadialWindow = () => {
         
         ipcRenderer.on('update-bg-alpha', (e, alpha) => {
             container.style.background = \`rgba(30,30,30,\${alpha})\`;
+        });
+
+        let toastTimeout;
+        ipcRenderer.on('update-hud-toast', (e, msg) => {
+            centerText.innerText = msg;
+            centerText.style.color = '#00cc66';
+            centerText.style.borderColor = '#00cc66';
+            centerText.style.boxShadow = '0 0 15px rgba(0,204,102,0.4)';
+            
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                centerText.innerText = 'RADIAL MINIMAP';
+                centerText.style.color = '#f14c4c';
+                centerText.style.borderColor = '#f14c4c';
+                centerText.style.boxShadow = 'none';
+            }, 2500);
         });
         </script>
         </body></html>
@@ -523,30 +569,61 @@ function startDualScrapers(voiceProvider, codeProvider) {
         `).catch(() => null);
 
         if (cData) {
-            if (cData.count > lastCodeMsg.count) {
-                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text); });
-                codeStableTicks = 0; // Reset tracker for new message
-            } 
-            else if (cData.count === lastCodeMsg.count && cData.text !== lastCodeMsg.text) {
-                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-update-message', cData.text); });
-                codeStableTicks = 0; // Reset tracker because it's actively typing
-            }
-            else if (cData.count === lastCodeMsg.count && cData.text === lastCodeMsg.text && cData.text.length > 50) {
-                // 🟢 The Code Brain has stopped typing. Wait ~3 seconds (3 ticks) then Auto-Sync!
-                codeStableTicks++;
-                if (codeStableTicks === 3 && global.currentSessionMode === 'proctored_live_interview' && global.bruteForceSyncPending) {
-                    global.bruteForceSyncPending = false; // 🟢 SNAP THE LOCK SHUT! The 2nd response will no longer auto-sync.
-                    
-                    let syncPrompt = PROMPTS.VOICE_SYNC_BRUTE_FORCE + cData.text;
-                    const voiceProviderName = AI_CONFIGS[activeLoadout.voiceEngine].name;
-                    
-                    if (voiceProviderName === 'Gemini') syncPrompt = '@Fast ' + syncPrompt;
-                    
-                    // 🟢 THE FIX: Explicitly pass voiceProviderName so the backend knows it is Grok and skips all UI clicking!
-                    sendPayloadToWindow(voiceWebWindow, syncPrompt, [], voiceProviderName).catch(()=>{});
+            if (global.isExtractingFollowup) {
+                // 🟢 INVISIBLE RELAY MODE: The UI is completely shielded from this generation.
+                if (cData.count === lastCodeMsg.count && cData.text === lastCodeMsg.text && cData.text.length > 10) {
+                    codeStableTicks++;
+                    if (codeStableTicks === 3 && !global.followupJustSent) {
+                        global.followupJustSent = true; // 🟢 SHIELD: Lock it to prevent double-firing!
+
+                        // Extract and send to Voice Brain!
+                        let extractedText = cData.text;
+                        if (extractedText.includes('[FOLLOWUP_DATA]:')) {
+                            extractedText = extractedText.split('[FOLLOWUP_DATA]:')[1].trim();
+                        }
+
+                        let voicePrompt = `SYSTEM DIRECTIVE: The interviewer just shared this on the screen:\n\n${extractedText}\n\nBased on the verbal instructions the interviewer just gave you, provide a short 1st-person script for me to dry-run this, fix the error, or acknowledge the constraint. Keep it extremely concise.`;
+
+                        const voiceProviderName = AI_CONFIGS[activeLoadout.voiceEngine].name;
+                        if (voiceProviderName === 'Gemini') voicePrompt = '@Fast ' + voicePrompt;
+
+                        sendPayloadToWindow(voiceWebWindow, voicePrompt, [], voiceProviderName).catch(()=>{});
+
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('show-radial-toast', '✅ FOLLOW-UP SYNCED'); });
+                    }
+                } else {
+                    if (!global.followupJustSent) {
+                        codeStableTicks = 0; // Only reset the tick counter if we haven't sent the payload yet
+                    }
                 }
+                lastCodeMsg = cData; // Track internally without ever sending to UI
+                
+            } else {
+                // 🟢 NORMAL LOGIC: Send to UI
+                if (cData.count > lastCodeMsg.count) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-new-message', cData.text); });
+                    codeStableTicks = 0; // Reset tracker for new message
+                } 
+                else if (cData.count === lastCodeMsg.count && cData.text !== lastCodeMsg.text) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('code-update-message', cData.text); });
+                    codeStableTicks = 0; // Reset tracker because it's actively typing
+                }
+                else if (cData.count === lastCodeMsg.count && cData.text === lastCodeMsg.text && cData.text.length > 50) {
+                    // 🟢 The Code Brain has stopped typing. Wait ~3 seconds (3 ticks) then Auto-Sync!
+                    codeStableTicks++;
+                    if (codeStableTicks === 3 && global.currentSessionMode === 'proctored_live_interview' && global.bruteForceSyncPending) {
+                        global.bruteForceSyncPending = false; // 🟢 SNAP THE LOCK SHUT!
+                        
+                        let syncPrompt = PROMPTS.VOICE_SYNC_BRUTE_FORCE + cData.text;
+                        const voiceProviderName = AI_CONFIGS[activeLoadout.voiceEngine].name;
+                        
+                        if (voiceProviderName === 'Gemini') syncPrompt = '@Fast ' + syncPrompt;
+                        
+                        sendPayloadToWindow(voiceWebWindow, syncPrompt, [], voiceProviderName).catch(()=>{});
+                    }
+                }
+                lastCodeMsg = cData;
             }
-            lastCodeMsg = cData;
         }
 
         if (voiceWebWindow && !voiceWebWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
@@ -1175,18 +1252,29 @@ function setupGeneralIpcHandlers() {
             const imagesForThisQuestion = [...accumulatedScreenshots];
             accumulatedScreenshots = []; 
 
+            global.isExtractingFollowup = false;
+
             if (global.currentSessionMode === 'proctored_live_interview') {
                 global.isThinkModeActive = false;
                 global.bruteForceSyncPending = true; 
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', false); });
 
                 let codePrompt1 = PROMPTS.INTERVIEW_BRUTE_FORCE;
+                let voicePromptInit = PROMPTS.VOICE_INITIAL_CONTEXT;
+                
                 if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt1 = '@Fast ' + codePrompt1;
+                if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePromptInit = '@Fast ' + voicePromptInit;
 
-                // 🟢 FIX: Send ONLY to Code Brain. Voice Brain is strictly ignored here.
+                // 1. Send the coding prompt WITH images to the Code Brain
                 await sendPayloadToWindow(codeWebWindow, codePrompt1, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
 
-                // 30-Second Delayed Optimized Prompt
+                // 2. 🟢 FIX: Instantly send the massive Context/Resume prompt to the Voice Brain (NO IMAGES)
+                setTimeout(async () => {
+                    if (global.currentSessionMode !== 'proctored_live_interview') return; 
+                    await sendPayloadToWindow(voiceWebWindow, voicePromptInit, [], AI_CONFIGS[activeLoadout.voiceEngine].name);
+                }, 1000);
+
+                // 3. 30-Second Delayed Optimized Prompt for Code Brain
                 setTimeout(async () => {
                     if (global.currentSessionMode !== 'proctored_live_interview') return; 
                     
@@ -1212,6 +1300,33 @@ function setupGeneralIpcHandlers() {
             }
             return true;
         } catch(e) { return false; }
+    });
+
+    // 🟢 INVISIBLE RELAY: Auto-capture and send follow-up image to Code Brain
+    ipcMain.handle('send-sync-followup', async () => {
+        try {
+            // 1. Force an instant, silent background screenshot
+            const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+            const screenImage = sources[0].thumbnail.toDataURL(); 
+
+            // 2. Reset the relay state locks for unlimited uses
+            global.isExtractingFollowup = true;
+            global.followupJustSent = false;
+
+            let codePrompt = PROMPTS.FOLLOWUP_EXTRACTION;
+            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
+
+            // 3. Beam the image silently to the Code Brain!
+            await sendPayloadToWindow(codeWebWindow, codePrompt, [screenImage], AI_CONFIGS[activeLoadout.codeEngine].name);
+            return true;
+        } catch(e) { return false; }
+    });
+
+    // 🟢 RADIAL TOAST IPC: Forward toast messages to the HUD
+    ipcMain.on('show-radial-toast', (event, msg) => {
+        if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+            global.radialHudWindow.webContents.send('update-hud-toast', msg);
+        }
     });
 
     // 🟢 BUG 4 FIX: Strip images from Grok's payload completely! It only gets text now.

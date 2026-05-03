@@ -25,8 +25,6 @@ export class LiveInterview extends LitElement {
             -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
             mask-image: linear-gradient(to bottom, transparent 0%, black 15%, black 85%, transparent 100%);
         }
-        .toast { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); background: rgba(0, 204, 102, 0.15); color: #00cc66; border: 1px solid #00cc66; padding: 8px 16px; border-radius: 6px; font-size: 13px; font-weight: bold; opacity: 0; transition: opacity 0.3s; z-index: 1000; pointer-events: none; text-transform: uppercase; }
-        .toast.visible { opacity: 1; }
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
@@ -52,6 +50,7 @@ export class LiveInterview extends LitElement {
         this.hoverTimer = null; this.autoMicTimer = null;
         this.swipeCooldown = false;
         this.optimizedReady = false;
+        this.hasSyncedOptimized = false;
     }
 
     getDefaultMap(page) {
@@ -61,10 +60,9 @@ export class LiveInterview extends LitElement {
     }
 
     showToast(msg) {
-        this.toastMessage = msg;
-        this.requestUpdate();
-        if (this.toastTimer) clearTimeout(this.toastTimer);
-        this.toastTimer = setTimeout(() => { this.toastMessage = ''; this.requestUpdate(); }, 2000);
+        if (window.require) {
+            window.require('electron').ipcRenderer.send('show-radial-toast', msg);
+        }
     }
 
     async connectedCallback() {
@@ -173,8 +171,7 @@ export class LiveInterview extends LitElement {
             // 🟢 FIX: Voice is now a continuous scrollable transcript on a single page!
             this.voiceNewHandler = (_, text) => { this.voiceChatHistory = [text]; this.voiceChatIndex = 0; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
             this.voiceUpdateHandler = (_, text) => { this.voiceChatHistory = [text]; this.voiceChatIndex = 0; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
-            // this.codeNewHandler = (_, text) => { this.codeChatHistory = [...this.codeChatHistory, `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`]; this.codeChatIndex = this.codeChatHistory.length - 1; this.requestUpdate(); this.scrollToBottom('code-feed'); };
-            // this.codeUpdateHandler = (_, text) => { if (this.codeChatHistory.length > 0) { const a = [...this.codeChatHistory]; a[a.length - 1] = `📸 **Visual Input Detected**\n\n🤖 AI:\n${text}`; this.codeChatHistory = a; } else { this.codeChatHistory = [`🤖 AI:\n${text}`]; this.codeChatIndex = 0; } this.requestUpdate(); this.scrollToBottom('code-feed'); };
+            // 🟢 SMART FORMATTER: Keeps images and code on the same page without destruction!
             // 🟢 SMART FORMATTER: Keeps images and code on the same page without destruction!
             this.codeNewHandler = (_, text) => { 
                 if (this.codeChatHistory.length > 0) {
@@ -194,11 +191,7 @@ export class LiveInterview extends LitElement {
                     this.codeChatIndex = 0;
                 }
                 
-                if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
-                    this.optimizedReady = true; 
-                } else {
-                    this.scrollToBottom('code-feed'); 
-                }
+                this.scrollToBottom('code-feed'); 
                 this.requestUpdate(); 
             };
 
@@ -215,11 +208,8 @@ export class LiveInterview extends LitElement {
                     this.codeChatHistory = [text]; 
                     this.codeChatIndex = 0; 
                 } 
-                if (this.codeChatIndex === 0 && this.codeChatHistory.length > 1) {
-                    this.optimizedReady = true;
-                } else {
-                    this.scrollToBottom('code-feed'); 
-                }
+                
+                this.scrollToBottom('code-feed'); 
                 this.requestUpdate(); 
             };
             this.micSyncHandler = (_, state) => { this.isMicOn = state; this.requestUpdate(); };
@@ -351,7 +341,7 @@ export class LiveInterview extends LitElement {
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🌟 Sync Optimized', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort',
-            'toggle_theme': '🌓 Theme Flip'
+            'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image'
         };
         return labels[action] || action || '—';
     }
@@ -375,21 +365,38 @@ export class LiveInterview extends LitElement {
                 ipcRenderer.invoke('capture-screenshot');
                 break;
             case 'send_ai': 
-                this.showToast('🚀 Firing to AI');
-                ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text');
+                ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text').then(success => {
+                    if (success) {
+                        this.showToast('🚀 FIRING TO AI');
+                        // 🟢 CYCLE RESET: Wipe UI history clean for the new problem!
+                        this.codeChatHistory = []; 
+                        this.voiceChatHistory = [];
+                        this.codeChatIndex = 0; 
+                        this.voiceChatIndex = 0;
+                        this.hasSyncedOptimized = false;
+                        this.requestUpdate();
+                    } else {
+                        this.showToast('❌ CAPTURE IMAGE FIRST');
+                    }
+                });
                 break;
-            case 'fix_error': // 🟢 Hijacked to trigger Sync Optimized
-                if (this.optimizedReady || this.codeChatHistory.length > 1) {
-                    this.showToast('🌟 Loaded 2nd Code & Synced Voice!');
-                    this.optimizedReady = false;
+            case 'fix_error': // 🟢 SYNC OPTIMIZED
+                if (this.codeChatHistory.length > 1 && !this.hasSyncedOptimized) {
+                    this.showToast('🌟 SYNCED TO VOICE');
+                    this.hasSyncedOptimized = true; // 🟢 SINGLE-FIRE LOCK: Snap it shut!
                     this.codeChatIndex = this.codeChatHistory.length - 1; // Snap view to optimized code
                     this.scrollToBottom('code-feed');
                     this.requestUpdate();
-                    // Blast context to Voice Brain
                     ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
+                } else if (this.hasSyncedOptimized) {
+                    this.showToast('⏳ ALREADY SYNCED');
                 } else {
-                    this.showToast('⏳ 2nd Code not ready yet...');
+                    this.showToast('⏳ OPTIMIZED NOT READY');
                 }
+                break;
+            case 'sync_followup': // 🟢 NEW: AUTO-CAPTURE + INVISIBLE RELAY
+                this.showToast('🔍 CAPTURING & EXTRACTING...');
+                ipcRenderer.invoke('send-sync-followup');
                 break;
             case 'regenerate':
                 this.showToast('🔄 Regenerating...');
@@ -536,7 +543,7 @@ export class LiveInterview extends LitElement {
                     <div class="pane-header">
                         <span class="header-title code-title">💻 Code Brain</span>
                         <div class="header-controls">
-                            ${this.optimizedReady ? html`<span style="background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; animation: pulse 1.5s infinite;">🌟 OPTIMIZED READY</span>` : ''}
+                            ${this.codeChatHistory.length > 1 && !this.hasSyncedOptimized ? html`<span style="background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; animation: pulse 1.5s infinite;">🌟 OPTIMIZED READY</span>` : ''}
                             <span class="status-badge" style="color: ${this.tacThinkMode ? '#f59e0b' : '#00cc66'};">${this.tacThinkMode ? '🧠 Think' : '⚡ Fast'}</span>
                             <span class="count-badge">${this.codeChatHistory.length ? `${this.codeChatIndex + 1}/${this.codeChatHistory.length}` : '0/0'}</span>
                         </div>
@@ -561,8 +568,6 @@ export class LiveInterview extends LitElement {
                         <chat-feed id="voice-feed" .content=${rightContent}></chat-feed>
                     </div>
                 </div>
-
-                <div class="toast ${this.toastMessage ? 'visible' : ''}">${this.toastMessage}</div>
             </div>
         `;
     }
