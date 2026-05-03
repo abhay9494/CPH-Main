@@ -15,6 +15,35 @@ export class ChatFeed extends LitElement {
         .markdown-body br { display: none; }
         .markdown-body h1, .markdown-body h2, .markdown-body h3, .markdown-body h4 { margin: 1em 0 0.5em 0; color: var(--text-color); font-weight: 600; }
         .markdown-body p { margin: 0.8em 0; }
+
+        /* 🟢 Grok-Inspired Typography & Lists */
+        .markdown-body strong { color: var(--text-color); font-weight: 700; }
+        
+        .markdown-body ul, .markdown-body ol { 
+            padding-left: 1.5rem; 
+            margin-top: 0.5rem; 
+            margin-bottom: 1rem; 
+        }
+        
+        .markdown-body li { 
+            margin-bottom: 0.5rem; 
+            line-height: 1.6;
+            padding-left: 0.25rem;
+        }
+        
+        .markdown-body li::marker { color: var(--text-muted, #888); }
+        
+        /* 🟢 Grok-Inspired Inline Code Highlighting (Orange/Amber Tint) */
+        .markdown-body p code, .markdown-body li code { 
+            background: rgba(245, 158, 11, 0.15); /* Soft Amber/Orange background */
+            color: #f59e0b; /* Bright Amber Text */
+            padding: 0.2em 0.4em; 
+            border-radius: 4px; 
+            font-family: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace; 
+            font-size: 0.85em; 
+            border: 1px solid rgba(245, 158, 11, 0.2);
+            word-break: break-word;
+        }
         
         /* Image Grid Fixes */
         .markdown-body p:has(img) {
@@ -88,11 +117,23 @@ export class ChatFeed extends LitElement {
                         </div>`;
                 };
 
-                if (typeof window.marked.parse === 'function') return window.marked.parse(text, { renderer: renderer, breaks: true });
-                else { window.marked.setOptions({ renderer: renderer, breaks: true }); return window.marked(text); }
+                // 🟢 THIS IS THE NEW PART:
+                const markedOptions = { 
+                    renderer: renderer, 
+                    breaks: true, 
+                    gfm: true // Force GitHub Flavored Markdown for perfect lists/inline code
+                };
+
+                if (typeof window.marked.parse === 'function') {
+                    return window.marked.parse(text, markedOptions);
+                } else { 
+                    window.marked.setOptions(markedOptions); 
+                    return window.marked(text); 
+                }
+                
             } catch (e) { console.error("Markdown Parser Error:", e); }
         }
-        return `<pre style="white-space: pre-wrap; margin: 0;">${text}</pre>`; 
+        return `<pre style="white-space: pre-wrap; margin: 0; font-family: inherit;">${text}</pre>`; 
     }
 
     handleMarkdownClick(e) {
