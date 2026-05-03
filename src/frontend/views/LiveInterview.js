@@ -381,17 +381,27 @@ export class LiveInterview extends LitElement {
                 });
                 break;
             case 'fix_error': // 🟢 SYNC OPTIMIZED
-                if (this.codeChatHistory.length > 1 && !this.hasSyncedOptimized) {
+                // if (this.codeChatHistory.length > 1 && !this.hasSyncedOptimized) {
+                //     this.showToast('🌟 SYNCED TO VOICE');
+                    // this.hasSyncedOptimized = true; // 🟢 SINGLE-FIRE LOCK: Snap it shut!
+                //     this.codeChatIndex = this.codeChatHistory.length - 1; // Snap view to optimized code
+                //     this.scrollToBottom('code-feed');
+                //     this.requestUpdate();
+                //     ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
+                // } else if (this.hasSyncedOptimized) {
+                //     this.showToast('⏳ ALREADY SYNCED');
+                // } else {
+                //     this.showToast('⏳ OPTIMIZED NOT READY');
+                // }
+                // break;
+                if (this.codeChatHistory.length > 0) {
                     this.showToast('🌟 SYNCED TO VOICE');
-                    this.hasSyncedOptimized = true; // 🟢 SINGLE-FIRE LOCK: Snap it shut!
-                    this.codeChatIndex = this.codeChatHistory.length - 1; // Snap view to optimized code
+                    this.codeChatIndex = this.codeChatHistory.length - 1; 
                     this.scrollToBottom('code-feed');
                     this.requestUpdate();
                     ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
-                } else if (this.hasSyncedOptimized) {
-                    this.showToast('⏳ ALREADY SYNCED');
                 } else {
-                    this.showToast('⏳ OPTIMIZED NOT READY');
+                    this.showToast('⏳ NO CODE TO SYNC');
                 }
                 break;
             case 'sync_followup': // 🟢 NEW: AUTO-CAPTURE + INVISIBLE RELAY
@@ -543,7 +553,6 @@ export class LiveInterview extends LitElement {
                     <div class="pane-header">
                         <span class="header-title code-title">💻 Code Brain</span>
                         <div class="header-controls">
-                            ${this.codeChatHistory.length > 1 && !this.hasSyncedOptimized ? html`<span style="background: #f59e0b; color: #000; padding: 2px 8px; border-radius: 4px; font-weight: bold; font-size: 10px; animation: pulse 1.5s infinite;">🌟 OPTIMIZED READY</span>` : ''}
                             <span class="status-badge" style="color: ${this.tacThinkMode ? '#f59e0b' : '#00cc66'};">${this.tacThinkMode ? '🧠 Think' : '⚡ Fast'}</span>
                             <span class="count-badge">${this.codeChatHistory.length ? `${this.codeChatIndex + 1}/${this.codeChatHistory.length}` : '0/0'}</span>
                         </div>
