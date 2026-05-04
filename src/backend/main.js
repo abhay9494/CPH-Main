@@ -209,6 +209,9 @@ let voiceWebWindowPrimary = null;  // 🟢 NEW: Primary Voice
 let voiceWebWindowSecondary = null; // 🟢 NEW: Backup Voice (Racer)
 let currentVoiceWinner = 'primary'; // 🟢 NEW: Tracks the fastest AI
 let codeWebWindow = null;
+let codeWebWindowPrimary = null;
+let codeWebWindowSecondary = null;
+let currentCodeWinner = null;
 let companionChatWindow = null;
 let activeLoadout = { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
 let accumulatedScreenshots = [];
@@ -216,6 +219,8 @@ let scrapingInterval = null;
 let isAppQuitting = false;
 let wasAiVisibleBeforeGhost = false;
 
+global.zoomWindow = null;
+global.isPanesSwapped = false;
 global.radialHudWindow = null; 
 global.activeRadialLabels = Array(16).fill('—');
 global.isOAModeActive = false;
@@ -239,6 +244,7 @@ global.createRadialWindow = () => {
         global.radialHudWindow = new BrowserWindow({
             width: rs.size, height: rs.size,
             frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
+            resizable: false,
             webPreferences: { nodeIntegration: true, contextIsolation: false }
         });
         global.radialHudWindow.setContentProtection(true);
@@ -351,13 +357,22 @@ global.createRadialWindow = () => {
 function launchDualBrains() {
     const prefs = storage.getPreferences();
     const loadouts = prefs.dualBrainLoadouts || [];
+    
+    // 🟢 STRONGER FALLBACK: Ensure all 4 brains have default IDs mapped if legacy settings exist
     activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || 
                     loadouts[0] ||
-                    { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
+                    { voiceEngine: 0, voiceProfileId: '1', voiceEngine2: 0, voiceProfile2Id: '3', codeEngine: 1, codeProfileId: '2', codeEngine2: 1, codeProfile2Id: '4' };
 
-    const voiceProviderPrimary = AI_CONFIGS[activeLoadout.voiceEngine || 0];
-    const voiceProviderSecondary = activeLoadout.voiceEngine2 !== undefined ? AI_CONFIGS[activeLoadout.voiceEngine2] : null;
-    const codeProvider = AI_CONFIGS[activeLoadout.codeEngine || 1];
+    // 🟢 BULLETPROOF INDICES: Force a valid integer even if the saved setting is completely undefined
+    const v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
+    const v2Idx = activeLoadout.voiceEngine2 !== undefined ? activeLoadout.voiceEngine2 : 0;
+    const c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+    const c2Idx = activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1;
+
+    const voiceProviderPrimary = AI_CONFIGS[v1Idx];
+    const voiceProviderSecondary = AI_CONFIGS[v2Idx];
+    const codeProviderPrimary = AI_CONFIGS[c1Idx];
+    const codeProviderSecondary = AI_CONFIGS[c2Idx];
 
     // 🟢 UNIVERSAL MIC INJECTOR HELPER
     const injectVoiceScripts = async (win, targetAudioMode) => {
@@ -474,6 +489,7 @@ function launchDualBrains() {
     if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.destroy();
     voiceWebWindowPrimary = new BrowserWindow({
         width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        frame: false, resizable: false, maximizable: false, minimizable: false, closable: false,
         title: `🗣️ Voice Brain: ${voiceProviderPrimary.name}`,
         webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfileId || '1'}` }
     });
@@ -483,38 +499,56 @@ function launchDualBrains() {
     voiceWebWindowPrimary.loadURL(voiceProviderPrimary.url);
     voiceWebWindowPrimary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowPrimary, targetAudioMode));
 
-    // 🟢 ALIAS FIX: Point legacy voiceWebWindow to Primary so old IPCs don't crash
-    voiceWebWindow = voiceWebWindowPrimary; 
+    voiceWebWindow = voiceWebWindowPrimary; // Alias default
 
     // 🟢 2. LAUNCH SECONDARY BACKUP VOICE BRAIN (THE RACER)
     if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.destroy();
-    if (voiceProviderSecondary) {
-        voiceWebWindowSecondary = new BrowserWindow({
-            width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
-            title: `🏎️ Backup Voice Brain: ${voiceProviderSecondary.name}`,
-            webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfile2Id || '3'}` }
-        });
-        voiceWebWindowSecondary.setContentProtection(true);
-        voiceWebWindowSecondary.webContents.setAudioMuted(true);
-        if (process.platform === 'win32') voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
-        voiceWebWindowSecondary.loadURL(voiceProviderSecondary.url);
-        voiceWebWindowSecondary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowSecondary, targetAudioMode));
-    }
-
-    // 🟢 3. LAUNCH CODE BRAIN
-    if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.destroy();
-    codeWebWindow = new BrowserWindow({
+    voiceWebWindowSecondary = new BrowserWindow({
         width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
-        title: `💻 Code Brain: ${codeProvider.name}`,
+        frame: false, resizable: false, maximizable: false, minimizable: false, closable: false,
+        title: `🏎️ Backup Voice Brain: ${voiceProviderSecondary.name}`,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfile2Id || '3'}` }
+    });
+    voiceWebWindowSecondary.setContentProtection(true);
+    voiceWebWindowSecondary.webContents.setAudioMuted(true);
+    if (process.platform === 'win32') voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+    voiceWebWindowSecondary.loadURL(voiceProviderSecondary.url);
+    voiceWebWindowSecondary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowSecondary, targetAudioMode));
+
+    // 🟢 3. LAUNCH PRIMARY CODE BRAIN
+    if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.destroy();
+    codeWebWindowPrimary = new BrowserWindow({
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        frame: false, resizable: false, maximizable: false, minimizable: false, closable: false,
+        title: `💻 Code Brain: ${codeProviderPrimary.name}`,
         webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.codeProfileId || '2'}` }
     });
-    codeWebWindow.setContentProtection(true);
-    codeWebWindow.webContents.setAudioMuted(true);
-    if (process.platform === 'win32') codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
-    codeWebWindow.loadURL(codeProvider.url);
-    codeWebWindow.webContents.on('dom-ready', async () => {
-        codeWebWindow.webContents.insertCSS('* { cursor: default !important; }');
-        await codeWebWindow.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked")); true;`).catch(() => {});
+    codeWebWindowPrimary.setContentProtection(true);
+    codeWebWindowPrimary.webContents.setAudioMuted(true);
+    if (process.platform === 'win32') codeWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+    codeWebWindowPrimary.loadURL(codeProviderPrimary.url);
+    codeWebWindowPrimary.webContents.on('dom-ready', async () => {
+        codeWebWindowPrimary.webContents.insertCSS('* { cursor: default !important; }');
+        await codeWebWindowPrimary.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked")); true;`).catch(() => {});
+    });
+
+    codeWebWindow = codeWebWindowPrimary; // Alias default
+
+    // 🟢 4. LAUNCH BACKUP CODE BRAIN (THE HIGHLANDER RACER)
+    if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.destroy();
+    codeWebWindowSecondary = new BrowserWindow({
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        frame: false, resizable: false, maximizable: false, minimizable: false, closable: false,
+        title: `🏎️ Backup Code Brain: ${codeProviderSecondary.name}`,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.codeProfile2Id || '4'}` }
+    });
+    codeWebWindowSecondary.setContentProtection(true);
+    codeWebWindowSecondary.webContents.setAudioMuted(true);
+    if (process.platform === 'win32') codeWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+    codeWebWindowSecondary.loadURL(codeProviderSecondary.url);
+    codeWebWindowSecondary.webContents.on('dom-ready', async () => {
+        codeWebWindowSecondary.webContents.insertCSS('* { cursor: default !important; }');
+        await codeWebWindowSecondary.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked")); true;`).catch(() => {});
     });
 
     const preventDeath = (win) => {
@@ -530,9 +564,10 @@ function launchDualBrains() {
     };
     preventDeath(voiceWebWindowPrimary);
     preventDeath(voiceWebWindowSecondary);
-    preventDeath(codeWebWindow);
+    preventDeath(codeWebWindowPrimary);
+    preventDeath(codeWebWindowSecondary);
 
-    startDualScrapers(voiceProviderPrimary, codeProvider);
+    startDualScrapers(voiceProviderPrimary, codeProviderPrimary);
 }
 
 function startDualScrapers(voiceProvider, codeProvider) {
@@ -613,12 +648,14 @@ function startDualScrapers(voiceProvider, codeProvider) {
         }
 
         // ====================================================================
-        // 💻 CODE BRAIN LOGIC
+        // 💻 CODE BRAIN HIGHLANDER RACE (There can be only one)
         // ====================================================================
-        const cData = await codeWebWindow.webContents.executeJavaScript(`
+        const codeExtractScript = `
             (() => {
                 try {
-                    const msgs = Array.from(document.querySelectorAll('${codeProvider.msgSelector}')).filter(el => {
+                    const sel = window.location.hostname.includes('chatgpt') ? 'div[data-message-author-role="assistant"]' :
+                                window.location.hostname.includes('grok') ? '.prose' : 'model-response';
+                    const msgs = Array.from(document.querySelectorAll(sel)).filter(el => {
                         if (el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message')) return false;
                         return (el.innerText || '').trim().length > 0;
                     });
@@ -626,7 +663,49 @@ function startDualScrapers(voiceProvider, codeProvider) {
                     return { count: msgs.length, text: msgs[msgs.length - 1].innerText.trim() };
                 } catch(e) { return null; }
             })();
-        `).catch(() => null);
+        `;
+
+        const getCData = async (win) => {
+            if (!win || win.isDestroyed()) return null;
+            return await win.webContents.executeJavaScript(codeExtractScript).catch(() => null);
+        };
+
+        let cData1 = await getCData(codeWebWindowPrimary);
+        let cData2 = await getCData(codeWebWindowSecondary);
+
+        if (global.code1StableTicks === undefined) { 
+            global.code1StableTicks = 0; global.lastCode1Text = ""; 
+            global.code2StableTicks = 0; global.lastCode2Text = ""; 
+        }
+
+        // Stability Tracker (Increments if text > 50 chars and hasn't changed in 1s)
+        if (cData1 && cData1.text === global.lastCode1Text && cData1.text.length > 50) global.code1StableTicks++;
+        else { global.code1StableTicks = 0; global.lastCode1Text = cData1 ? cData1.text : ""; }
+
+        if (cData2 && cData2.text === global.lastCode2Text && cData2.text.length > 50) global.code2StableTicks++;
+        else { global.code2StableTicks = 0; global.lastCode2Text = cData2 ? cData2.text : ""; }
+
+        // 🪓 THE EXECUTIONER: Kill the loser when winner is determined
+        if (currentCodeWinner === null) {
+            const checkWin = (data, ticks) => data && data.text && (data.text.includes('[CODE_END]') || ticks >= 4);
+            
+            if (checkWin(cData1, global.code1StableTicks)) {
+                currentCodeWinner = 'primary';
+                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.destroy();
+                codeWebWindowSecondary = null;
+                codeWebWindow = codeWebWindowPrimary; // Secure the alias for legacy code
+                if (global.applyAIBounds) global.applyAIBounds(true); // Snap surviving window to 50%
+            } else if (checkWin(cData2, global.code2StableTicks)) {
+                currentCodeWinner = 'secondary';
+                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.destroy();
+                codeWebWindowPrimary = null;
+                codeWebWindow = codeWebWindowSecondary; // Update the alias
+                if (global.applyAIBounds) global.applyAIBounds(true); // Snap surviving window to 50%
+            }
+        }
+
+        // Pipe the active leader (or winner) to the UI
+        let cData = currentCodeWinner === 'secondary' ? cData2 : (currentCodeWinner === 'primary' ? cData1 : (cData1 || cData2));
 
         if (cData) {
             if (global.isExtractingFollowup) {
@@ -918,12 +997,24 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
 }
 
 app.whenReady().then(async () => {
+    // 🛡️ THE PERFECT CHROME MASK
+    const pristineChromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+
     app.on('session-created', (sess) => {
         sess.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
         sess.setPermissionCheckHandler(() => true);
         sess.setDisplayMediaRequestHandler((request, callback) => {
             desktopCapturer.getSources({ types: ['screen'] }).then(sources => { callback({ video: sources[0], audio: 'loopback' }); });
         }, { useSystemPicker: false });
+
+        // Apply clean headers to EVERY window and completely delete Electron leak headers
+        sess.webRequest.onBeforeSendHeaders((details, callback) => {
+            details.requestHeaders['User-Agent'] = pristineChromeUA;
+            delete details.requestHeaders['sec-ch-ua'];
+            delete details.requestHeaders['sec-ch-ua-mobile'];
+            delete details.requestHeaders['sec-ch-ua-platform'];
+            callback({ cancel: false, requestHeaders: details.requestHeaders });
+        });
     });
 
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
@@ -933,7 +1024,10 @@ app.whenReady().then(async () => {
     }, { useSystemPicker: false });
 
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-        details.requestHeaders['User-Agent'] = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Gecko/20100101 Firefox/123.0';
+        details.requestHeaders['User-Agent'] = pristineChromeUA;
+        delete details.requestHeaders['sec-ch-ua'];
+        delete details.requestHeaders['sec-ch-ua-mobile'];
+        delete details.requestHeaders['sec-ch-ua-platform'];
         callback({ cancel: false, requestHeaders: details.requestHeaders });
     });
 
@@ -941,8 +1035,11 @@ app.whenReady().then(async () => {
     mainWindow = createWindow(); 
 
     mainWindow.on('hide', () => {
-        if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) voiceWebWindow.hide();
-        if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) codeWebWindow.hide();
+        // 🟢 FIX BUG 2: Target all windows explicitly so none are left behind
+        if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed() && voiceWebWindowPrimary.isVisible()) voiceWebWindowPrimary.hide();
+        if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed() && voiceWebWindowSecondary.isVisible()) voiceWebWindowSecondary.hide();
+        if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed() && codeWebWindowPrimary.isVisible()) codeWebWindowPrimary.hide();
+        if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() && codeWebWindowSecondary.isVisible()) codeWebWindowSecondary.hide();
     });
 
     mainWindow.on('show', () => {
@@ -995,6 +1092,123 @@ function setupGeneralIpcHandlers() {
     let currentRadialSlice = null;
     const DEADZONE_PX = 25; 
 
+    // 🟢 STEALTH ZOOM HANDLER
+    ipcMain.handle('toggle-zoom-window', () => {
+        if (global.zoomWindow && !global.zoomWindow.isDestroyed()) {
+            global.zoomWindow.show(); global.zoomWindow.focus();
+            return true;
+        }
+        global.zoomWindow = new BrowserWindow({
+            width: 1200, height: 800, show: true, autoHideMenuBar: true, title: "Zoom Web Client",
+            skipTaskbar: true, // 🟢 STEALTH: Hides the window from the OS Taskbar completely
+            webPreferences: { nodeIntegration: false, contextIsolation: true, partition: 'persist:zoom' }
+        });
+        
+        // 🟢 STEALTH: Apply Content Protection (Renders the window as a black box to screen recording/sharing tools)
+        global.zoomWindow.setContentProtection(true);
+        
+        // Spoof standard Chrome to ensure maximum compatibility with Zoom's WebRTC audio/video
+        const pristineChromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+        global.zoomWindow.webContents.setUserAgent(pristineChromeUA);
+        
+        // Load the primary Zoom portal
+        global.zoomWindow.loadURL('https://app.zoom.us/wc/home'); // 🟢 Directs straight to the Web Client portal
+        
+        global.zoomWindow.on('close', (e) => {
+            if (!isAppQuitting) { e.preventDefault(); global.zoomWindow.minimize(); } // Minimize lock
+        });
+        return true;
+    });
+
+    // 🟢 CENTRALIZED WINDOW BOUNDS CALCULATOR (25/25/25/25 -> 50/25/25)
+    global.applyAIBounds = function(forceShow) {
+        if (!codeWebWindowPrimary && !codeWebWindowSecondary) return false;
+        
+        const isVisible = (codeWebWindowPrimary && codeWebWindowPrimary.isVisible() && codeWebWindowPrimary.getOpacity() !== 0) || 
+                          (codeWebWindowSecondary && codeWebWindowSecondary.isVisible() && codeWebWindowSecondary.getOpacity() !== 0);
+        const targetVisible = forceShow !== undefined ? forceShow : !isVisible;
+
+        if (targetVisible) {
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const { width, height } = primaryDisplay.workAreaSize;
+
+            if (global.currentSessionMode === 'proctored_oa') {
+                const safeWidth = Math.max(800, Math.floor(width * 0.7));
+                const safeHeight = Math.max(600, Math.floor(height * 0.8));
+                const x = Math.floor((width - safeWidth) / 2);
+                const y = Math.floor((height - safeHeight) / 2);
+
+                const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary ? codeWebWindowSecondary : codeWebWindowPrimary;
+                if (activeCode && !activeCode.isDestroyed()) {
+                    activeCode.setOpacity(1); activeCode.setIgnoreMouseEvents(false);
+                    activeCode.setAlwaysOnTop(true, 'floating', 1);
+                    activeCode.setBounds({ x, y, width: safeWidth, height: safeHeight });
+                    activeCode.showInactive();
+                }
+                [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary].forEach(w => {
+                    if (w && w !== activeCode && !w.isDestroyed()) w.hide();
+                });
+            } else {
+                const halfWidth = Math.floor(width / 2);
+                const halfHeight = Math.floor(height / 2);
+                
+                let codeX = global.isPanesSwapped ? halfWidth : 0;
+                let voiceX = global.isPanesSwapped ? 0 : halfWidth;
+
+                // 💻 CODE SIDE (Highlander Check)
+                if (currentCodeWinner === null && codeWebWindowPrimary && codeWebWindowSecondary) {
+                    // Race Ongoing: Code is split 25% Top / 25% Bottom
+                    if (!codeWebWindowPrimary.isDestroyed()) {
+                        codeWebWindowPrimary.setOpacity(1); codeWebWindowPrimary.setIgnoreMouseEvents(false);
+                        codeWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+                        codeWebWindowPrimary.setBounds({ x: codeX, y: 0, width: halfWidth, height: halfHeight });
+                        codeWebWindowPrimary.showInactive();
+                    }
+                    if (!codeWebWindowSecondary.isDestroyed()) {
+                        codeWebWindowSecondary.setOpacity(1); codeWebWindowSecondary.setIgnoreMouseEvents(false);
+                        codeWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+                        codeWebWindowSecondary.setBounds({ x: codeX, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                        codeWebWindowSecondary.showInactive();
+                    }
+                } else {
+                    // Winner Decided: Surviving Code gets full 50% height
+                    const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary ? codeWebWindowSecondary : codeWebWindowPrimary;
+                    if (activeCode && !activeCode.isDestroyed()) {
+                        activeCode.setOpacity(1); activeCode.setIgnoreMouseEvents(false);
+                        activeCode.setAlwaysOnTop(true, 'floating', 1);
+                        activeCode.setBounds({ x: codeX, y: 0, width: halfWidth, height: height });
+                        activeCode.showInactive();
+                    }
+                }
+
+                // 🗣️ VOICE SIDE (Always 25% Top / 25% Bottom)
+                if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                    voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
+                    voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+                    voiceWebWindowPrimary.setBounds({ x: voiceX, y: 0, width: halfWidth, height: halfHeight });
+                    voiceWebWindowPrimary.showInactive();
+                }
+                if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                    voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
+                    voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+                    voiceWebWindowSecondary.setBounds({ x: voiceX, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                    voiceWebWindowSecondary.showInactive();
+                }
+            }
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
+                global.radialHudWindow.moveTop();
+            }
+            return true;
+        } else {
+            [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary].forEach(w => {
+                if (w && !w.isDestroyed()) w.hide();
+            });
+            return false;
+        }
+    };
+
     ipcMain.handle('open-login-window', async (event, profileId, aiIndex) => {
         const provider = AI_CONFIGS[aiIndex];
         const partitionId = `persist:ai_profile_${profileId}`;
@@ -1024,14 +1238,19 @@ function setupGeneralIpcHandlers() {
                 mainWindow.setIgnoreMouseEvents(false);
                 mainWindow.webContents.send('ghost-state-changed', false);
             }
+            
+            // 🟢 FIX BUG 2: Target all windows explicitly so none are left behind
             if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
                 voiceWebWindowPrimary.hide(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
             }
             if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
                 voiceWebWindowSecondary.hide(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
             }
-            if (codeWebWindow && !codeWebWindow.isDestroyed()) {
-                codeWebWindow.hide(); codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
+                codeWebWindowPrimary.hide(); codeWebWindowPrimary.setOpacity(1); codeWebWindowPrimary.setIgnoreMouseEvents(false);
+            }
+            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
+                codeWebWindowSecondary.hide(); codeWebWindowSecondary.setOpacity(1); codeWebWindowSecondary.setIgnoreMouseEvents(false);
             }
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
         }
@@ -1292,51 +1511,89 @@ function setupGeneralIpcHandlers() {
 
             global.isExtractingFollowup = false;
 
+            // 🟢 Extract Safe Indices
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+            let c2Idx = activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1;
+            let v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
+            let v2Idx = activeLoadout.voiceEngine2 !== undefined ? activeLoadout.voiceEngine2 : 0;
+
             if (global.currentSessionMode === 'proctored_live_interview') {
                 global.isThinkModeActive = true; 
                 global.bruteForceSyncPending = true; 
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', true); });
 
-                let codePrompt2 = PROMPTS.INTERVIEW_OPTIMIZED;
+                let codePromptPrimary = PROMPTS.INTERVIEW_OPTIMIZED;
+                let codePromptSecondary = PROMPTS.INTERVIEW_OPTIMIZED;
                 let voicePromptInit1 = PROMPTS.VOICE_INITIAL_CONTEXT;
                 let voicePromptInit2 = PROMPTS.VOICE_INITIAL_CONTEXT;
                 
-                if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt2 = '@Pro ' + codePrompt2;
-                if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') voicePromptInit1 = '@Fast ' + voicePromptInit1;
-                if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') voicePromptInit2 = '@Fast ' + voicePromptInit2;
+                // Add @Pro / @Fast tags dynamically based on the specific engine
+                if (AI_CONFIGS[c1Idx].name === 'Gemini') codePromptPrimary = '@Pro ' + codePromptPrimary;
+                if (AI_CONFIGS[c2Idx].name === 'Gemini') codePromptSecondary = '@Pro ' + codePromptSecondary;
+                
+                if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePromptInit1 = '@Fast ' + voicePromptInit1;
+                if (AI_CONFIGS[v2Idx].name === 'Gemini') voicePromptInit2 = '@Fast ' + voicePromptInit2;
 
-                await sendPayloadToWindow(codeWebWindow, codePrompt2, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
+                // 🟢 Restart the Race (Only reset if secondary window wasn't destroyed in a previous question)
+                currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
+                if (global.applyAIBounds) global.applyAIBounds(true); // Snap to the 4-pane race grid (or 3-pane if secondary is dead)
+
+                // 🟢 Send Optimized prompt to BOTH Code Brains simultaneously
+                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
+                    sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
+                }
+                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
+                    sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
+                }
 
                 setTimeout(async () => {
                     if (global.currentSessionMode !== 'proctored_live_interview') return; 
-                    sendPayloadToWindow(voiceWebWindowPrimary, voicePromptInit1, [], AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
-                    if (voiceWebWindowSecondary) {
-                        sendPayloadToWindow(voiceWebWindowSecondary, voicePromptInit2, [], AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                        sendPayloadToWindow(voiceWebWindowPrimary, voicePromptInit1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
+                    }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                        sendPayloadToWindow(voiceWebWindowSecondary, voicePromptInit2, [], AI_CONFIGS[v2Idx].name).catch(()=>{});
                     }
                 }, 1000);
 
             } else {
-                let codePrompt = PROMPTS.OA_AUTOMATION(language); 
-                let voicePrompt1 = PROMPTS.VOICE_CONTEXT;
-                let voicePrompt2 = PROMPTS.VOICE_CONTEXT;
+                let codePromptPrimary = PROMPTS.OA_AUTOMATION(language); 
+                let codePromptSecondary = PROMPTS.OA_AUTOMATION(language); 
+                let voicePrompt1 = PROMPTS.VOICE_CONTEXT || "Answer this.";
+                let voicePrompt2 = PROMPTS.VOICE_CONTEXT || "Answer this.";
                 
-                if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
-                if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') voicePrompt1 = getModePrefix() + voicePrompt1;
-                if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') voicePrompt2 = getModePrefix() + voicePrompt2;
+                if (AI_CONFIGS[c1Idx].name === 'Gemini') codePromptPrimary = getModePrefix() + codePromptPrimary;
+                if (AI_CONFIGS[c2Idx].name === 'Gemini') codePromptSecondary = getModePrefix() + codePromptSecondary;
+                
+                if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePrompt1 = getModePrefix() + voicePrompt1;
+                if (AI_CONFIGS[v2Idx].name === 'Gemini') voicePrompt2 = getModePrefix() + voicePrompt2;
 
-                await sendPayloadToWindow(codeWebWindow, codePrompt, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
+                // 🟢 Restart the Race
+                currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
+                if (global.applyAIBounds) global.applyAIBounds(true); // Snap to the 4-pane race grid
+
+                // 🟢 Send prompt to BOTH Code Brains
+                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
+                    sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
+                }
+                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
+                    sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
+                }
+
                 setTimeout(async () => { 
-                    sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt1, imagesForThisQuestion, AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
-                    if (voiceWebWindowSecondary) {
-                        sendPayloadToWindow(voiceWebWindowSecondary, voicePrompt2, imagesForThisQuestion, AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                        sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt1, imagesForThisQuestion, AI_CONFIGS[v1Idx].name).catch(()=>{});
+                    }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                        sendPayloadToWindow(voiceWebWindowSecondary, voicePrompt2, imagesForThisQuestion, AI_CONFIGS[v2Idx].name).catch(()=>{});
                     }
                 }, 1500);
             }
             return true;
-        } catch(e) { return false; }
+        } catch(e) { console.error(e); return false; }
     });
 
-    // 🟢 INVISIBLE RELAY: Auto-capture and send follow-up image to Code Brain
+    // 🟢 INVISIBLE RELAY: Auto-capture and send follow-up image to SURVIVING Code Brain
     ipcMain.handle('send-sync-followup', async () => {
         try {
             // 1. Force an instant, silent background screenshot
@@ -1347,11 +1604,17 @@ function setupGeneralIpcHandlers() {
             global.isExtractingFollowup = true;
             global.followupJustSent = false;
 
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
             let codePrompt = PROMPTS.FOLLOWUP_EXTRACTION;
-            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
 
-            // 3. Beam the image silently to the Code Brain!
-            await sendPayloadToWindow(codeWebWindow, codePrompt, [screenImage], AI_CONFIGS[activeLoadout.codeEngine].name);
+            // 3. Beam the image silently to the SURVIVING Code Brain!
+            const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
+            const activeCodeIdx = currentCodeWinner === 'secondary' ? (activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1) : c1Idx;
+
+            if (activeCode && !activeCode.isDestroyed()) {
+                await sendPayloadToWindow(activeCode, codePrompt, [screenImage], AI_CONFIGS[activeCodeIdx].name);
+            }
             return true;
         } catch(e) { return false; }
     });
@@ -1380,35 +1643,16 @@ function setupGeneralIpcHandlers() {
     });
 
     ipcMain.handle('swap-ai-windows', async (event, isSwapped) => {
-        if (!codeWebWindow || !voiceWebWindowPrimary) return false;
-        
-        if (global.currentSessionMode !== 'proctored_oa' && codeWebWindow.isVisible() && voiceWebWindowPrimary.isVisible()) {
-            const primaryDisplay = screen.getPrimaryDisplay();
-            const { width, height } = primaryDisplay.workAreaSize;
-            
-            const halfWidth = Math.floor(width / 2);
-            const halfHeight = Math.floor(height / 2);
-            
-            if (isSwapped) {
-                // Swapped: Voice1 (Top Left) | Voice2 (Bottom Left) | Code (Right 50%)
-                if (voiceWebWindowPrimary) voiceWebWindowPrimary.setBounds({ x: 0, y: 0, width: halfWidth, height: halfHeight });
-                if (voiceWebWindowSecondary) voiceWebWindowSecondary.setBounds({ x: 0, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                codeWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
-            } else {
-                // Normal: Code (Left 50%) | Voice1 (Top Right) | Voice2 (Bottom Right)
-                codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
-                if (voiceWebWindowPrimary) voiceWebWindowPrimary.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: halfHeight });
-                if (voiceWebWindowSecondary) voiceWebWindowSecondary.setBounds({ x: halfWidth, y: halfHeight, width: halfWidth, height: height - halfHeight });
-            }
-        }
-        return true;
+        global.isPanesSwapped = isSwapped;
+        return global.applyAIBounds(true);
     });
 
     ipcMain.handle('new-chat', async () => {
         try {
             if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.loadURL(AI_CONFIGS[activeLoadout.voiceEngine || 0].url);
             if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.loadURL(AI_CONFIGS[activeLoadout.voiceEngine2 || 0].url);
-            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.loadURL(AI_CONFIGS[activeLoadout.codeEngine || 1].url);
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.loadURL(AI_CONFIGS[activeLoadout.codeEngine || 1].url);
+            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.loadURL(AI_CONFIGS[activeLoadout.codeEngine2 || 1].url);
             return true;
         } catch(e) { return false; }
     });
@@ -1560,7 +1804,8 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('send-oa-regenerate', async () => {
         try {
             const script = `(() => { try { const btn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent||'').toLowerCase().includes('regenerate') || (b.getAttribute('aria-label')||'').toLowerCase().includes('regenerate')); if(btn) { btn.click(); return true; } return false; } catch(e) { return false; } })();`;
-            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.webContents.executeJavaScript(script).catch(()=>{});
+            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.webContents.executeJavaScript(script).catch(()=>{});
             if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.webContents.executeJavaScript(script).catch(()=>{});
             if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.webContents.executeJavaScript(script).catch(()=>{});
             return true;
@@ -1585,86 +1830,23 @@ function setupGeneralIpcHandlers() {
     });
 
     ipcMain.handle('toggle-ai-visibility', (event, forceShow) => {
-        try {
-            if (!codeWebWindow) return false;
-            const isVisible = codeWebWindow.isVisible() && codeWebWindow.getOpacity() !== 0;
-            const targetVisible = forceShow !== undefined ? forceShow : !isVisible;
-
-            if (targetVisible) {
-                const primaryDisplay = screen.getPrimaryDisplay();
-                const { width, height } = primaryDisplay.workAreaSize;
-
-                if (global.currentSessionMode === 'proctored_oa') {
-                    const safeWidth = Math.max(800, Math.floor(width * 0.7));
-                    const safeHeight = Math.max(600, Math.floor(height * 0.8));
-                    const x = Math.floor((width - safeWidth) / 2);
-                    const y = Math.floor((height - safeHeight) / 2);
-
-                    if (!codeWebWindow.isDestroyed()) {
-                        codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
-                        codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
-                        codeWebWindow.setBounds({ x, y, width: safeWidth, height: safeHeight });
-                        codeWebWindow.showInactive();
-                    }
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) { voiceWebWindowPrimary.hide(); }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) { voiceWebWindowSecondary.hide(); }
-                } else {
-                    // 🟢 Stacked Split: Code (Left), Voice 1 (Top Right), Voice 2 (Bottom Right)
-                    const halfWidth = Math.floor(width / 2);
-                    const halfHeight = Math.floor(height / 2);
-
-                    if (!codeWebWindow.isDestroyed()) {
-                        codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
-                        codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
-                        codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
-                        codeWebWindow.showInactive();
-                    }
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                        voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
-                        voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindowPrimary.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: halfHeight });
-                        voiceWebWindowPrimary.showInactive();
-                    }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                        voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
-                        voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindowSecondary.setBounds({ x: halfWidth, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                        voiceWebWindowSecondary.showInactive();
-                    }
-                }
-
-                if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-                if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
-                    global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
-                    global.radialHudWindow.moveTop();
-                }
-                return true;
-            } else {
-                if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.hide();
-                if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.hide();
-                if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.hide();
-                return false;
-            }
-        } catch(e) { return false; }
+        return global.applyAIBounds(forceShow);
     });
 
     ipcMain.handle('hide-all-overlays', () => {
         try {
             BrowserWindow.getAllWindows().forEach(w => {
-                if (!w.isDestroyed() && w !== voiceWebWindowPrimary && w !== voiceWebWindowSecondary && w !== codeWebWindow) {
+                // 🟢 IGNORE THE ZOOM WINDOW SO IT STAYS VISIBLE
+                if (!w.isDestroyed() && w !== voiceWebWindowPrimary && w !== voiceWebWindowSecondary && w !== codeWebWindowPrimary && w !== codeWebWindowSecondary && w !== global.zoomWindow) {
                     w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true });
                 }
             });
 
-            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed() && voiceWebWindowPrimary.isVisible()) {
-                voiceWebWindowPrimary.setOpacity(0); voiceWebWindowPrimary.setIgnoreMouseEvents(true, { forward: true });
-            }
-            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed() && voiceWebWindowSecondary.isVisible()) {
-                voiceWebWindowSecondary.setOpacity(0); voiceWebWindowSecondary.setIgnoreMouseEvents(true, { forward: true });
-            }
-            if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) {
-                codeWebWindow.setOpacity(0); codeWebWindow.setIgnoreMouseEvents(true, { forward: true });
-            }
+            [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary].forEach(w => {
+                if (w && !w.isDestroyed() && w.isVisible()) {
+                    w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true });
+                }
+            });
             return true;
         } catch(e) { return false; }
     });
@@ -1675,23 +1857,25 @@ function setupGeneralIpcHandlers() {
 
             if (global.isGhostHidden) {
                 mainWindow.webContents.send('app-made-hidden');
-                wasAiVisibleBeforeGhost = (voiceWebWindowPrimary && voiceWebWindowPrimary.isVisible() && voiceWebWindowPrimary.getOpacity() !== 0) || 
-                                          (codeWebWindow && codeWebWindow.isVisible() && codeWebWindow.getOpacity() !== 0);
+                
+                // Track what was visible before hiding
+                wasAiVisibleBeforeGhost = [voiceWebWindowPrimary, codeWebWindowPrimary, codeWebWindowSecondary].some(w => w && w.isVisible() && w.getOpacity() !== 0);
 
                 mainWindow.setOpacity(0); mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 
-                if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) { voiceWebWindowPrimary.setOpacity(0); voiceWebWindowPrimary.setIgnoreMouseEvents(true, { forward: true }); }
-                if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) { voiceWebWindowSecondary.setOpacity(0); voiceWebWindowSecondary.setIgnoreMouseEvents(true, { forward: true }); }
-                if (codeWebWindow && !codeWebWindow.isDestroyed()) { codeWebWindow.setOpacity(0); codeWebWindow.setIgnoreMouseEvents(true, { forward: true }); }
+                [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary].forEach(w => {
+                    if (w && !w.isDestroyed()) { w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true }); }
+                });
+                
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) { global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true }); }
             } else {
                 mainWindow.webContents.send('app-made-visible');
                 mainWindow.setOpacity(1); mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
                 
                 if (wasAiVisibleBeforeGhost) {
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) { voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false); }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) { voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false); }
-                    if (codeWebWindow && !codeWebWindow.isDestroyed()) { codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false); }
+                    [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary].forEach(w => {
+                        if (w && !w.isDestroyed()) { w.setOpacity(1); w.setIgnoreMouseEvents(false); }
+                    });
                 }
                 
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {

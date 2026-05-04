@@ -328,6 +328,7 @@ export class SettingsView extends LitElement {
             { id: 'interviewcorners', icon: '🕵️', label: 'Interview HUD' },
             { id: 'minimap', icon: '🧭', label: 'Minimap Settings' },
             { id: 'search', icon: '🔍', label: 'Search' },
+            { id: 'zoom', icon: '📹', label: 'Zoom Web' },
             { id: 'advanced', icon: '⚠️', label: 'Advanced' },  
         ];
 
@@ -671,49 +672,46 @@ export class SettingsView extends LitElement {
                             <p style="font-size: 11px; color: #ccc; margin-bottom: 15px;">Configure which AI engine and profile handles Audio (Fast) and which handles Vision/Code (Thinking).</p>
                             
                             <div style="display: flex; gap: 15px;">
+                                <!-- 🗣️ VOICE COLUMN -->
                                 <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🗣️ Voice Brain</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🗣️ Voice Brain (Primary)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
                                         ${this.renderCustomDropdown('voiceEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine || 0, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
-                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                         ${this.renderCustomDropdown('voiceProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfileId || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceProfileId = val; this.savePref('dualBrainLoadouts', l);
-                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceProfileId = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                        })}
+                                    </div>
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #f59e0b;">🏎️ Voice Backup (Race)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('voiceEngine2', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine2 || 0, (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].voiceEngine2 = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                        })}
+                                        ${this.renderCustomDropdown('voiceProfile2', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfile2Id || '', (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].voiceProfile2Id = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                     </div>
                                 </div>
+
+                                <!-- 💻 CODE COLUMN -->
                                 <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
-                                    <!-- 🟢 NEW: The Racing Backup Voice Brain -->
-                                    <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
-                                        <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #f59e0b;">🏎️ Voice Backup (Race)</div>
-                                        <div style="display: flex; flex-direction: column; gap: 8px;">
-                                            ${this.renderCustomDropdown('voiceEngine2', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine2 || 0, (val) => {
-                                                let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                                if(!l[0]) l[0] = {}; l[0].voiceEngine2 = parseInt(val); this.savePref('dualBrainLoadouts', l);
-                                                if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                            })}
-                                            ${this.renderCustomDropdown('voiceProfile2', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfile2Id || '', (val) => {
-                                                let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                                if(!l[0]) l[0] = {}; l[0].voiceProfile2Id = val; this.savePref('dualBrainLoadouts', l);
-                                                if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                            })}
-                                        </div>
-                                    </div>
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain (Primary)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
                                         ${this.renderCustomDropdown('codeEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine || 1, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l);
-                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                         ${this.renderCustomDropdown('codeProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.codeProfileId || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])];
-                                            if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l);
-                                            if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                        })}
+                                    </div>
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #f59e0b;">🏎️ Code Backup (Race)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('codeEngine2', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine2 || 1, (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].codeEngine2 = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                        })}
+                                        ${this.renderCustomDropdown('codeProfile2', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.codeProfile2Id || '', (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].codeProfile2Id = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                         })}
                                     </div>
                                 </div>
@@ -1334,6 +1332,24 @@ export class SettingsView extends LitElement {
                         When enabled, the AI can browse the live internet for real-time information (e.g., current events, specific documentation). 
                     </p>
                 `;
+            
+            case 'zoom':
+                return html`
+                    <div class="scrollable-tab">
+                        <h2>Stealth Zoom Environment</h2>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 0; margin-bottom: 25px;">
+                            This launches a native Zoom Web Client browser inside the app. Closing the window with the 'X' will only minimize it to ensure you never accidentally drop a call. It remains visible during Emergency Stealth.
+                        </p>
+                        <div style="background: rgba(45, 140, 255, 0.1); border: 1px solid #2D8CFF; padding: 20px; border-radius: 8px; text-align: center;">
+                            <button @click=${() => {
+                                if (window.require) window.require('electron').ipcRenderer.invoke('toggle-zoom-window');
+                            }} style="background: #2D8CFF; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer !important; transition: 0.2s;">
+                                📹 Launch / Show Zoom
+                            </button>
+                        </div>
+                    </div>
+                `;
+                
             case 'advanced':
                 return html`
                     <h2>Advanced Settings</h2>
