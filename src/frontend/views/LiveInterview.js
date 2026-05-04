@@ -36,7 +36,8 @@ export class LiveInterview extends LitElement {
         paneHoverState: { type: String }, isMicOn: { type: Boolean },
         tacThinkMode: { type: Boolean }, toastMessage: { type: String },
         activePage: { type: Number }, prefs: { type: Object },
-        optimizedReady: { type: Boolean }
+        optimizedReady: { type: Boolean },
+        isSwapped: { type: Boolean }
     };
 
     constructor() {
@@ -51,6 +52,8 @@ export class LiveInterview extends LitElement {
         this.swipeCooldown = false;
         this.optimizedReady = false;
         this.hasSyncedOptimized = false;
+        this.isSwapped = false;
+        this.hideAiEdgeCooldown = false;
     }
 
     getDefaultMap(page) {
@@ -139,33 +142,72 @@ export class LiveInterview extends LitElement {
                     }
                 };
 
-                if (!zone || zone === 'none') { killDot(); return; }
+                // If mouse leaves all zones, reset everything including all cooldowns
+                if (!zone || zone === 'none') { 
+                    killDot(); 
+                    this.swapEdgeCooldown = false; 
+                    this.hideAiEdgeCooldown = false;
+                    return; 
+                }
 
                 const stealthEdge = this.prefs.interviewStealthEdge || 'none';
-                if (zone !== stealthEdge || stealthEdge === 'none') { killDot(); return; }
+                const swapEdge = this.prefs.interviewSwapEdge || 'none';
+                const hideAiEdge = this.prefs.interviewHideAiEdge || 'none'; // 🟢 Added Hide AI Edge
 
-                if (this._isGhostHidden) {
-                    if (!this._isHoveringStealthDot) {
-                        ipcRenderer.send('set-ghost-dot', true);
-                        this._isHoveringStealthDot = true;
+                // 🟢 1. Process "Swap Panes" Edge Trigger
+                if (zone === swapEdge && swapEdge !== 'none') {
+                    killDot();
+                    this.hideAiEdgeCooldown = false; // Reset the other cooldown
+                    if (!this.swapEdgeCooldown) {
+                        this.swapEdgeCooldown = true;
+                        this.executeHotCorner('swap_panes');
                     }
-                } else { killDot(); }
-
-                const bounds = this.prefs.hotCornerBounds || { hideTime: 0 };
-                let targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
+                    return;
+                }
                 
-                let progress = 0;
-                if (targetTimeMs <= 0) { this.executeHotCorner('hide_unhide'); return; }
-
-                this.hoverTimer = setInterval(() => {
-                    progress += (50 / targetTimeMs) * 100;
-                    if (progress >= 100) {
-                        clearInterval(this.hoverTimer);
-                        this.hoverTimer = null;
-                        this.executeHotCorner('hide_unhide');
+                // 🟢 2. Process "Toggle AI Visibility" Edge Trigger
+                if (zone === hideAiEdge && hideAiEdge !== 'none') {
+                    killDot();
+                    this.swapEdgeCooldown = false; // Reset the other cooldown
+                    if (!this.hideAiEdgeCooldown) {
+                        this.hideAiEdgeCooldown = true;
+                        this.executeHotCorner('toggle_ai_vis');
                     }
-                }, 50);
+                    return;
+                }
+
+                // If they are in a zone but it's NOT the swap or hide edge, reset their cooldowns
+                this.swapEdgeCooldown = false;
+                this.hideAiEdgeCooldown = false;
+
+                // 🟢 3. Process "Stealth" Edge Trigger
+                if (zone === stealthEdge && stealthEdge !== 'none') {
+                    if (this._isGhostHidden) {
+                        if (!this._isHoveringStealthDot) {
+                            ipcRenderer.send('set-ghost-dot', true);
+                            this._isHoveringStealthDot = true;
+                        }
+                    } else { killDot(); }
+
+                    const bounds = this.prefs.hotCornerBounds || { hideTime: 0 };
+                    let targetTimeMs = this._isGhostHidden ? ((bounds.hideTime || 0) * 1000) : 0;
+                    
+                    let progress = 0;
+                    if (targetTimeMs <= 0) { this.executeHotCorner('hide_unhide'); return; }
+
+                    this.hoverTimer = setInterval(() => {
+                        progress += (50 / targetTimeMs) * 100;
+                        if (progress >= 100) {
+                            clearInterval(this.hoverTimer);
+                            this.hoverTimer = null;
+                            this.executeHotCorner('hide_unhide');
+                        }
+                    }, 50);
+                } else {
+                    killDot();
+                }
             };
+
             ipcRenderer.on('hot-corner-hover', this.hoverHandler);
 
             // 🟢 FIX: Voice is now a continuous scrollable transcript on a single page!
@@ -341,7 +383,8 @@ export class LiveInterview extends LitElement {
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🌟 Sync Optimized', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort',
-            'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image'
+            'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
+            'swap_panes': '🔀 Swap Panes'
         };
         return labels[action] || action || '—';
     }
@@ -518,6 +561,12 @@ export class LiveInterview extends LitElement {
                 ipcRenderer.send('set-ignore-mouse-events', false);
                 window.dispatchEvent(new CustomEvent('return-to-main'));
                 break;
+            case 'swap_panes': // 🟢 NEW: Instantly flips UI and Hardware Windows
+                this.isSwapped = !this.isSwapped;
+                this.showToast('🔀 Swapped Brain Panes');
+                if (window.require) window.require('electron').ipcRenderer.invoke('swap-ai-windows', this.isSwapped).catch(()=>{});
+                this.requestUpdate();
+                break;
         }
     }
 
@@ -548,7 +597,7 @@ export class LiveInterview extends LitElement {
         let rightContent = this.voiceChatHistory.length > 0 ? this.voiceChatHistory[this.voiceChatIndex] : "🟢 **Voice Engine Online**\nListening to microphone feed...";
 
         return html`
-            <div class="split-container">
+            <div class="split-container" style="flex-direction: ${this.isSwapped ? 'row-reverse' : 'row'};">
                 <div class="pane ${this.paneHoverState === 'code' ? 'hovered-code' : ''}" @mouseenter=${() => this.paneHoverState = 'code'}>
                     <div class="pane-header">
                         <span class="header-title code-title">💻 Code Brain</span>

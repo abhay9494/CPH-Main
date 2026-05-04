@@ -205,6 +205,9 @@ const { spawn } = require('child_process');
 
 let mainWindow = null;
 let voiceWebWindow = null;
+let voiceWebWindowPrimary = null;  // 🟢 NEW: Primary Voice
+let voiceWebWindowSecondary = null; // 🟢 NEW: Backup Voice (Racer)
+let currentVoiceWinner = 'primary'; // 🟢 NEW: Tracks the fastest AI
 let codeWebWindow = null;
 let companionChatWindow = null;
 let activeLoadout = { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
@@ -348,39 +351,22 @@ global.createRadialWindow = () => {
 function launchDualBrains() {
     const prefs = storage.getPreferences();
     const loadouts = prefs.dualBrainLoadouts || [];
-    // 🟢 BUG FIX: Look for exact ID, fallback to the first saved loadout, then fallback to ChatGPT default
     activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || 
                     loadouts[0] ||
                     { voiceEngine: 0, voiceProfileId: '1', codeEngine: 1, codeProfileId: '2' };
 
-    const voiceProvider = AI_CONFIGS[activeLoadout.voiceEngine];
-    const codeProvider = AI_CONFIGS[activeLoadout.codeEngine];
+    const voiceProviderPrimary = AI_CONFIGS[activeLoadout.voiceEngine || 0];
+    const voiceProviderSecondary = activeLoadout.voiceEngine2 !== undefined ? AI_CONFIGS[activeLoadout.voiceEngine2] : null;
+    const codeProvider = AI_CONFIGS[activeLoadout.codeEngine || 1];
 
-    if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.destroy();
-    voiceWebWindow = new BrowserWindow({
-        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
-        title: `🗣️ Voice Brain: ${voiceProvider.name}`,
-        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfileId}` }
-    });
-    voiceWebWindow.setContentProtection(true);
-    voiceWebWindow.webContents.setAudioMuted(true);
-
-    if (process.platform === 'win32') voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
-    voiceWebWindow.loadURL(voiceProvider.url);
-    
-    voiceWebWindow.webContents.on('dom-ready', async () => {
-        voiceWebWindow.webContents.insertCSS('* { cursor: default !important; }');
+    // 🟢 UNIVERSAL MIC INJECTOR HELPER
+    const injectVoiceScripts = async (win, targetAudioMode) => {
+        win.webContents.insertCSS('* { cursor: default !important; }');
         try {
-            // 🟢 1. Read user preferences for the Virtual Mixer
-            const currentPrefs = storage.getPreferences();
-            const targetAudioMode = currentPrefs.audioMode || 'speaker_only';
-
-            // 🟢 2. Securely fetch Screen ID BEFORE injecting WebRTC script to eliminate race conditions
             const sources = await desktopCapturer.getSources({ types: ['screen'] });
             if (!sources || sources.length === 0) return;
             const screenSourceId = sources[0].id;
 
-            // 🟢 3. The Ultimate Virtual Audio Mixer (Double-Fallback Architecture)
             const hijackScript = `
                 if (!window.__micHijacked) {
                     window.__micHijacked = true;
@@ -393,41 +379,33 @@ function launchDualBrains() {
                         if (constraints && constraints.audio) {
                             try {
                                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
-                                // WAKE UP the audio context in case Chromium suspended it due to lack of human clicking
                                 if (ctx.state === 'suspended') await ctx.resume();
                                 const dest = ctx.createMediaStreamDestination();
                                 
-                                // Route 1: Desktop / System Audio (Speaker)
                                 if (mode === 'speaker_only' || mode === 'both') {
                                     try {
                                         let sysStream;
                                         try {
-                                            // Primary: High-privilege Electron Desktop Capture
                                             sysStream = await originalGetUserMedia({ 
                                                 audio: { mandatory: { chromeMediaSource: 'desktop' } }, 
                                                 video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } 
                                             });
                                         } catch (err1) {
-                                            console.warn('[VirtualMixer] Legacy capture failed, falling back to getDisplayMedia...', err1);
-                                            // Fallback: Modern DisplayMedia API natively intercepted by backend loopback handler!
                                             if (originalGetDisplayMedia) {
                                                 sysStream = await originalGetDisplayMedia({ audio: true, video: true });
                                             }
                                         }
-
                                         if (sysStream) {
                                             const sysAudioTrack = sysStream.getAudioTracks()[0];
                                             if (sysAudioTrack) {
                                                 const sysSource = ctx.createMediaStreamSource(new MediaStream([sysAudioTrack]));
                                                 sysSource.connect(dest);
                                             }
-                                            // Instantly stop video track to save CPU/Bandwidth
                                             sysStream.getVideoTracks().forEach(t => t.stop());
                                         }
-                                    } catch(e) { console.error('[VirtualMixer] Desktop audio capture completely failed:', e); }
+                                    } catch(e) { }
                                 }
 
-                                // Route 2: Physical Hardware Microphone
                                 if (mode === 'mic_only' || mode === 'both') {
                                     try {
                                         const micStream = await originalGetUserMedia({ audio: true });
@@ -436,10 +414,9 @@ function launchDualBrains() {
                                             const micSource = ctx.createMediaStreamSource(new MediaStream([micTrack]));
                                             micSource.connect(dest);
                                         }
-                                    } catch(e) { console.error('[VirtualMixer] Hardware Mic failed:', e); }
+                                    } catch(e) { }
                                 }
                                 
-                                // Route 3: Anti-Silence Keepalive (20kHz sine wave)
                                 const osc = ctx.createOscillator();
                                 osc.frequency.value = 20000; 
                                 const gain = ctx.createGain();
@@ -448,8 +425,6 @@ function launchDualBrains() {
                                 gain.connect(dest);
                                 osc.start();
                                 
-                                // 🟢 Route 4: Anti-Idle VAD Pinger (Survives 1.5 hour tests!)
-                                // Pulses a tiny 100Hz hum every 15 seconds to prevent the AI server from hanging up.
                                 setInterval(() => {
                                     try {
                                         if(ctx.state === 'suspended') ctx.resume();
@@ -466,10 +441,7 @@ function launchDualBrains() {
                                 }, 15000);
                                 
                                 return dest.stream;
-                            } catch (err) {
-                                console.error('[VirtualMixer] Core mixer failure, returning raw mic:', err);
-                                return originalGetUserMedia(constraints);
-                            }
+                            } catch (err) { return originalGetUserMedia(constraints); }
                         }
                         return originalGetUserMedia(constraints);
                     };
@@ -477,9 +449,8 @@ function launchDualBrains() {
                 true;
             `;
             
-            await voiceWebWindow.webContents.executeJavaScript(hijackScript);
+            await win.webContents.executeJavaScript(hijackScript);
 
-            // 🟢 4. ChatGPT Popup Assassin
             const assassinScript = `
                 setInterval(() => {
                     try {
@@ -492,20 +463,53 @@ function launchDualBrains() {
                     } catch(e) {}
                 }, 3000);
             `;
-            voiceWebWindow.webContents.executeJavaScript(assassinScript).catch(()=>{});
+            win.webContents.executeJavaScript(assassinScript).catch(()=>{});
             
-        } catch (err) { console.error('Failed to init Voice WebRTC:', err); }
-    });
+        } catch (err) { }
+    };
 
+    const targetAudioMode = prefs.audioMode || 'speaker_only';
+
+    // 🟢 1. LAUNCH PRIMARY VOICE BRAIN
+    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.destroy();
+    voiceWebWindowPrimary = new BrowserWindow({
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        title: `🗣️ Voice Brain: ${voiceProviderPrimary.name}`,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfileId || '1'}` }
+    });
+    voiceWebWindowPrimary.setContentProtection(true);
+    voiceWebWindowPrimary.webContents.setAudioMuted(true);
+    if (process.platform === 'win32') voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+    voiceWebWindowPrimary.loadURL(voiceProviderPrimary.url);
+    voiceWebWindowPrimary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowPrimary, targetAudioMode));
+
+    // 🟢 ALIAS FIX: Point legacy voiceWebWindow to Primary so old IPCs don't crash
+    voiceWebWindow = voiceWebWindowPrimary; 
+
+    // 🟢 2. LAUNCH SECONDARY BACKUP VOICE BRAIN (THE RACER)
+    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.destroy();
+    if (voiceProviderSecondary) {
+        voiceWebWindowSecondary = new BrowserWindow({
+            width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+            title: `🏎️ Backup Voice Brain: ${voiceProviderSecondary.name}`,
+            webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.voiceProfile2Id || '3'}` }
+        });
+        voiceWebWindowSecondary.setContentProtection(true);
+        voiceWebWindowSecondary.webContents.setAudioMuted(true);
+        if (process.platform === 'win32') voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+        voiceWebWindowSecondary.loadURL(voiceProviderSecondary.url);
+        voiceWebWindowSecondary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowSecondary, targetAudioMode));
+    }
+
+    // 🟢 3. LAUNCH CODE BRAIN
     if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.destroy();
     codeWebWindow = new BrowserWindow({
         width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
         title: `💻 Code Brain: ${codeProvider.name}`,
-        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.codeProfileId}` }
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.codeProfileId || '2'}` }
     });
     codeWebWindow.setContentProtection(true);
     codeWebWindow.webContents.setAudioMuted(true);
-
     if (process.platform === 'win32') codeWebWindow.setAlwaysOnTop(true, 'floating', 1);
     codeWebWindow.loadURL(codeProvider.url);
     codeWebWindow.webContents.on('dom-ready', async () => {
@@ -514,6 +518,7 @@ function launchDualBrains() {
     });
 
     const preventDeath = (win) => {
+        if (!win) return;
         win.on('close', (event) => { if (!isAppQuitting) { event.preventDefault(); win.hide(); } });
         win.on('focus', () => {
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
@@ -523,10 +528,11 @@ function launchDualBrains() {
             }
         });
     };
-    preventDeath(voiceWebWindow);
+    preventDeath(voiceWebWindowPrimary);
+    preventDeath(voiceWebWindowSecondary);
     preventDeath(codeWebWindow);
 
-    startDualScrapers(voiceProvider, codeProvider);
+    startDualScrapers(voiceProviderPrimary, codeProvider);
 }
 
 function startDualScrapers(voiceProvider, codeProvider) {
@@ -536,43 +542,79 @@ function startDualScrapers(voiceProvider, codeProvider) {
     let codeStableTicks = 0; 
     global.bruteForceSyncPending = false; 
 
+    // 🟢 NEW: The script we inject into BOTH Voice Brains to extract text
+    const voiceExtractScript = `
+        (() => {
+            try {
+                const msgs = Array.from(document.querySelectorAll('[data-testid="user-message"], [data-message-author-role], .message, .user-message, model-response, user-query, .prose, div.group\\\\/conversation-turn'));
+                const uniqueMsgs = [];
+                msgs.forEach(el => { if (!msgs.some(p => p !== el && p.contains(el))) uniqueMsgs.push(el); });
+
+                let filtered = [];
+                uniqueMsgs.forEach(el => {
+                    let txt = (el.innerText || '').trim();
+                    if(!txt) return;
+                    if (txt.includes('SYSTEM DIRECTIVE') || txt.includes('Brute force synced') || 
+                        txt.includes('Optimized code synced') || txt.includes('Act as a senior') || 
+                        txt.includes('Give me just one moment')) return;
+
+                    let isUser = false;
+                    if (window.location.hostname.includes('grok')) {
+                        isUser = !el.classList.contains('prose') && !el.querySelector('.prose');
+                    } else {
+                        isUser = el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message') || el.tagName.toLowerCase() === 'user-query' || el.className.toLowerCase().includes('user');
+                    }
+                    filtered.push((isUser ? "🎙️ **Transcript:**\\n" : "🤖 **AI:**\\n") + txt);
+                });
+
+                if(filtered.length === 0) return null;
+                return { count: filtered.length, text: filtered.slice(-6).join('\\n\\n---\\n\\n') };
+            } catch(e) { return null; }
+        })();
+    `;
+
     scrapingInterval = setInterval(async () => {
-        const vData = await voiceWebWindow.webContents.executeJavaScript(`
-            (() => {
-                try {
-                    const msgs = Array.from(document.querySelectorAll('[data-testid="user-message"], [data-message-author-role], .message, .user-message, model-response, user-query, .prose, div.group\\\\/conversation-turn'));
-                    const uniqueMsgs = [];
-                    msgs.forEach(el => { if (!msgs.some(p => p !== el && p.contains(el))) uniqueMsgs.push(el); });
+        // ====================================================================
+        // 🏎️ THE RACE CONDITION: Scrape both Voice Brains simultaneously
+        // ====================================================================
+        const getVData = async (win) => {
+            if (!win || win.isDestroyed()) return null;
+            return await win.webContents.executeJavaScript(voiceExtractScript).catch(() => null);
+        };
 
-                    let filtered = [];
-                    uniqueMsgs.forEach(el => {
-                        let txt = (el.innerText || '').trim();
-                        if(!txt) return;
-                        if (txt.includes('SYSTEM DIRECTIVE') || txt.includes('Brute force synced') || 
-                            txt.includes('Optimized code synced') || txt.includes('Act as a senior') || 
-                            txt.includes('Give me just one moment')) return;
+        const [vData1, vData2] = await Promise.all([
+            getVData(voiceWebWindowPrimary),
+            getVData(voiceWebWindowSecondary)
+        ]);
 
-                        let isUser = false;
-                        if (window.location.hostname.includes('grok')) {
-                            isUser = !el.classList.contains('prose') && !el.querySelector('.prose');
-                        } else {
-                            isUser = el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message') || el.tagName.toLowerCase() === 'user-query' || el.className.toLowerCase().includes('user');
-                        }
-                        filtered.push((isUser ? "🎙️ **Transcript:**\\n" : "🤖 **AI:**\\n") + txt);
-                    });
+        let winnerData = null;
 
-                    if(filtered.length === 0) return null;
-                    return { count: filtered.length, text: filtered.slice(-6).join('\\n\\n---\\n\\n') };
-                } catch(e) { return null; }
-            })();
-        `).catch(() => null);
-
-        if (vData) {
-            if (vData.count > lastVoiceMsg.count) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-new-message', vData.text); });
-            else if (vData.count === lastVoiceMsg.count && vData.text !== lastVoiceMsg.text) BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-update-message', vData.text); });
-            lastVoiceMsg = vData;
+        // Determine the fastest brain to generate a NEW response block
+        if (vData1 && vData1.count > lastVoiceMsg.count) {
+            currentVoiceWinner = 'primary';
+            winnerData = vData1;
+        } else if (vData2 && vData2.count > lastVoiceMsg.count) {
+            currentVoiceWinner = 'secondary';
+            winnerData = vData2;
+        } else if (currentVoiceWinner === 'primary' && vData1) {
+            winnerData = vData1; // Keep scraping the winner while it types
+        } else if (currentVoiceWinner === 'secondary' && vData2) {
+            winnerData = vData2; // Keep scraping the winner while it types
         }
 
+        // Pipe the winner's text to your overlay UI
+        if (winnerData) {
+            if (winnerData.count > lastVoiceMsg.count) {
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-new-message', winnerData.text); });
+            } else if (winnerData.count === lastVoiceMsg.count && winnerData.text !== lastVoiceMsg.text) {
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-update-message', winnerData.text); });
+            }
+            lastVoiceMsg = winnerData;
+        }
+
+        // ====================================================================
+        // 💻 CODE BRAIN LOGIC
+        // ====================================================================
         const cData = await codeWebWindow.webContents.executeJavaScript(`
             (() => {
                 try {
@@ -596,10 +638,18 @@ function startDualScrapers(voiceProvider, codeProvider) {
                         if (extractedText.includes('[FOLLOWUP_DATA]:')) {
                             extractedText = extractedText.split('[FOLLOWUP_DATA]:')[1].trim();
                         }
-                        let voicePrompt = `SYSTEM DIRECTIVE: The interviewer just shared this on the screen:\n\n${extractedText}\n\nBased on the verbal instructions the interviewer just gave you, provide a short 1st-person script for me to dry-run this, fix the error, or acknowledge the constraint. Keep it extremely concise.`;
-                        const voiceProviderName = AI_CONFIGS[activeLoadout.voiceEngine].name;
-                        if (voiceProviderName === 'Gemini') voicePrompt = '@Fast ' + voicePrompt;
-                        sendPayloadToWindow(voiceWebWindow, voicePrompt, [], voiceProviderName).catch(()=>{});
+                        
+                        let baseVoicePrompt = `SYSTEM DIRECTIVE: The interviewer just shared this on the screen:\n\n${extractedText}\n\nBased on the verbal instructions the interviewer just gave you, provide a short 1st-person script for me to dry-run this, fix the error, or acknowledge the constraint. Keep it extremely concise.`;
+                        let vPrompt1 = baseVoicePrompt;
+                        let vPrompt2 = baseVoicePrompt;
+                        
+                        if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') vPrompt1 = '@Fast ' + vPrompt1;
+                        if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') vPrompt2 = '@Fast ' + vPrompt2;
+                        
+                        // 🟢 Send Followup to BOTH Voice Brains
+                        sendPayloadToWindow(voiceWebWindowPrimary, vPrompt1, [], AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
+                        if (voiceWebWindowSecondary) sendPayloadToWindow(voiceWebWindowSecondary, vPrompt2, [], AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+                        
                         BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('show-radial-toast', '✅ FOLLOW-UP SYNCED'); });
                     }
                 } else {
@@ -617,23 +667,19 @@ function startDualScrapers(voiceProvider, codeProvider) {
                 }
                 else if (cData.count === lastCodeMsg.count && cData.text === lastCodeMsg.text && cData.text.length > 50) {
                     codeStableTicks++;
-                    // 🟢 CHANGED: Auto-sync disabled per user request. User will sync manually.
+                    // 🟢 Auto-sync disabled per user request. User will sync manually.
                     if (codeStableTicks === 3 && global.currentSessionMode === 'proctored_live_interview' && global.bruteForceSyncPending) {
                         global.bruteForceSyncPending = false; 
-                        
-                        /* 🔴 AUTO-SYNC COMMENTED OUT:
-                        let syncPrompt = PROMPTS.VOICE_SYNC_OPTIMIZED + cData.text;
-                        const voiceProviderName = AI_CONFIGS[activeLoadout.voiceEngine].name;
-                        if (voiceProviderName === 'Gemini') syncPrompt = '@Fast ' + syncPrompt;
-                        sendPayloadToWindow(voiceWebWindow, syncPrompt, [], voiceProviderName).catch(()=>{});
-                        */
                     }
                 }
                 lastCodeMsg = cData;
             }
         }
 
-        if (voiceWebWindow && !voiceWebWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
+        // ====================================================================
+        // 🎙️ MIC STATE MONITORING (Reads from Primary Only to save CPU)
+        // ====================================================================
+        if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
             const spyScript = `
                 (function() {
                     try {
@@ -659,11 +705,11 @@ function startDualScrapers(voiceProvider, codeProvider) {
                     } catch(e) { return false; }
                 })();
             `;
-            voiceWebWindow.webContents.executeJavaScript(spyScript).then((isMicActive) => {
+            voiceWebWindowPrimary.webContents.executeJavaScript(spyScript).then((isMicActive) => {
                 if (isMicActive !== lastMicState) {
                     lastMicState = isMicActive;
                     BrowserWindow.getAllWindows().forEach(w => {
-                        if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) { w.webContents.send('sync-mic-state', !!isMicActive); }
+                        if (!w.isDestroyed() && w !== voiceWebWindowPrimary && w !== codeWebWindow) { w.webContents.send('sync-mic-state', !!isMicActive); }
                     });
                 }
             }).catch(() => { });
@@ -978,8 +1024,11 @@ function setupGeneralIpcHandlers() {
                 mainWindow.setIgnoreMouseEvents(false);
                 mainWindow.webContents.send('ghost-state-changed', false);
             }
-            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
-                voiceWebWindow.hide(); voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                voiceWebWindowPrimary.hide(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
+            }
+            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                voiceWebWindowSecondary.hide(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
             }
             if (codeWebWindow && !codeWebWindow.isDestroyed()) {
                 codeWebWindow.hide(); codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
@@ -1234,7 +1283,6 @@ function setupGeneralIpcHandlers() {
 
     const getModePrefix = () => global.isThinkModeActive ? '@Pro ' : '@Fast ';
 
-    // 🟢 FIXED: The Ultimate Payload Router (Closure-Secured Images)
     ipcMain.handle('send-oa-automation', async (event, language) => {
         try {
             if (accumulatedScreenshots.length === 0) return false;
@@ -1245,35 +1293,44 @@ function setupGeneralIpcHandlers() {
             global.isExtractingFollowup = false;
 
             if (global.currentSessionMode === 'proctored_live_interview') {
-                // 🟢 CHANGED: We now start the UI in Think/Pro mode and instantly trigger the Optimized Code
                 global.isThinkModeActive = true; 
                 global.bruteForceSyncPending = true; 
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('sync-ai-mode', true); });
 
                 let codePrompt2 = PROMPTS.INTERVIEW_OPTIMIZED;
-                let voicePromptInit = PROMPTS.VOICE_INITIAL_CONTEXT;
+                let voicePromptInit1 = PROMPTS.VOICE_INITIAL_CONTEXT;
+                let voicePromptInit2 = PROMPTS.VOICE_INITIAL_CONTEXT;
                 
                 if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt2 = '@Pro ' + codePrompt2;
-                if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePromptInit = '@Fast ' + voicePromptInit;
+                if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') voicePromptInit1 = '@Fast ' + voicePromptInit1;
+                if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') voicePromptInit2 = '@Fast ' + voicePromptInit2;
 
-                // 1. Immediately send Optimized prompt to Code Brain
                 await sendPayloadToWindow(codeWebWindow, codePrompt2, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
 
-                // 2. Instantly send Context/Resume to Voice Brain
                 setTimeout(async () => {
                     if (global.currentSessionMode !== 'proctored_live_interview') return; 
-                    await sendPayloadToWindow(voiceWebWindow, voicePromptInit, [], AI_CONFIGS[activeLoadout.voiceEngine].name);
+                    sendPayloadToWindow(voiceWebWindowPrimary, voicePromptInit1, [], AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
+                    if (voiceWebWindowSecondary) {
+                        sendPayloadToWindow(voiceWebWindowSecondary, voicePromptInit2, [], AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+                    }
                 }, 1000);
 
             } else {
-                // STANDARD OA LOGIC
                 let codePrompt = PROMPTS.OA_AUTOMATION(language); 
-                let voicePrompt = PROMPTS.VOICE_CONTEXT;
+                let voicePrompt1 = PROMPTS.VOICE_CONTEXT;
+                let voicePrompt2 = PROMPTS.VOICE_CONTEXT;
+                
                 if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
-                if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+                if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') voicePrompt1 = getModePrefix() + voicePrompt1;
+                if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') voicePrompt2 = getModePrefix() + voicePrompt2;
 
                 await sendPayloadToWindow(codeWebWindow, codePrompt, imagesForThisQuestion, AI_CONFIGS[activeLoadout.codeEngine].name);
-                setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, imagesForThisQuestion, AI_CONFIGS[activeLoadout.voiceEngine].name); }, 1500);
+                setTimeout(async () => { 
+                    sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt1, imagesForThisQuestion, AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
+                    if (voiceWebWindowSecondary) {
+                        sendPayloadToWindow(voiceWebWindowSecondary, voicePrompt2, imagesForThisQuestion, AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+                    }
+                }, 1500);
             }
             return true;
         } catch(e) { return false; }
@@ -1306,22 +1363,52 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    // 🟢 BUG 4 FIX: Strip images from Grok's payload completely! It only gets text now.
     ipcMain.handle('sync-optimized-to-voice', async (event, optimizedCodeText) => {
         try {
-            let finalPrompt = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
-            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') finalPrompt = '@Fast ' + finalPrompt; 
+            let prompt1 = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
+            let prompt2 = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
             
-            // 🟢 Passed an EMPTY array [] so the Voice Brain receives pure text!
-            await sendPayloadToWindow(voiceWebWindow, finalPrompt, [], AI_CONFIGS[activeLoadout.voiceEngine].name);
+            if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') prompt1 = '@Fast ' + prompt1; 
+            if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') prompt2 = '@Fast ' + prompt2; 
+            
+            sendPayloadToWindow(voiceWebWindowPrimary, prompt1, [], AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
+            if (voiceWebWindowSecondary) {
+                sendPayloadToWindow(voiceWebWindowSecondary, prompt2, [], AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+            }
             return true;
         } catch(e) { return false; }
     });
 
+    ipcMain.handle('swap-ai-windows', async (event, isSwapped) => {
+        if (!codeWebWindow || !voiceWebWindowPrimary) return false;
+        
+        if (global.currentSessionMode !== 'proctored_oa' && codeWebWindow.isVisible() && voiceWebWindowPrimary.isVisible()) {
+            const primaryDisplay = screen.getPrimaryDisplay();
+            const { width, height } = primaryDisplay.workAreaSize;
+            
+            const halfWidth = Math.floor(width / 2);
+            const halfHeight = Math.floor(height / 2);
+            
+            if (isSwapped) {
+                // Swapped: Voice1 (Top Left) | Voice2 (Bottom Left) | Code (Right 50%)
+                if (voiceWebWindowPrimary) voiceWebWindowPrimary.setBounds({ x: 0, y: 0, width: halfWidth, height: halfHeight });
+                if (voiceWebWindowSecondary) voiceWebWindowSecondary.setBounds({ x: 0, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                codeWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
+            } else {
+                // Normal: Code (Left 50%) | Voice1 (Top Right) | Voice2 (Bottom Right)
+                codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
+                if (voiceWebWindowPrimary) voiceWebWindowPrimary.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: halfHeight });
+                if (voiceWebWindowSecondary) voiceWebWindowSecondary.setBounds({ x: halfWidth, y: halfHeight, width: halfWidth, height: height - halfHeight });
+            }
+        }
+        return true;
+    });
+
     ipcMain.handle('new-chat', async () => {
         try {
-            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.loadURL(AI_CONFIGS[activeLoadout.voiceEngine].url);
-            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.loadURL(AI_CONFIGS[activeLoadout.codeEngine].url);
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.loadURL(AI_CONFIGS[activeLoadout.voiceEngine || 0].url);
+            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.loadURL(AI_CONFIGS[activeLoadout.voiceEngine2 || 0].url);
+            if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.loadURL(AI_CONFIGS[activeLoadout.codeEngine || 1].url);
             return true;
         } catch(e) { return false; }
     });
@@ -1427,7 +1514,8 @@ function setupGeneralIpcHandlers() {
 
             // Execute on Gemini windows
             if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') await injectModeNative(codeWebWindow);
-            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') await injectModeNative(voiceWebWindow);
+            if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') await injectModeNative(voiceWebWindowPrimary);
+            if (voiceWebWindowSecondary && AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') await injectModeNative(voiceWebWindowSecondary);
 
             return true;
         } catch(e) { return false; }
@@ -1473,7 +1561,8 @@ function setupGeneralIpcHandlers() {
         try {
             const script = `(() => { try { const btn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent||'').toLowerCase().includes('regenerate') || (b.getAttribute('aria-label')||'').toLowerCase().includes('regenerate')); if(btn) { btn.click(); return true; } return false; } catch(e) { return false; } })();`;
             if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.webContents.executeJavaScript(script).catch(()=>{});
-            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.webContents.executeJavaScript(script).catch(()=>{});
+            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.webContents.executeJavaScript(script).catch(()=>{});
             return true;
         } catch(e) { return false; }
     });
@@ -1517,9 +1606,12 @@ function setupGeneralIpcHandlers() {
                         codeWebWindow.setBounds({ x, y, width: safeWidth, height: safeHeight });
                         codeWebWindow.showInactive();
                     }
-                    if (voiceWebWindow && !voiceWebWindow.isDestroyed()) { voiceWebWindow.hide(); }
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) { voiceWebWindowPrimary.hide(); }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) { voiceWebWindowSecondary.hide(); }
                 } else {
+                    // 🟢 Stacked Split: Code (Left), Voice 1 (Top Right), Voice 2 (Bottom Right)
                     const halfWidth = Math.floor(width / 2);
+                    const halfHeight = Math.floor(height / 2);
 
                     if (!codeWebWindow.isDestroyed()) {
                         codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false);
@@ -1527,11 +1619,17 @@ function setupGeneralIpcHandlers() {
                         codeWebWindow.setBounds({ x: 0, y: 0, width: halfWidth, height: height });
                         codeWebWindow.showInactive();
                     }
-                    if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
-                        voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false);
-                        voiceWebWindow.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindow.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: height });
-                        voiceWebWindow.showInactive();
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                        voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
+                        voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+                        voiceWebWindowPrimary.setBounds({ x: halfWidth, y: 0, width: halfWidth, height: halfHeight });
+                        voiceWebWindowPrimary.showInactive();
+                    }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                        voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
+                        voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+                        voiceWebWindowSecondary.setBounds({ x: halfWidth, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                        voiceWebWindowSecondary.showInactive();
                     }
                 }
 
@@ -1543,7 +1641,8 @@ function setupGeneralIpcHandlers() {
                 return true;
             } else {
                 if (codeWebWindow && !codeWebWindow.isDestroyed()) codeWebWindow.hide();
-                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) voiceWebWindow.hide();
+                if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.hide();
+                if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.hide();
                 return false;
             }
         } catch(e) { return false; }
@@ -1552,13 +1651,16 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('hide-all-overlays', () => {
         try {
             BrowserWindow.getAllWindows().forEach(w => {
-                if (!w.isDestroyed() && w !== voiceWebWindow && w !== codeWebWindow) {
+                if (!w.isDestroyed() && w !== voiceWebWindowPrimary && w !== voiceWebWindowSecondary && w !== codeWebWindow) {
                     w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true });
                 }
             });
 
-            if (voiceWebWindow && !voiceWebWindow.isDestroyed() && voiceWebWindow.isVisible()) {
-                voiceWebWindow.setOpacity(0); voiceWebWindow.setIgnoreMouseEvents(true, { forward: true });
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed() && voiceWebWindowPrimary.isVisible()) {
+                voiceWebWindowPrimary.setOpacity(0); voiceWebWindowPrimary.setIgnoreMouseEvents(true, { forward: true });
+            }
+            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed() && voiceWebWindowSecondary.isVisible()) {
+                voiceWebWindowSecondary.setOpacity(0); voiceWebWindowSecondary.setIgnoreMouseEvents(true, { forward: true });
             }
             if (codeWebWindow && !codeWebWindow.isDestroyed() && codeWebWindow.isVisible()) {
                 codeWebWindow.setOpacity(0); codeWebWindow.setIgnoreMouseEvents(true, { forward: true });
@@ -1573,12 +1675,13 @@ function setupGeneralIpcHandlers() {
 
             if (global.isGhostHidden) {
                 mainWindow.webContents.send('app-made-hidden');
-                wasAiVisibleBeforeGhost = (voiceWebWindow && voiceWebWindow.isVisible() && voiceWebWindow.getOpacity() !== 0) || 
+                wasAiVisibleBeforeGhost = (voiceWebWindowPrimary && voiceWebWindowPrimary.isVisible() && voiceWebWindowPrimary.getOpacity() !== 0) || 
                                           (codeWebWindow && codeWebWindow.isVisible() && codeWebWindow.getOpacity() !== 0);
 
                 mainWindow.setOpacity(0); mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 
-                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) { voiceWebWindow.setOpacity(0); voiceWebWindow.setIgnoreMouseEvents(true, { forward: true }); }
+                if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) { voiceWebWindowPrimary.setOpacity(0); voiceWebWindowPrimary.setIgnoreMouseEvents(true, { forward: true }); }
+                if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) { voiceWebWindowSecondary.setOpacity(0); voiceWebWindowSecondary.setIgnoreMouseEvents(true, { forward: true }); }
                 if (codeWebWindow && !codeWebWindow.isDestroyed()) { codeWebWindow.setOpacity(0); codeWebWindow.setIgnoreMouseEvents(true, { forward: true }); }
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) { global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true }); }
             } else {
@@ -1586,7 +1689,8 @@ function setupGeneralIpcHandlers() {
                 mainWindow.setOpacity(1); mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
                 
                 if (wasAiVisibleBeforeGhost) {
-                    if (voiceWebWindow && !voiceWebWindow.isDestroyed()) { voiceWebWindow.setOpacity(1); voiceWebWindow.setIgnoreMouseEvents(false); }
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) { voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false); }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) { voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false); }
                     if (codeWebWindow && !codeWebWindow.isDestroyed()) { codeWebWindow.setOpacity(1); codeWebWindow.setIgnoreMouseEvents(false); }
                 }
                 

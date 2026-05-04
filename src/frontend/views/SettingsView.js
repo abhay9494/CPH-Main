@@ -687,6 +687,22 @@ export class SettingsView extends LitElement {
                                     </div>
                                 </div>
                                 <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
+                                    <!-- 🟢 NEW: The Racing Backup Voice Brain -->
+                                    <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
+                                        <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #f59e0b;">🏎️ Voice Backup (Race)</div>
+                                        <div style="display: flex; flex-direction: column; gap: 8px;">
+                                            ${this.renderCustomDropdown('voiceEngine2', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine2 || 0, (val) => {
+                                                let l = [...(this.prefs.dualBrainLoadouts || [])];
+                                                if(!l[0]) l[0] = {}; l[0].voiceEngine2 = parseInt(val); this.savePref('dualBrainLoadouts', l);
+                                                if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                            })}
+                                            ${this.renderCustomDropdown('voiceProfile2', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfile2Id || '', (val) => {
+                                                let l = [...(this.prefs.dualBrainLoadouts || [])];
+                                                if(!l[0]) l[0] = {}; l[0].voiceProfile2Id = val; this.savePref('dualBrainLoadouts', l);
+                                                if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                            })}
+                                        </div>
+                                    </div>
                                     <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain</div>
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
                                         ${this.renderCustomDropdown('codeEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine || 1, (val) => {
@@ -873,7 +889,8 @@ export class SettingsView extends LitElement {
                     {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
                     {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
+                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'}
                 ];
                 
                 this.editingPage = this.editingPage || 1; // Default to Page 1
@@ -996,7 +1013,8 @@ export class SettingsView extends LitElement {
                     {value: 'scroll_up', label: '⬆️ Scroll Up'},
                     {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
+                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'}
                 ];
                 
                 const tb = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
@@ -1102,7 +1120,8 @@ export class SettingsView extends LitElement {
                     {value: 'bg_dec', label: '⬜ Opacity -'},
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
                     {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
+                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'}
                 ];
                 this.editingPage = this.editingPage || 1;
                 const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';
@@ -1118,28 +1137,57 @@ export class SettingsView extends LitElement {
                 return html`
                     <div class="scrollable-tab">
                         
-                        <div style="background: rgba(241, 76, 76, 0.1); border: 1px solid #f14c4c; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
-                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #f14c4c;">🚨 Emergency Edge Stealth</h3>
-                            <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Pick a screen edge to instantly hide the app during an interview without using your keyboard. Unhide uses the delay slider below.</p>
-                            ${this.renderCustomDropdown('interviewStealthEdge', [
-                                {value: 'none', label: 'None (Disabled)'},
-                                {value: 'top_left', label: 'Top-Left Corner'},
-                                {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
-                                {value: 'top_center', label: 'Top-Center Edge'},
-                                {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
-                                {value: 'top_right', label: 'Top-Right Corner'},
-                                {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
-                                {value: 'right_mid_top', label: 'Right-Mid-Top Edge'},
-                                {value: 'middle_left', label: 'Middle-Left Edge'},
-                                {value: 'middle_right', label: 'Middle-Right Edge'},
-                                {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
-                                {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'},
-                                {value: 'bottom_left', label: 'Bottom-Left Corner'},
-                                {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'},
-                                {value: 'bottom_center', label: 'Bottom-Center Edge'},
-                                {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'},
-                                {value: 'bottom_right', label: 'Bottom-Right Corner'}
-                            ], this.prefs.interviewStealthEdge || 'none', (val) => this.savePref('interviewStealthEdge', val))}
+                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
+                            <!-- 🚨 Emergency Stealth Dropdown -->
+                            <div style="background: rgba(241, 76, 76, 0.1); border: 1px solid #f14c4c; padding: 15px; border-radius: 8px;">
+                                <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #f14c4c;">🚨 Emergency Stealth</h3>
+                                <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Instantly hide the app without using your keyboard. Unhide uses the delay slider below.</p>
+                                ${this.renderCustomDropdown('interviewStealthEdge', [
+                                    {value: 'none', label: 'None (Disabled)'},
+                                    {value: 'top_left', label: 'Top-Left Corner'}, {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
+                                    {value: 'top_center', label: 'Top-Center Edge'}, {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
+                                    {value: 'top_right', label: 'Top-Right Corner'}, {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
+                                    {value: 'right_mid_top', label: 'Right-Mid-Top Edge'}, {value: 'middle_left', label: 'Middle-Left Edge'},
+                                    {value: 'middle_right', label: 'Middle-Right Edge'}, {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
+                                    {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'}, {value: 'bottom_left', label: 'Bottom-Left Corner'},
+                                    {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'}, {value: 'bottom_center', label: 'Bottom-Center Edge'},
+                                    {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'}, {value: 'bottom_right', label: 'Bottom-Right Corner'}
+                                ], this.prefs.interviewStealthEdge || 'none', (val) => this.savePref('interviewStealthEdge', val))}
+                            </div>
+
+                            <!-- 🔀 Edge Pane Swap Dropdown -->
+                            <div style="background: rgba(66, 133, 244, 0.1); border: 1px solid #4285f4; padding: 15px; border-radius: 8px;">
+                                <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #4285f4;">🔀 Edge Pane Swap</h3>
+                                <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Instantly flip the Code and Voice Brain windows left-to-right on your screen.</p>
+                                ${this.renderCustomDropdown('interviewSwapEdge', [
+                                    {value: 'none', label: 'None (Disabled)'},
+                                    {value: 'top_left', label: 'Top-Left Corner'}, {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
+                                    {value: 'top_center', label: 'Top-Center Edge'}, {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
+                                    {value: 'top_right', label: 'Top-Right Corner'}, {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
+                                    {value: 'right_mid_top', label: 'Right-Mid-Top Edge'}, {value: 'middle_left', label: 'Middle-Left Edge'},
+                                    {value: 'middle_right', label: 'Middle-Right Edge'}, {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
+                                    {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'}, {value: 'bottom_left', label: 'Bottom-Left Corner'},
+                                    {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'}, {value: 'bottom_center', label: 'Bottom-Center Edge'},
+                                    {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'}, {value: 'bottom_right', label: 'Bottom-Right Corner'}
+                                ], this.prefs.interviewSwapEdge || 'none', (val) => this.savePref('interviewSwapEdge', val))}
+                            </div>
+
+                            <!-- 👁️ Toggle AI Windows Dropdown -->
+                            <div style="background: rgba(0, 204, 102, 0.1); border: 1px solid #00cc66; padding: 15px; border-radius: 8px;">
+                                <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #00cc66;">👁️ Toggle AI Windows</h3>
+                                <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Instantly show or hide ONLY the background AI hardware windows.</p>
+                                ${this.renderCustomDropdown('interviewHideAiEdge', [
+                                    {value: 'none', label: 'None (Disabled)'},
+                                    {value: 'top_left', label: 'Top-Left Corner'}, {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
+                                    {value: 'top_center', label: 'Top-Center Edge'}, {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
+                                    {value: 'top_right', label: 'Top-Right Corner'}, {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
+                                    {value: 'right_mid_top', label: 'Right-Mid-Top Edge'}, {value: 'middle_left', label: 'Middle-Left Edge'},
+                                    {value: 'middle_right', label: 'Middle-Right Edge'}, {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
+                                    {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'}, {value: 'bottom_left', label: 'Bottom-Left Corner'},
+                                    {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'}, {value: 'bottom_center', label: 'Bottom-Center Edge'},
+                                    {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'}, {value: 'bottom_right', label: 'Bottom-Right Corner'}
+                                ], this.prefs.interviewHideAiEdge || 'none', (val) => this.savePref('interviewHideAiEdge', val))}
+                            </div>
                         </div>
 
                         <h2 style="margin-bottom: 5px;">Live Interview Radial Map</h2>
