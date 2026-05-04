@@ -9,6 +9,7 @@ export class LiveInterview extends LitElement {
         .pane { flex: 1; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s; display: flex; flex-direction: column; border: 1px solid var(--border-color); }
         .pane.hovered-code { border-color: #4285f4; }
         .pane.hovered-voice { border-color: #a142f4; }
+        .pane.hovered-comp { border-color: #00cc66; }
         .pane-header { position: sticky; top: -15px; background: var(--bg-tertiary); backdrop-filter: blur(5px); padding: 8px 10px; margin: -15px -10px 10px -10px; border-bottom: 1px solid var(--border-color); z-index: 10; display: flex; justify-content: space-between; align-items: center; border-radius: 4px 4px 0 0; }
         .header-title { font-size: 11px; font-weight: bold; text-transform: uppercase; }
         .code-title { color: #4285f4; }
@@ -31,8 +32,8 @@ export class LiveInterview extends LitElement {
     `;
 
     static properties = {
-        codeChatHistory: { type: Array }, voiceChatHistory: { type: Array },
-        codeChatIndex: { type: Number }, voiceChatIndex: { type: Number },
+        codeChatHistory: { type: Array }, voiceChatHistory: { type: Array }, companionChatHistory: { type: Array },
+        codeChatIndex: { type: Number }, voiceChatIndex: { type: Number }, companionChatIndex: { type: Number },
         paneHoverState: { type: String }, isMicOn: { type: Boolean },
         tacThinkMode: { type: Boolean }, toastMessage: { type: String },
         activePage: { type: Number }, prefs: { type: Object },
@@ -42,8 +43,8 @@ export class LiveInterview extends LitElement {
 
     constructor() {
         super();
-        this.codeChatHistory = []; this.voiceChatHistory = [];
-        this.codeChatIndex = 0; this.voiceChatIndex = 0;
+        this.codeChatHistory = []; this.voiceChatHistory = []; this.companionChatHistory = [];
+        this.codeChatIndex = 0; this.voiceChatIndex = 0; this.companionChatIndex = 0;
         this.paneHoverState = 'code'; this.isMicOn = false;
         this.tacThinkMode = false; this.toastMessage = '';
         this.activePage = 1; this.prefs = {}; this.trimTick = 0;
@@ -75,12 +76,6 @@ export class LiveInterview extends LitElement {
             if (e.ctrlKey) {
                 e.preventDefault(); // Stop browser zooming/navigation
 
-                const halfWidth = window.innerWidth / 2;
-                const isLeft = e.clientX < halfWidth;
-                
-                // 🟢 Sync hover state instantly so the router targets the correct Brain
-                this.paneHoverState = isLeft ? 'code' : 'voice';
-
                 if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
                     // 🟢 Horizontal Swipe Detected
                     if (!this.swipeCooldown && Math.abs(e.deltaX) > 20) {
@@ -92,12 +87,14 @@ export class LiveInterview extends LitElement {
                             this.executeHotCorner('prev_resp'); // Swipe Left = Previous
                         }
                         
-                        // Lock swipes for 400ms so one gesture = one page turn
                         setTimeout(() => { this.swipeCooldown = false; }, 400); 
                     }
                 } else {
-                    // 🟢 Vertical Scroll Detected
-                    const wrapperId = isLeft ? 'code-feed-wrapper' : 'voice-feed-wrapper';
+                    // 🟢 Vertical Scroll Detected (Flawlessly uses hover state)
+                    let wrapperId = 'code-feed-wrapper';
+                    if (this.paneHoverState === 'voice') wrapperId = 'voice-feed-wrapper';
+                    if (this.paneHoverState === 'comp') wrapperId = 'comp-feed-wrapper';
+
                     const wrapper = this.shadowRoot.getElementById(wrapperId);
                     if (wrapper) {
                         wrapper.scrollBy({ top: e.deltaY, behavior: 'auto' });
@@ -210,21 +207,27 @@ export class LiveInterview extends LitElement {
 
             ipcRenderer.on('hot-corner-hover', this.hoverHandler);
 
-            // 🟢 FIX: Voice is now a continuous scrollable transcript on a single page!
-            this.voiceNewHandler = (_, text) => { this.voiceChatHistory = [text]; this.voiceChatIndex = 0; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
-            this.voiceUpdateHandler = (_, text) => { this.voiceChatHistory = [text]; this.voiceChatIndex = 0; this.requestUpdate(); this.scrollToBottom('voice-feed'); };
-            // 🟢 SMART FORMATTER: Keeps images and code on the same page without destruction!
-            // 🟢 SMART FORMATTER: Keeps images and code on the same page without destruction!
+            this.voiceNewHandler = (_, text) => { 
+                this.voiceChatHistory = [...this.voiceChatHistory, text]; 
+                this.voiceChatIndex = this.voiceChatHistory.length - 1; 
+                this.requestUpdate(); 
+                this.scrollToBottom('voice-feed');
+            };
+            this.voiceUpdateHandler = (_, text) => { 
+                if (this.voiceChatHistory.length > 0) this.voiceChatHistory[this.voiceChatHistory.length - 1] = text;
+                else this.voiceChatHistory = [text];
+                this.voiceChatIndex = this.voiceChatHistory.length - 1; 
+                this.requestUpdate(); 
+                this.scrollToBottom('voice-feed');
+            };
             this.codeNewHandler = (_, text) => { 
                 if (this.codeChatHistory.length > 0) {
                     const currentBlock = this.codeChatHistory[this.codeChatIndex] || "";
                     const images = currentBlock.match(/<img[^>]+>/g) || [];
                     
-                    // If the current page ONLY contains images, append the code directly below them (Page 1 Fix)
                     if (images.length > 0 && currentBlock.replace(/<img[^>]+>/g, '').replace(/🟢 \*\*Code Engine Online\*\*\nWaiting for captures.../g, '').trim() === "") {
                         this.codeChatHistory[this.codeChatIndex] = images.join("") + "\n\n" + text;
                     } else {
-                        // This is a completely new response (Page 2)
                         this.codeChatHistory = [...this.codeChatHistory, text]; 
                         this.codeChatIndex = this.codeChatHistory.length - 1; 
                     }
@@ -232,8 +235,6 @@ export class LiveInterview extends LitElement {
                     this.codeChatHistory = [text];
                     this.codeChatIndex = 0;
                 }
-                
-                this.scrollToBottom('code-feed'); 
                 this.requestUpdate(); 
             };
 
@@ -243,17 +244,28 @@ export class LiveInterview extends LitElement {
                     const currentBlock = a[a.length - 1] || "";
                     const images = currentBlock.match(/<img[^>]+>/g) || [];
                     
-                    // Preserve the images at the top of the block while updating the text
                     a[a.length - 1] = images.join("") + "\n\n" + text; 
                     this.codeChatHistory = a; 
                 } else { 
                     this.codeChatHistory = [text]; 
                     this.codeChatIndex = 0; 
                 } 
-                
-                this.scrollToBottom('code-feed'); 
                 this.requestUpdate(); 
             };
+            this.compNewHandler = (_, text) => { 
+                this.companionChatHistory = [...this.companionChatHistory, text]; 
+                this.companionChatIndex = this.companionChatHistory.length - 1; 
+                this.requestUpdate(); 
+                this.scrollToBottom('comp-feed');
+            };
+            this.compUpdateHandler = (_, text) => { 
+                if (this.companionChatHistory.length > 0) this.companionChatHistory[this.companionChatHistory.length - 1] = text;
+                else this.companionChatHistory = [text];
+                this.companionChatIndex = this.companionChatHistory.length - 1; 
+                this.requestUpdate(); 
+                this.scrollToBottom('comp-feed');
+            };
+            
             this.micSyncHandler = (_, state) => { this.isMicOn = state; this.requestUpdate(); };
 
             // 🟢 FIX: Small Inline Images + Removed from Voice Brain!
@@ -316,6 +328,11 @@ export class LiveInterview extends LitElement {
             ipcRenderer.on('sync-mic-state', this.micSyncHandler);
             ipcRenderer.on('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.on('radial-continuous-hold', this.radialContinuousHandler);
+
+            ipcRenderer.on('companion-new-message', this.compNewHandler);
+            ipcRenderer.on('companion-update-message', this.compUpdateHandler);
+
+            this._autoStartMic();
             
             this._autoStartMic();
         }
@@ -340,6 +357,8 @@ export class LiveInterview extends LitElement {
             ipcRenderer.removeListener('sync-ai-mode', this.aiModeSyncHandler);
             ipcRenderer.removeListener('execute-radial-hud', this.radialExecuteHandler);
             ipcRenderer.removeListener('radial-continuous-hold', this.radialContinuousHandler);
+            ipcRenderer.removeListener('companion-new-message', this.compNewHandler);
+            ipcRenderer.removeListener('companion-update-message', this.compUpdateHandler);
         }
     }
 
@@ -423,26 +442,13 @@ export class LiveInterview extends LitElement {
                     }
                 });
                 break;
-            case 'fix_error': // 🟢 SYNC OPTIMIZED
-                // if (this.codeChatHistory.length > 1 && !this.hasSyncedOptimized) {
-                //     this.showToast('🌟 SYNCED TO VOICE');
-                    // this.hasSyncedOptimized = true; // 🟢 SINGLE-FIRE LOCK: Snap it shut!
-                //     this.codeChatIndex = this.codeChatHistory.length - 1; // Snap view to optimized code
-                //     this.scrollToBottom('code-feed');
-                //     this.requestUpdate();
-                //     ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
-                // } else if (this.hasSyncedOptimized) {
-                //     this.showToast('⏳ ALREADY SYNCED');
-                // } else {
-                //     this.showToast('⏳ OPTIMIZED NOT READY');
-                // }
-                // break;
+            case 'fix_error': 
                 if (this.codeChatHistory.length > 0) {
                     this.showToast('🌟 SYNCED TO VOICE');
                     this.codeChatIndex = this.codeChatHistory.length - 1; 
-                    this.scrollToBottom('code-feed');
                     this.requestUpdate();
-                    ipcRenderer.invoke('sync-optimized-to-voice', this.codeChatHistory[this.codeChatIndex]);
+                    const cleanCodeText = this.codeChatHistory[this.codeChatIndex].replace(/<img[^>]*>/g, '').replace(/🟢 \*\*Code Engine Online\*\*.*?captures.../gs, '');
+                    ipcRenderer.invoke('sync-optimized-to-voice', cleanCodeText);
                 } else {
                     this.showToast('⏳ NO CODE TO SYNC');
                 }
@@ -516,6 +522,7 @@ export class LiveInterview extends LitElement {
                 this.showToast('✨ Session Reset');
                 this.codeChatHistory = []; this.voiceChatHistory = [];
                 this.codeChatIndex = 0; this.voiceChatIndex = 0;
+                this.companionChatHistory = []; this.companionChatIndex = 0;
                 ipcRenderer.invoke('new-chat');
                 this.requestUpdate();
                 this._autoStartMic(); 
@@ -551,6 +558,8 @@ export class LiveInterview extends LitElement {
                 this.voiceChatHistory = [];
                 this.codeChatIndex = 0; 
                 this.voiceChatIndex = 0;
+                this.companionChatHistory = []; 
+                this.companionChatIndex = 0;
                 
                 // 🟢 FIX: Tell the backend to force-reload the AI URLs, resetting their memory
                 ipcRenderer.invoke('new-chat');
@@ -595,6 +604,7 @@ export class LiveInterview extends LitElement {
     render() {
         let leftContent = this.codeChatHistory.length > 0 ? this.codeChatHistory[this.codeChatIndex] : "🟢 **Code Engine Online**\nWaiting for captures...";
         let rightContent = this.voiceChatHistory.length > 0 ? this.voiceChatHistory[this.voiceChatIndex] : "🟢 **Voice Engine Online**\nListening to microphone feed...";
+        let compContent = this.companionChatHistory.length > 0 ? this.companionChatHistory[this.companionChatIndex] : "🤝 **Companion Online**\nListening to room mic...";
 
         return html`
             <div class="split-container" style="flex-direction: ${this.isSwapped ? 'row-reverse' : 'row'};">
@@ -611,19 +621,29 @@ export class LiveInterview extends LitElement {
                     </div>
                 </div>
 
-                <div class="pane ${this.paneHoverState === 'voice' ? 'hovered-voice' : ''}" @mouseenter=${() => this.paneHoverState = 'voice'}>
-                    <div class="pane-header">
-                        <span class="header-title voice-title">🗣️ Voice Brain</span>
-                        <div class="header-controls">
-                            <button class="mic-btn ${this.isMicOn ? 'on' : 'off'}" @click=${this.handleToggleMic}>
-                                🎙️ MIC: ${this.isMicOn ? 'ON' : 'OFF'}
-                            </button>
-                            <span class="status-badge" style="color: ${this.tacThinkMode ? '#f59e0b' : '#00cc66'};">${this.tacThinkMode ? '🧠 Think' : '⚡ Fast'}</span>
-                            <span class="count-badge">${this.voiceChatHistory.length ? `${this.voiceChatIndex + 1}/${this.voiceChatHistory.length}` : '0/0'}</span>
+                <div style="flex: 1; display: flex; flex-direction: column; gap: 10px;">
+                    <div class="pane ${this.paneHoverState === 'voice' ? 'hovered-voice' : ''}" @mouseenter=${() => this.paneHoverState = 'voice'}>
+                        <div class="pane-header">
+                            <span class="header-title voice-title">🗣️ Voice Brain</span>
+                            <div class="header-controls">
+                                <button class="mic-btn ${this.isMicOn ? 'on' : 'off'}" @click=${this.handleToggleMic}>
+                                    🎙️ MIC: ${this.isMicOn ? 'ON' : 'OFF'}
+                                </button>
+                                <span class="count-badge">${this.voiceChatHistory.length ? `${this.voiceChatIndex + 1}/${this.voiceChatHistory.length}` : '0/0'}</span>
+                            </div>
+                        </div>
+                        <div class="chat-feed-wrapper" id="voice-feed-wrapper">
+                            <chat-feed id="voice-feed" .content=${rightContent}></chat-feed>
                         </div>
                     </div>
-                    <div class="chat-feed-wrapper" id="voice-feed-wrapper">
-                        <chat-feed id="voice-feed" .content=${rightContent}></chat-feed>
+                    
+                    <div class="pane ${this.paneHoverState === 'comp' ? 'hovered-comp' : ''}" @mouseenter=${() => this.paneHoverState = 'comp'}>
+                        <div class="pane-header">
+                            <span class="header-title" style="color: #00cc66;">🤝 Companion</span>
+                        </div>
+                        <div class="chat-feed-wrapper" id="comp-feed-wrapper">
+                            <chat-feed id="comp-feed" .content=${compContent}></chat-feed>
+                        </div>
                     </div>
                 </div>
             </div>

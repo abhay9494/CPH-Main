@@ -715,6 +715,18 @@ export class SettingsView extends LitElement {
                                         })}
                                     </div>
                                 </div>
+                                <!-- 🤝 COMPANION COLUMN -->
+                                <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🤝 Companion Brain</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('compEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.companionEngine || 0, (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].companionEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                        })}
+                                        ${this.renderCustomDropdown('compProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.companionProfileId || '', (val) => {
+                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].companionProfileId = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                        })}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 

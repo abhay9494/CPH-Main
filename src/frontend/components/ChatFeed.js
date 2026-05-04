@@ -6,7 +6,7 @@ export class ChatFeed extends LitElement {
         
         .markdown-body { 
             width: 100%; 
-            padding: calc(50vh - 100px) 25px; 
+            padding: 10px 15px; 
             font-size: var(--response-font-size, 14px); 
             line-height: 1.7; color: var(--text-color, #e0e0e0); 
             overflow-x: hidden; word-wrap: break-word; 

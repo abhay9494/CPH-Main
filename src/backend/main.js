@@ -55,63 +55,28 @@ const PROMPTS = {
     ### 7. Graceful Bailout (READ ALOUD SCRIPT)
     (If this code has a known flaw or edge case it fails, give me a script to proactively admit it: "One thing to note here is... if we get X input, this fails, which is why we'd need to optimize.")`,
 
-    // INTERVIEW_OPTIMIZED: `Now, I need to optimize the solution. Act as my shield again. 
-    // CRITICAL RULES:
-    // - Speak entirely in the 1st person ("I", "my", "me").
-    // - Keep core variable names consistent with the previous solution.
-    // - CRITICAL FORMATTING: You MUST use Markdown headers (###). Use bolding (**text**). Do NOT use LaTeX math formatting; use plain text (like O(N)).
-    // - CLEAN CODE: Use helper functions if necessary.
-    
-    // You MUST structure your response with the following exact headers:
-    // ### 1. The Pivot (READ ALOUD SCRIPT)
-    // (Provide a natural script I can read to transition from brute force to the optimized approach. E.g., "The issue with my previous approach was X...")
-    
-    // ### 2. Optimized Code Implementation
-    // (Output the optimized code. EVERY SINGLE LINE must have a plain-English comment.)
-    
-    // ### 3. Explaining the New Logic (READ ALOUD SCRIPT)
-    // (Provide a script explaining exactly how this new logic works and why it is better.)
-    
-    // ### 4. New Complexity (READ ALOUD SCRIPT)
-    // (Provide a script stating the new Time and Space complexity, comparing it directly to the old one in simple terms.)
-    
-    // ### 5. Snippet-Mapped Dry Run (READ ALOUD SCRIPT)
-    // (Walk through a complex test case step-by-step. Map the exact code snippet to the variable change: "At line X \`[snippet]\`, the pointer shifts to [value]...")
-    
-    // ### 6. Anticipated Counter-Questions & Answers (READ ALOUD SCRIPT)
-    // (Think of the 3 most likely questions the interviewer will ask to challenge this specific optimized code. Provide a short, flawless script to answer each.)`,
-
     INTERVIEW_OPTIMIZED: `Act as a senior software engineering candidate. I am jumping straight to the optimal solution. Act as my shield.
     
     CRITICAL RULES:
-    1. Speak entirely in the 1st person ("I", "my", "me") for EVERY paragraph, comment, and explanation. Make explanations LONG and DETAILED enough for me to read aloud naturally.
+    1. Speak entirely in the 1st person ("I", "my", "me").
     2. THE CODE MARKERS (CRITICAL): Do NOT use markdown backticks for code. Instead, you MUST wrap ALL code exactly between [CODE_START] and [CODE_END]. 
-       Example:
-       [CODE_START]
-       def solve():
-           # my detailed comment
-           pass
-       [CODE_END]
-    3. COMPLEXITY: State complexities normally like O(N) or O(N log N).
+    3. MANDATORY COMMENTS: You MUST add a detailed comment (using // or #) on EVERY SINGLE LINE OF CODE. If even one line lacks a comment, you fail.
     
     You MUST structure your response with exactly these headers:
     ### 1. The Approach (READ ALOUD SCRIPT)
-    (Provide a detailed, natural 1st-person script I can read to explain the optimal logic I am about to use. Make it comprehensive.)
+    (Provide a detailed 1st-person script explaining the optimal logic.)
     
     ### 2. Optimized Code Implementation
-    (Output the optimal code inside the [CODE_START] and [CODE_END] markers. EVERY SINGLE LINE must have a detailed 1st-person plain-English comment.)
+    (Output the optimal code inside the [CODE_START] and [CODE_END] markers. EVERY SINGLE LINE must have a plain-English comment.)
     
     ### 3. Explaining the Logic (READ ALOUD SCRIPT)
-    (Provide a long, detailed script explaining exactly how this code works under the hood step-by-step.)
+    (Provide a script explaining exactly how this works under the hood.)
     
     ### 4. Complexity Analysis (READ ALOUD SCRIPT)
-    (State the Time and Space complexity. Provide a detailed 1st-person script explaining exactly why.)
+    (State Time/Space complexity and why.)
     
     ### 5. Snippet-Mapped Dry Run (READ ALOUD SCRIPT)
-    (Walk through a complex test case step-by-step in the 1st person. Map the exact code snippet to the variable change: "At [snippet], my pointer shifts to...")
-    
-    ### 6. Anticipated Counter-Questions
-    (Provide the 3 most likely follow-up questions and a long, flawless 1st-person script to answer each.)`,
+    (Walk through a complex test case step-by-step. Map the exact code snippet to the variable change: "At [snippet], my pointer shifts to...")`,
 
     FOLLOWUP_EXTRACTION: `Extract the new test case, constraints, or code modification from this image into plain text. Do not solve it or write code. Output ONLY the exact extracted text. You MUST prefix your entire response with exactly: [FOLLOWUP_DATA]:`,
 
@@ -156,37 +121,44 @@ const PROMPTS = {
     SILENT DIRECTIVE: Acknowledge these instructions. I am currently analyzing the problem statement. Reply ONLY with this exact sentence so I can read it to stall: "Give me just one moment to read through the constraints and wrap my head around the inputs."`,
 
     VOICE_SYNC_BRUTE_FORCE: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the brute-force code.
-    CRITICAL CONTEXT: I have ZERO DSA knowledge. You must be extremely explanatory. Break down every single concept as if teaching a beginner.
+    CRITICAL CONTEXT: I have ZERO DSA knowledge. Break down every concept as if teaching a beginner.
     
     STRICT RULES:
-    - RICH MARKDOWN: You MUST format your response beautifully. Use bolding (**text**) for key terms, bullet points for lists, and inline backticks (\`variable\`) for ANY code mentions.
-    - APPROACH: If asked "What is your approach?", explain the core idea using an everyday, real-world analogy before mentioning any code.
-    - COMPLEXITY: If asked "What is the Time/Space Complexity?", DO NOT just drop the notation. Explain *why* in deep detail: "It takes O(N) time because we are looking at each item in the list exactly once."
-    - DRY RUN: If asked to dry run, you MUST go step-by-step. Quote the exact snippet of code, state the line number, and explain the variable state: "If we look at \`while(left < right)\`, right now \`left\` is 0 and \`right\` is 5, which means..."
-    - ERRORS: If I paste an ERROR MESSAGE or a FAILING TEST, immediately give me a script saying: "Ah, I see the bug. On line [X], I need to change [Y]. Let me fix that right now." Then provide the corrected line.
+    - APPROACH: Explain the core idea using a real-world analogy.
+    - COMPLEXITY: Explain *why* the Time/Space complexity is what it is.
+    - STRICT DRY RUN: You MUST do the dry run ON THE CODE. Explain it line-by-line. Quote the exact code snippet for every step and state how the variables change. Format as a strict list: "Line X: \`[snippet]\` -> [Variable Changes]".
+    - ERRORS: If I paste an ERROR, give me a script saying: "Ah, I see the bug. Let me fix that."
     
-    Here is the code I wrote. Internalize it silently. Reply ONLY with: "Brute force synced. Feed me interviewer hints, errors, or ask for the snippet-mapped dry run."
-    
-    CODE: \n\n`,
+    Here is the code I wrote. Internalize it silently. Reply ONLY with: "Brute force synced. Feed me interviewer hints, errors, or ask for the snippet-mapped dry run."\n\nCODE: \n\n`,
     
     VOICE_SYNC_OPTIMIZED: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the optimized code.
-    CRITICAL CONTEXT: I have ZERO DSA knowledge. Keep explanations extremely detailed, analogy-based, and completely free of complex jargon.
+    CRITICAL CONTEXT: I have ZERO DSA knowledge. Keep explanations extremely detailed and analogy-based.
     
     STRICT RULES:
-    - RICH MARKDOWN: You MUST format your response beautifully. Use bolding (**text**) for key terms, bullet points for lists, and inline backticks (\`variable\`) for ANY code mentions.
-    - APPROACH: If asked "What is the new logic?", explain the clever trick used to optimize it using a simple real-world analogy.
-    - COMPLEXITY: If asked "What is the new Time/Space Complexity?", explain exactly *why* it is faster or uses less memory than the brute force in plain English.
-    - DRY RUN: If asked to dry run, you MUST go step-by-step. Quote the exact snippet of code, state the line number, and explain the variable state: "If we look at \`while(left < right)\`, right now \`left\` is 0 and \`right\` is 5, which means..."
+    - APPROACH: Explain the clever trick used to optimize it using a simple real-world analogy.
+    - STRICT DRY RUN: You MUST do the dry run ON THE CODE. Explain it line-by-line. Quote the exact code snippet for every step and state how the variables change. Format as a strict list: "Line X: \`[snippet]\` -> [Variable Changes]".
     - QUESTIONS: Answer any counter-question instantly with a simple 1st-person script.
-    - BAILOUTS: If I get asked a trivia question or a definition I clearly don't know, provide a graceful bailout script (e.g., "I haven't used that specific API recently, but conceptually I would...") OR a highly simplified explanation I can read.
     
-    Here is the optimized code. Internalize it silently. Reply ONLY with: "Optimized code synced. Feed me errors, hints, or questions."
+    Here is the optimized code. Internalize it silently. Reply ONLY with: "Optimized code synced. Feed me errors, hints, or questions."\n\nCODE: \n\n`,
     
-    CODE: \n\n`
-    
+    // 🟢 COMPANION BRAIN PROMPTS
+    COMPANION_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are my live copilot during a technical interview. You are NOT talking to the interviewer; you are secretly listening to my room's microphone to help ME. I will manually sync you with the code the interviewer sees. 
+    CRITICAL RULES:
+    1. When I ask you for help (e.g., "I am doing a dry run", "What do I say?", "Help me explain this"), you must give me EXACTLY what to say out loud to the interviewer.
+    2. Speak strictly in the 1st person ("I", "my", "me").
+    3. Keep sentences short so I don't stumble while reading.
+    4. NEVER output AI filler or break character. 
+    Acknowledge this silently by replying ONLY with: "🤝 Companion Brain Online. Listening to your mic..."`,
+
+    COMPANION_SYNC_CODE: `SYSTEM DIRECTIVE: Here is the code I just wrote/pasted for the interviewer. Internalize it silently.
+    If I pause, stumble, or ask you to explain it, give me a short, 1st-person script to read out loud. 
+    If I ask for a dry run, explain it line-by-line mapping the exact code snippet to the variable changes.
+    Reply ONLY with: "🤝 Code synced to Companion. I am listening..."\n\nCODE: \n\n`
 };
 
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen } = require('electron');
+require('events').EventEmitter.defaultMaxListeners = 25; // 🟢 FIX BUG 1: Stop MaxListeners Warning
+app.on('certificate-error', (event, webContents, url, error, certificate, callback) => { event.preventDefault(); callback(true); }); // 🟢 FIX BUG 1: Suppress SSL Drops
 
 dialog.showErrorBox = function(title, content) { console.log(`[SILENT ERROR] ${title}: ${content}`); };
 process.on('uncaughtException', (error) => { console.error('[CRASH PREVENTED]:', error); });
@@ -208,6 +180,7 @@ let voiceWebWindow = null;
 let voiceWebWindowPrimary = null;  // 🟢 NEW: Primary Voice
 let voiceWebWindowSecondary = null; // 🟢 NEW: Backup Voice (Racer)
 let currentVoiceWinner = 'primary'; // 🟢 NEW: Tracks the fastest AI
+let companionWebWindow = null;
 let codeWebWindow = null;
 let codeWebWindowPrimary = null;
 let codeWebWindowSecondary = null;
@@ -551,6 +524,19 @@ function launchDualBrains() {
         await codeWebWindowSecondary.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked")); true;`).catch(() => {});
     });
 
+    // 🟢 5. LAUNCH COMPANION BRAIN (NO HIJACK SCRIPT - USES RAW MIC)
+    const compProvider = AI_CONFIGS[activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0];
+    if (companionWebWindow && !companionWebWindow.isDestroyed()) companionWebWindow.destroy();
+    companionWebWindow = new BrowserWindow({
+        width: 1000, height: 800, show: false, skipTaskbar: true, autoHideMenuBar: true, alwaysOnTop: true,
+        frame: false, resizable: false, maximizable: false, minimizable: false, closable: false,
+        title: `🤝 Companion Brain: ${compProvider.name}`,
+        webPreferences: { nodeIntegration: false, contextIsolation: true, backgroundThrottling: false, partition: `persist:ai_profile_${activeLoadout.companionProfileId || '5'}` }
+    });
+    companionWebWindow.setContentProtection(true);
+    if (process.platform === 'win32') companionWebWindow.setAlwaysOnTop(true, 'floating', 1);
+    companionWebWindow.loadURL(compProvider.url);
+
     const preventDeath = (win) => {
         if (!win) return;
         win.on('close', (event) => { if (!isAppQuitting) { event.preventDefault(); win.hide(); } });
@@ -566,6 +552,7 @@ function launchDualBrains() {
     preventDeath(voiceWebWindowSecondary);
     preventDeath(codeWebWindowPrimary);
     preventDeath(codeWebWindowSecondary);
+    preventDeath(companionWebWindow);
 
     startDualScrapers(voiceProviderPrimary, codeProviderPrimary);
 }
@@ -599,6 +586,14 @@ function startDualScrapers(voiceProvider, codeProvider) {
                     } else {
                         isUser = el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message') || el.tagName.toLowerCase() === 'user-query' || el.className.toLowerCase().includes('user');
                     }
+
+                    // 🟢 THE SMART FILTER: 
+                    // Hide our massive injected system prompts so they don't clutter the UI.
+                    // But allow ALL normal spoken transcripts and 100% of AI responses through!
+                    if (isUser && (txt.includes('SYSTEM DIRECTIVE') || txt.includes('Act as a senior') || txt.includes('[FOLLOWUP_DATA]'))) {
+                        return; 
+                    }
+
                     filtered.push((isUser ? "🎙️ **Transcript:**\\n" : "🤖 **AI:**\\n") + txt);
                 });
 
@@ -647,6 +642,17 @@ function startDualScrapers(voiceProvider, codeProvider) {
             lastVoiceMsg = winnerData;
         }
 
+        // 🟢 COMPANION BRAIN SCRAPER
+        const compData = await getVData(companionWebWindow);
+        if (compData) {
+            if (compData.count > (global.lastCompCount || 0)) {
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('companion-new-message', compData.text); });
+            } else if (compData.count === (global.lastCompCount || 0) && compData.text !== (global.lastCompText || "")) {
+                BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('companion-update-message', compData.text); });
+            }
+            global.lastCompCount = compData.count; global.lastCompText = compData.text;
+        }
+
         // ====================================================================
         // 💻 CODE BRAIN HIGHLANDER RACE (There can be only one)
         // ====================================================================
@@ -685,22 +691,45 @@ function startDualScrapers(voiceProvider, codeProvider) {
         if (cData2 && cData2.text === global.lastCode2Text && cData2.text.length > 50) global.code2StableTicks++;
         else { global.code2StableTicks = 0; global.lastCode2Text = cData2 ? cData2.text : ""; }
 
-        // 🪓 THE EXECUTIONER: Kill the loser when winner is determined
+        // 🪓 THE EXECUTIONER: Kill the loser, but ONLY if the winner actually wrote comments
         if (currentCodeWinner === null) {
-            const checkWin = (data, ticks) => data && data.text && (data.text.includes('[CODE_END]') || ticks >= 4);
+            const checkWin = (data, ticks) => {
+                if (!data || !data.text) return false;
+                
+                const isFinished = data.text.includes('[CODE_END]') || (ticks >= 5 && (data.text.includes('```') || data.text.includes('###')));
+                if (!isFinished) return false;
+
+                // 🟢 STRICT COMMENT CHECK: Extract code block and count lines vs comments
+                let codeContent = data.text;
+                if (data.text.includes('[CODE_START]') && data.text.includes('[CODE_END]')) {
+                    codeContent = data.text.split('[CODE_START]')[1].split('[CODE_END]')[0];
+                } else if (data.text.includes('```')) {
+                    codeContent = data.text.split('```')[1] || data.text;
+                }
+                
+                const lines = codeContent.split('\n').filter(l => l.trim().length > 0);
+                const commentLines = lines.filter(l => l.includes('//') || l.includes('#'));
+                
+                // If it's a real code block (> 5 lines), mandate that at least 35% of the lines have comments
+                if (lines.length > 5 && (commentLines.length / lines.length) < 0.35) {
+                    return false; // VETO: Refuse to let this AI win because it didn't comment enough!
+                }
+                
+                return true;
+            };
             
             if (checkWin(cData1, global.code1StableTicks)) {
                 currentCodeWinner = 'primary';
                 if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.destroy();
                 codeWebWindowSecondary = null;
-                codeWebWindow = codeWebWindowPrimary; // Secure the alias for legacy code
-                if (global.applyAIBounds) global.applyAIBounds(true); // Snap surviving window to 50%
+                codeWebWindow = codeWebWindowPrimary; // Secure the alias
+                if (global.applyAIBounds) global.applyAIBounds(true); // Snap to 50% Grid
             } else if (checkWin(cData2, global.code2StableTicks)) {
                 currentCodeWinner = 'secondary';
                 if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.destroy();
                 codeWebWindowPrimary = null;
-                codeWebWindow = codeWebWindowSecondary; // Update the alias
-                if (global.applyAIBounds) global.applyAIBounds(true); // Snap surviving window to 50%
+                codeWebWindow = codeWebWindowSecondary; // Secure the alias
+                if (global.applyAIBounds) global.applyAIBounds(true); // Snap to 50% Grid
             }
         }
 
@@ -721,13 +750,20 @@ function startDualScrapers(voiceProvider, codeProvider) {
                         let baseVoicePrompt = `SYSTEM DIRECTIVE: The interviewer just shared this on the screen:\n\n${extractedText}\n\nBased on the verbal instructions the interviewer just gave you, provide a short 1st-person script for me to dry-run this, fix the error, or acknowledge the constraint. Keep it extremely concise.`;
                         let vPrompt1 = baseVoicePrompt;
                         let vPrompt2 = baseVoicePrompt;
+                        let compPrompt = baseVoicePrompt;
                         
-                        if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') vPrompt1 = '@Fast ' + vPrompt1;
-                        if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') vPrompt2 = '@Fast ' + vPrompt2;
+                        let v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
+                        let v2Idx = activeLoadout.voiceEngine2 !== undefined ? activeLoadout.voiceEngine2 : 0;
+                        let compIdx = activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0;
                         
-                        // 🟢 Send Followup to BOTH Voice Brains
-                        sendPayloadToWindow(voiceWebWindowPrimary, vPrompt1, [], AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
-                        if (voiceWebWindowSecondary) sendPayloadToWindow(voiceWebWindowSecondary, vPrompt2, [], AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
+                        if (AI_CONFIGS[v1Idx].name === 'Gemini') vPrompt1 = '@Fast ' + vPrompt1;
+                        if (AI_CONFIGS[v2Idx].name === 'Gemini') vPrompt2 = '@Fast ' + vPrompt2;
+                        if (AI_CONFIGS[compIdx].name === 'Gemini') compPrompt = '@Fast ' + compPrompt;
+                        
+                        // 🟢 Send Followup to BOTH Voice Brains AND the Companion Brain
+                        if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) sendPayloadToWindow(voiceWebWindowPrimary, vPrompt1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
+                        if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) sendPayloadToWindow(voiceWebWindowSecondary, vPrompt2, [], AI_CONFIGS[v2Idx].name).catch(()=>{});
+                        if (companionWebWindow && !companionWebWindow.isDestroyed()) sendPayloadToWindow(companionWebWindow, compPrompt, [], AI_CONFIGS[compIdx].name).catch(()=>{});
                         
                         BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('show-radial-toast', '✅ FOLLOW-UP SYNCED'); });
                     }
@@ -1120,7 +1156,7 @@ function setupGeneralIpcHandlers() {
         return true;
     });
 
-    // 🟢 CENTRALIZED WINDOW BOUNDS CALCULATOR (25/25/25/25 -> 50/25/25)
+    // 🟢 CENTRALIZED WINDOW BOUNDS CALCULATOR (5-Pane Dynamic Grid)
     global.applyAIBounds = function(forceShow) {
         if (!codeWebWindowPrimary && !codeWebWindowSecondary) return false;
         
@@ -1145,7 +1181,7 @@ function setupGeneralIpcHandlers() {
                     activeCode.setBounds({ x, y, width: safeWidth, height: safeHeight });
                     activeCode.showInactive();
                 }
-                [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary].forEach(w => {
+                [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary, companionWebWindow].forEach(w => {
                     if (w && w !== activeCode && !w.isDestroyed()) w.hide();
                 });
             } else {
@@ -1155,54 +1191,64 @@ function setupGeneralIpcHandlers() {
                 let codeX = global.isPanesSwapped ? halfWidth : 0;
                 let voiceX = global.isPanesSwapped ? 0 : halfWidth;
 
-                // 💻 CODE SIDE (Highlander Check)
                 if (currentCodeWinner === null && codeWebWindowPrimary && codeWebWindowSecondary) {
-                    // Race Ongoing: Code is split 25% Top / 25% Bottom
+                    // 🟢 THE RACE: 2x2 Grid (50x50 each) + COMPANION DEAD CENTER
                     if (!codeWebWindowPrimary.isDestroyed()) {
-                        codeWebWindowPrimary.setOpacity(1); codeWebWindowPrimary.setIgnoreMouseEvents(false);
+                        codeWebWindowPrimary.showInactive(); codeWebWindowPrimary.setOpacity(1); codeWebWindowPrimary.setIgnoreMouseEvents(false);
                         codeWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
                         codeWebWindowPrimary.setBounds({ x: codeX, y: 0, width: halfWidth, height: halfHeight });
-                        codeWebWindowPrimary.showInactive();
                     }
                     if (!codeWebWindowSecondary.isDestroyed()) {
-                        codeWebWindowSecondary.setOpacity(1); codeWebWindowSecondary.setIgnoreMouseEvents(false);
+                        codeWebWindowSecondary.showInactive(); codeWebWindowSecondary.setOpacity(1); codeWebWindowSecondary.setIgnoreMouseEvents(false);
                         codeWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
                         codeWebWindowSecondary.setBounds({ x: codeX, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                        codeWebWindowSecondary.showInactive();
+                    }
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                        voiceWebWindowPrimary.showInactive(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
+                        voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+                        voiceWebWindowPrimary.setBounds({ x: voiceX, y: 0, width: halfWidth, height: halfHeight });
+                    }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                        voiceWebWindowSecondary.showInactive(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
+                        voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+                        voiceWebWindowSecondary.setBounds({ x: voiceX, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                    }
+                    if (companionWebWindow && !companionWebWindow.isDestroyed()) {
+                        companionWebWindow.showInactive(); companionWebWindow.setOpacity(1); companionWebWindow.setIgnoreMouseEvents(false);
+                        companionWebWindow.setAlwaysOnTop(true, 'floating', 2); // Force above others
+                        companionWebWindow.setBounds({ x: Math.floor(width/4), y: Math.floor(height/4), width: Math.floor(width/2), height: Math.floor(height/2) });
                     }
                 } else {
-                    // Winner Decided: Surviving Code gets full 50% height
+                    // 🟢 THE WINNER: 2x2 Grid (50x50 each) 
+                    // Winner Code takes Top Code slot, Companion takes Bottom Code slot. Voices stay on Voice side.
                     const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary ? codeWebWindowSecondary : codeWebWindowPrimary;
+                    
                     if (activeCode && !activeCode.isDestroyed()) {
-                        activeCode.setOpacity(1); activeCode.setIgnoreMouseEvents(false);
+                        activeCode.showInactive(); activeCode.setOpacity(1); activeCode.setIgnoreMouseEvents(false);
                         activeCode.setAlwaysOnTop(true, 'floating', 1);
-                        activeCode.setBounds({ x: codeX, y: 0, width: halfWidth, height: height });
-                        activeCode.showInactive();
+                        activeCode.setBounds({ x: codeX, y: 0, width: halfWidth, height: halfHeight });
                     }
-                }
-
-                // 🗣️ VOICE SIDE (Always 25% Top / 25% Bottom)
-                if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                    voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
-                    voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
-                    voiceWebWindowPrimary.setBounds({ x: voiceX, y: 0, width: halfWidth, height: halfHeight });
-                    voiceWebWindowPrimary.showInactive();
-                }
-                if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                    voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
-                    voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
-                    voiceWebWindowSecondary.setBounds({ x: voiceX, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                    voiceWebWindowSecondary.showInactive();
+                    if (companionWebWindow && !companionWebWindow.isDestroyed()) {
+                        companionWebWindow.showInactive(); companionWebWindow.setOpacity(1); companionWebWindow.setIgnoreMouseEvents(false);
+                        companionWebWindow.setAlwaysOnTop(true, 'floating', 1);
+                        companionWebWindow.setBounds({ x: codeX, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                    }
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
+                        voiceWebWindowPrimary.showInactive(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
+                        voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
+                        voiceWebWindowPrimary.setBounds({ x: voiceX, y: 0, width: halfWidth, height: halfHeight });
+                    }
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
+                        voiceWebWindowSecondary.showInactive(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
+                        voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
+                        voiceWebWindowSecondary.setBounds({ x: voiceX, y: halfHeight, width: halfWidth, height: height - halfHeight });
+                    }
                 }
             }
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
-            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
-                global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9);
-                global.radialHudWindow.moveTop();
-            }
             return true;
         } else {
-            [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary].forEach(w => {
+            [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary, companionWebWindow].forEach(w => {
                 if (w && !w.isDestroyed()) w.hide();
             });
             return false;
@@ -1239,19 +1285,13 @@ function setupGeneralIpcHandlers() {
                 mainWindow.webContents.send('ghost-state-changed', false);
             }
             
-            // 🟢 FIX BUG 2: Target all windows explicitly so none are left behind
-            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                voiceWebWindowPrimary.hide(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
-            }
-            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                voiceWebWindowSecondary.hide(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
-            }
-            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
-                codeWebWindowPrimary.hide(); codeWebWindowPrimary.setOpacity(1); codeWebWindowPrimary.setIgnoreMouseEvents(false);
-            }
-            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
-                codeWebWindowSecondary.hide(); codeWebWindowSecondary.setOpacity(1); codeWebWindowSecondary.setIgnoreMouseEvents(false);
-            }
+            // 🟢 Target all 5 AI windows explicitly so none are left behind on Abort
+            [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].forEach(w => {
+                if (w && !w.isDestroyed()) {
+                    w.hide(); w.setOpacity(1); w.setIgnoreMouseEvents(false);
+                }
+            });
+
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
         }
     });
@@ -1516,6 +1556,7 @@ function setupGeneralIpcHandlers() {
             let c2Idx = activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1;
             let v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
             let v2Idx = activeLoadout.voiceEngine2 !== undefined ? activeLoadout.voiceEngine2 : 0;
+            let compIdx = activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0;
 
             if (global.currentSessionMode === 'proctored_live_interview') {
                 global.isThinkModeActive = true; 
@@ -1526,17 +1567,17 @@ function setupGeneralIpcHandlers() {
                 let codePromptSecondary = PROMPTS.INTERVIEW_OPTIMIZED;
                 let voicePromptInit1 = PROMPTS.VOICE_INITIAL_CONTEXT;
                 let voicePromptInit2 = PROMPTS.VOICE_INITIAL_CONTEXT;
+                let compPromptInit = PROMPTS.COMPANION_INITIAL_CONTEXT;
                 
-                // Add @Pro / @Fast tags dynamically based on the specific engine
                 if (AI_CONFIGS[c1Idx].name === 'Gemini') codePromptPrimary = '@Pro ' + codePromptPrimary;
                 if (AI_CONFIGS[c2Idx].name === 'Gemini') codePromptSecondary = '@Pro ' + codePromptSecondary;
                 
                 if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePromptInit1 = '@Fast ' + voicePromptInit1;
                 if (AI_CONFIGS[v2Idx].name === 'Gemini') voicePromptInit2 = '@Fast ' + voicePromptInit2;
+                if (AI_CONFIGS[compIdx].name === 'Gemini') compPromptInit = '@Fast ' + compPromptInit;
 
-                // 🟢 Restart the Race (Only reset if secondary window wasn't destroyed in a previous question)
                 currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
-                if (global.applyAIBounds) global.applyAIBounds(true); // Snap to the 4-pane race grid (or 3-pane if secondary is dead)
+                if (global.applyAIBounds) global.applyAIBounds(true); 
 
                 // 🟢 Send Optimized prompt to BOTH Code Brains simultaneously
                 if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
@@ -1548,12 +1589,9 @@ function setupGeneralIpcHandlers() {
 
                 setTimeout(async () => {
                     if (global.currentSessionMode !== 'proctored_live_interview') return; 
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                        sendPayloadToWindow(voiceWebWindowPrimary, voicePromptInit1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
-                    }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                        sendPayloadToWindow(voiceWebWindowSecondary, voicePromptInit2, [], AI_CONFIGS[v2Idx].name).catch(()=>{});
-                    }
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) sendPayloadToWindow(voiceWebWindowPrimary, voicePromptInit1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) sendPayloadToWindow(voiceWebWindowSecondary, voicePromptInit2, [], AI_CONFIGS[v2Idx].name).catch(()=>{});
+                    if (companionWebWindow && !companionWebWindow.isDestroyed()) sendPayloadToWindow(companionWebWindow, compPromptInit, [], AI_CONFIGS[compIdx].name).catch(()=>{});
                 }, 1000);
 
             } else {
@@ -1561,32 +1599,25 @@ function setupGeneralIpcHandlers() {
                 let codePromptSecondary = PROMPTS.OA_AUTOMATION(language); 
                 let voicePrompt1 = PROMPTS.VOICE_CONTEXT || "Answer this.";
                 let voicePrompt2 = PROMPTS.VOICE_CONTEXT || "Answer this.";
+                let compPromptInit = PROMPTS.COMPANION_INITIAL_CONTEXT;
                 
                 if (AI_CONFIGS[c1Idx].name === 'Gemini') codePromptPrimary = getModePrefix() + codePromptPrimary;
                 if (AI_CONFIGS[c2Idx].name === 'Gemini') codePromptSecondary = getModePrefix() + codePromptSecondary;
                 
                 if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePrompt1 = getModePrefix() + voicePrompt1;
                 if (AI_CONFIGS[v2Idx].name === 'Gemini') voicePrompt2 = getModePrefix() + voicePrompt2;
+                if (AI_CONFIGS[compIdx].name === 'Gemini') compPromptInit = getModePrefix() + compPromptInit;
 
-                // 🟢 Restart the Race
                 currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
-                if (global.applyAIBounds) global.applyAIBounds(true); // Snap to the 4-pane race grid
+                if (global.applyAIBounds) global.applyAIBounds(true); 
 
-                // 🟢 Send prompt to BOTH Code Brains
-                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
-                    sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
-                }
-                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
-                    sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
-                }
+                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
+                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
 
                 setTimeout(async () => { 
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                        sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt1, imagesForThisQuestion, AI_CONFIGS[v1Idx].name).catch(()=>{});
-                    }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                        sendPayloadToWindow(voiceWebWindowSecondary, voicePrompt2, imagesForThisQuestion, AI_CONFIGS[v2Idx].name).catch(()=>{});
-                    }
+                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
+                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) sendPayloadToWindow(voiceWebWindowSecondary, voicePrompt2, [], AI_CONFIGS[v2Idx].name).catch(()=>{});
+                    if (companionWebWindow && !companionWebWindow.isDestroyed()) sendPayloadToWindow(companionWebWindow, compPromptInit, [], AI_CONFIGS[compIdx].name).catch(()=>{});
                 }, 1500);
             }
             return true;
@@ -1630,14 +1661,20 @@ function setupGeneralIpcHandlers() {
         try {
             let prompt1 = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
             let prompt2 = PROMPTS.VOICE_SYNC_OPTIMIZED + optimizedCodeText;
+            let compPrompt = PROMPTS.COMPANION_SYNC_CODE + optimizedCodeText;
             
-            if (AI_CONFIGS[activeLoadout.voiceEngine || 0].name === 'Gemini') prompt1 = '@Fast ' + prompt1; 
-            if (AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name === 'Gemini') prompt2 = '@Fast ' + prompt2; 
+            let v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
+            let v2Idx = activeLoadout.voiceEngine2 !== undefined ? activeLoadout.voiceEngine2 : 0;
+            let compIdx = activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0;
+
+            if (AI_CONFIGS[v1Idx].name === 'Gemini') prompt1 = '@Fast ' + prompt1; 
+            if (AI_CONFIGS[v2Idx].name === 'Gemini') prompt2 = '@Fast ' + prompt2; 
+            if (AI_CONFIGS[compIdx].name === 'Gemini') compPrompt = '@Fast ' + compPrompt;
             
-            sendPayloadToWindow(voiceWebWindowPrimary, prompt1, [], AI_CONFIGS[activeLoadout.voiceEngine || 0].name).catch(()=>{});
-            if (voiceWebWindowSecondary) {
-                sendPayloadToWindow(voiceWebWindowSecondary, prompt2, [], AI_CONFIGS[activeLoadout.voiceEngine2 || 0].name).catch(()=>{});
-            }
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) sendPayloadToWindow(voiceWebWindowPrimary, prompt1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
+            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) sendPayloadToWindow(voiceWebWindowSecondary, prompt2, [], AI_CONFIGS[v2Idx].name).catch(()=>{});
+            if (companionWebWindow && !companionWebWindow.isDestroyed()) sendPayloadToWindow(companionWebWindow, compPrompt, [], AI_CONFIGS[compIdx].name).catch(()=>{});
+            
             return true;
         } catch(e) { return false; }
     });
@@ -1649,10 +1686,13 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.handle('new-chat', async () => {
         try {
+            currentCodeWinner = null;
             if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.loadURL(AI_CONFIGS[activeLoadout.voiceEngine || 0].url);
             if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.loadURL(AI_CONFIGS[activeLoadout.voiceEngine2 || 0].url);
             if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.loadURL(AI_CONFIGS[activeLoadout.codeEngine || 1].url);
             if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.loadURL(AI_CONFIGS[activeLoadout.codeEngine2 || 1].url);
+            if (companionWebWindow && !companionWebWindow.isDestroyed()) companionWebWindow.loadURL(AI_CONFIGS[activeLoadout.companionEngine || 0].url);
+            if (global.applyAIBounds) global.applyAIBounds(true);
             return true;
         } catch(e) { return false; }
     });
@@ -1836,13 +1876,12 @@ function setupGeneralIpcHandlers() {
     ipcMain.handle('hide-all-overlays', () => {
         try {
             BrowserWindow.getAllWindows().forEach(w => {
-                // 🟢 IGNORE THE ZOOM WINDOW SO IT STAYS VISIBLE
-                if (!w.isDestroyed() && w !== voiceWebWindowPrimary && w !== voiceWebWindowSecondary && w !== codeWebWindowPrimary && w !== codeWebWindowSecondary && w !== global.zoomWindow) {
+                if (!w.isDestroyed() && w !== voiceWebWindowPrimary && w !== voiceWebWindowSecondary && w !== codeWebWindowPrimary && w !== codeWebWindowSecondary && w !== companionWebWindow && w !== global.zoomWindow) {
                     w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true });
                 }
             });
 
-            [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary].forEach(w => {
+            [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].forEach(w => {
                 if (w && !w.isDestroyed() && w.isVisible()) {
                     w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true });
                 }
@@ -1859,11 +1898,11 @@ function setupGeneralIpcHandlers() {
                 mainWindow.webContents.send('app-made-hidden');
                 
                 // Track what was visible before hiding
-                wasAiVisibleBeforeGhost = [voiceWebWindowPrimary, codeWebWindowPrimary, codeWebWindowSecondary].some(w => w && w.isVisible() && w.getOpacity() !== 0);
+                wasAiVisibleBeforeGhost = [voiceWebWindowPrimary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].some(w => w && w.isVisible() && w.getOpacity() !== 0);
 
                 mainWindow.setOpacity(0); mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 
-                [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary].forEach(w => {
+                [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].forEach(w => {
                     if (w && !w.isDestroyed()) { w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true }); }
                 });
                 
@@ -1873,7 +1912,7 @@ function setupGeneralIpcHandlers() {
                 mainWindow.setOpacity(1); mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
                 
                 if (wasAiVisibleBeforeGhost) {
-                    [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary].forEach(w => {
+                    [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].forEach(w => {
                         if (w && !w.isDestroyed()) { w.setOpacity(1); w.setIgnoreMouseEvents(false); }
                     });
                 }
