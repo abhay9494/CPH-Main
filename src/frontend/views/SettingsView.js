@@ -580,6 +580,7 @@ export class SettingsView extends LitElement {
             'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
             'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
             'toggle_page2': '🔄', 'regenerate': '🔄 Regen',    'toggle_theme': '🌓',   'sync_followup': '🔍',
+            'fusion_dry_run': '🎯', 'on_the_go': '🏃'
         };
         return labels[action] || '—';
     }
@@ -597,6 +598,7 @@ export class SettingsView extends LitElement {
             'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
             'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2',
             'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
+            'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 On-The-Go Dictator',
         };
         return labels[action] || action || '—';
     }
@@ -882,17 +884,38 @@ export class SettingsView extends LitElement {
                 `;
 
             case 'language':
-                const langOpts = [
+                const spokenLangOpts = [
                     {value: 'en-US', label: 'English (US)'}, {value: 'en-GB', label: 'English (UK)'},
                     {value: 'es-ES', label: 'Spanish'}, {value: 'fr-FR', label: 'French'},
                     {value: 'de-DE', label: 'German'}, {value: 'hi-IN', label: 'Hindi'},
                     {value: 'zh-CN', label: 'Chinese (Simplified)'}
                 ];
+                const codeLangOpts = [
+                    {value: 'C++', label: 'C++'},
+                    {value: 'Python', label: 'Python'},
+                    {value: 'Java', label: 'Java'},
+                    {value: 'JavaScript', label: 'JavaScript'},
+                    {value: 'Go', label: 'GoLang'}
+                ];
                 return html`
-                    <h2>Speech Recognition</h2>
-                    <div class="form-group">
-                        <label>Primary Language</label>
-                        ${this.renderCustomDropdown('selectedLanguage', langOpts, this.prefs.selectedLanguage, (val) => this.savePref('selectedLanguage', val))}
+                    <div class="scrollable-tab">
+                        <h2>Language Settings</h2>
+                        
+                        <div style="background: rgba(66, 133, 244, 0.1); padding: 15px; border-radius: 6px; border: 1px solid rgba(66, 133, 244, 0.3); margin-bottom: 25px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #4285f4;">💻 Target Programming Language</h3>
+                            <p style="font-size: 11px; color: #ccc; margin-bottom: 15px;">The AI will exclusively write solutions in this language.</p>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                ${this.renderCustomDropdown('programmingLanguage', codeLangOpts, this.prefs.programmingLanguage || 'C++', (val) => this.savePref('programmingLanguage', val))}
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color);">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px;">🗣️ Speech Recognition</h3>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Primary Spoken Language</label>
+                                ${this.renderCustomDropdown('selectedLanguage', spokenLangOpts, this.prefs.selectedLanguage, (val) => this.savePref('selectedLanguage', val))}
+                            </div>
+                        </div>
                     </div>
                 `;
             case 'capture':
@@ -944,7 +967,9 @@ export class SettingsView extends LitElement {
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
                     {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
                     {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
-                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'}
+                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'},
+                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'}, 
+                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
                 ];
                 
                 this.editingPage = this.editingPage || 1; // Default to Page 1
@@ -1068,7 +1093,9 @@ export class SettingsView extends LitElement {
                     {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
                     {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
-                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'}
+                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'},
+                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'},
+                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
                 ];
                 
                 const tb = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
@@ -1175,7 +1202,9 @@ export class SettingsView extends LitElement {
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
                     {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
                     {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
-                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'}
+                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'},
+                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'},
+                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
                 ];
                 this.editingPage = this.editingPage || 1;
                 const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';

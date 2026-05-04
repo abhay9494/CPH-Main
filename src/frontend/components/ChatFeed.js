@@ -42,7 +42,7 @@ export class ChatFeed extends LitElement {
         .markdown-body li::marker { color: #4285f4; font-weight: bold; } 
         
         /* 🟢 Glowing Complexity Badges (Time/Space & Inline Variables) */
-        .markdown-body p code, .markdown-body li code, .markdown-body td code { 
+        .markdown-body p code, .markdown-body li code, .markdown-body td code, code.big-o-badge { 
             background: rgba(161, 66, 244, 0.2) !important; 
             color: #d8b4fe !important; /* Bright glowing purple */
             padding: 0.25em 0.6em !important; 
@@ -53,6 +53,14 @@ export class ChatFeed extends LitElement {
             border: 1px solid rgba(161, 66, 244, 0.4) !important;
             word-break: break-word !important;
             box-shadow: 0 0 8px rgba(161, 66, 244, 0.2) !important;
+        }
+
+        /* 🟢 NEW: Pulls the exponent tight against the letter and elevates it perfectly */
+        code.big-o-badge sup {
+            font-size: 0.75em !important;
+            line-height: 0 !important;
+            vertical-align: super !important;
+            margin-left: 1px !important;
         }
 
         /* 🟢 Tables */
@@ -109,6 +117,7 @@ export class ChatFeed extends LitElement {
             overflow-x: hidden !important; /* Kills horizontal scrollbar */
             white-space: pre-wrap !important; /* Forces text wrapping */
             word-wrap: break-word !important; 
+            overflow-wrap: anywhere !important; /* 🟢 FIX: Forces hard wrapping to prevent horizontal scroll */
             background: transparent !important; /* Lets wrapper translucency show */
         }
         
@@ -152,19 +161,69 @@ export class ChatFeed extends LitElement {
         this.modalImage = null;
     }
 
+    async connectedCallback() {
+        super.connectedCallback();
+        await this.ensureDependencies();
+    }
+
+    async ensureDependencies() {
+        const loadScript = (src, checkVar) => {
+            return new Promise((resolve) => {
+                if (window[checkVar]) return resolve(); // Already loaded in memory
+                
+                // If it's currently downloading, just wait for it
+                if (document.querySelector(`script[src="${src}"]`)) {
+                    let interval = setInterval(() => {
+                        if (window[checkVar]) { clearInterval(interval); resolve(); }
+                    }, 50);
+                    return;
+                }
+                
+                // Otherwise, inject it straight into the app's hidden DOM
+                const script = document.createElement('script');
+                script.src = src;
+                script.onload = resolve;
+                script.onerror = () => { console.error(`Failed to load ${src}`); resolve(); };
+                document.head.appendChild(script);
+            });
+        };
+
+        // Fetch the exact local files sitting right there in your assets folder!
+        await loadScript('./assets/marked-4.3.0.min.js', 'marked');
+        await loadScript('./assets/highlight-11.9.0.min.js', 'hljs');
+        
+        // Force the UI to instantly repaint the code with the VS Code colors
+        this.requestUpdate();
+    }
+
     renderMarkdown(text) {
         if (!text) return '';
 
-        // 🟢 1. PRE-PROCESSING: Implement the [CODE_START] / [CODE_END] extraction
         let processedText = text;
         
+        processedText = processedText.replace(/\[CODE_START.*?\]\s*```[a-zA-Z]*/gi, '[CODE_START]\n');
+        processedText = processedText.replace(/```\s*\[CODE_END\]/gi, '\n[CODE_END]');
+
         // Convert the custom markers back into Markdown code blocks so the parser catches them
         processedText = processedText.replace(/\[CODE_START.*?\]/gi, '\n```\n');
         processedText = processedText.replace(/\[CODE_END\]/gi, '\n```\n');
 
-        // 🟢 2. AUTO-FORMATTER: Automatically catch Big-O notation like O(N), O(log N), O(1) 
-        // and wrap them in backticks so your glowing CSS badge targets them.
-        processedText = processedText.replace(/\b(O\([^\)]+\))/gi, '`$1`');
+        // 🟢 2. AUTO-FORMATTER: Safely format Big-O notation and fix ugly monospace superscripts
+        // First, strip existing backticks around Big-O just in case the AI already added them
+        processedText = processedText.replace(/`\s*(O\([^\)]+\))\s*`/gi, '$1'); 
+        
+        // Next, intercept the math and inject beautiful HTML superscripts
+        processedText = processedText.replace(/\b(O\([^\)]+\))/gi, (match) => {
+            let formatted = match
+                .replace(/\^([a-zA-Z0-9]+)/g, '<sup>$1</sup>') // Catches ^2, ^N, etc.
+                .replace(/\^\(([^\)]+)\)/g, '<sup>$1</sup>')   // Catches ^(2)
+                .replace(/²/g, '<sup>2</sup>')                 // Catches Unicode ²
+                .replace(/³/g, '<sup>3</sup>')                 // Catches Unicode ³
+                .replace(/ⁿ/gi, '<sup>n</sup>');               // Catches Unicode ⁿ
+            
+            // Wrap it in our custom glowing badge class!
+            return `<code class="big-o-badge">${formatted}</code>`;
+        });
 
         if (window.marked && window.hljs) {
             try {
@@ -173,14 +232,26 @@ export class ChatFeed extends LitElement {
                     const codeStr = typeof code === 'object' ? (code.text || '') : (code || '');
                     const langStr = typeof code === 'object' ? (code.lang || '') : (language || '');
                     const langName = langStr.toLowerCase();
-                    const validLang = (langName && window.hljs.getLanguage(langName)) ? langName : 'plaintext';
                     
                     let highlighted = codeStr;
-                    try { highlighted = window.hljs.highlight(codeStr, { language: validLang }).value; } 
-                    catch (e) { highlighted = codeStr.replace(/</g, '&lt;').replace(/>/g, '&gt;'); }
+                    let displayLang = langName || 'code';
                     
+                    if (window.hljs) {
+                        try {
+                            if (langName && window.hljs.getLanguage(langName)) {
+                                highlighted = window.hljs.highlight(codeStr, { language: langName }).value;
+                            } else {
+                                // 🟢 FORCE AUTO-COLORING: If the AI forgets 'cpp', highlight.js will guess and color it anyway!
+                                const auto = window.hljs.highlightAuto(codeStr);
+                                highlighted = auto.value;
+                                displayLang = auto.language || 'code';
+                            }
+                        } catch (e) { 
+                            highlighted = codeStr.replace(/</g, '&lt;').replace(/>/g, '&gt;'); 
+                        }
+                    }
+
                     const encodedCode = encodeURIComponent(codeStr); 
-                    const displayLang = validLang === 'plaintext' ? 'code' : validLang;
                     
                     return `
                         <div class="code-block-wrapper">
@@ -191,7 +262,7 @@ export class ChatFeed extends LitElement {
                                     <button class="copy-code-btn" data-code="${encodedCode}">📋 Copy</button>
                                 </div>
                             </div>
-                            <pre><code class="hljs ${validLang}">${highlighted}</code></pre>
+                            <pre><code class="hljs">${highlighted}</code></pre>
                         </div>`;
                 };
 
@@ -234,6 +305,9 @@ export class ChatFeed extends LitElement {
 
     render() {
         return html`
+            <!-- 🟢 INJECT VS CODE DARK+ THEME DIRECTLY INTO SHADOW DOM -->
+            <link rel="stylesheet" href="./assets/highlight-vscode-dark.min.css">
+            
             <div class="markdown-body" @click=${this.handleMarkdownClick} .innerHTML=${this.renderMarkdown(this.content)}></div>
             ${this.modalImage ? html`
                 <div class="image-modal" @click=${() => { this.modalImage = null; this.requestUpdate(); }}>

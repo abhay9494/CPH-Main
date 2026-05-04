@@ -57,26 +57,65 @@ const PROMPTS = {
 
     INTERVIEW_OPTIMIZED: `Act as a senior software engineering candidate. I am jumping straight to the optimal solution. Act as my shield.
     
+    CRITICAL CONTEXT 1 (DSA KNOWLEDGE): I have absolutely ZERO knowledge of Data Structures and Algorithms. I cannot explain complex jargon. 
+    
     CRITICAL RULES:
-    1. Speak entirely in the 1st person ("I", "my", "me").
-    2. THE CODE MARKERS (CRITICAL): Do NOT use markdown backticks for code. Instead, you MUST wrap ALL code exactly between [CODE_START] and [CODE_END]. 
-    3. MANDATORY COMMENTS: You MUST add a detailed comment (using // or #) on EVERY SINGLE LINE OF CODE. If even one line lacks a comment, you fail.
+    1. TRANSCRIBE FIRST: Start your entire response by transcribing the exact problem statement and all constraints from the image into plain text. This is strictly required.
+    2. Speak entirely in the 1st person ("I", "my", "me").
+    3. NEVER use complex jargon without providing a "READ ALOUD" script explaining it in plain English.
+    4. THE DOUBLE WRAPPER (CRITICAL): You MUST wrap ALL code in standard markdown backticks (\`\`\`) AND you must wrap the entire code block exactly between [CODE_START] and [CODE_END]. If you do not use both, the tab spacing gets destroyed.
+    5. MANDATORY COMMENTS: You MUST add a detailed comment (using // or #) on EVERY SINGLE LINE OF CODE. If even one line lacks a comment, you fail.
     
     You MUST structure your response with exactly these headers:
+    ### 0. Problem Statement (Transcribed)
+    (Provide the full text of the question here)
+
     ### 1. The Approach (READ ALOUD SCRIPT)
     (Provide a detailed 1st-person script explaining the optimal logic.)
     
     ### 2. Optimized Code Implementation
-    (Output the optimal code inside the [CODE_START] and [CODE_END] markers. EVERY SINGLE LINE must have a plain-English comment.)
+    [CODE_START]
+    \`\`\`cpp
+    (Output the optimal code here. EVERY SINGLE LINE must have a plain-English comment.)
+    \`\`\`
+    [CODE_END]
     
     ### 3. Explaining the Logic (READ ALOUD SCRIPT)
     (Provide a script explaining exactly how this works under the hood.)
     
-    ### 4. Complexity Analysis (READ ALOUD SCRIPT)
+    ### 4. Datatypes & Why I Used Them (READ ALOUD SCRIPT)
+    (Provide a simple script I can read if they ask "Why did you use this specific data type or data structure over another?")
+    
+    ### 5. Complexity Analysis (READ ALOUD SCRIPT)
     (State Time/Space complexity and why.)
     
-    ### 5. Snippet-Mapped Dry Run (READ ALOUD SCRIPT)
+    ### 6. Snippet-Mapped Dry Run (READ ALOUD SCRIPT)
     (Walk through a complex test case step-by-step. Map the exact code snippet to the variable change: "At [snippet], my pointer shifts to...")`,
+
+    ON_THE_GO_DICTATOR: `SYSTEM DIRECTIVE: You are my live teleprompter. I have already generated the optimal code. Now, I need to type it out live while explaining it to the interviewer. 
+    Here is the optimal code. You MUST use this exact code. DO NOT CHANGE THE LOGIC OR VARIABLE NAMES. 
+    
+    CRITICAL RULES:
+    1. Break the code down into logical chunks for me to type out.
+    2. Format your response EXACTLY like this pattern:
+
+       [Short 1st-person conversational script of what I am about to write]
+       
+       [CODE_START]
+       \`\`\`cpp
+       // I am declaring n to store the input size
+       int n; 
+       // Taking the input from standard in
+       cin >> n;
+       \`\`\`
+       [CODE_END]
+       
+       [Explanation of what it does, why I used it (e.g., space complexity for data structures, time complexity for loops)]
+       
+    3. THE DOUBLE WRAPPER (CRITICAL): You MUST wrap EVERY code snippet in standard markdown backticks (\`\`\`) AND wrap that entirely between [CODE_START] and [CODE_END] as shown above. This forces the browser to preserve tab spaces.
+    4. NO GROUPED COMMENTS: Every single line of code in the snippets MUST have an inline comment exactly above it or next to it. Do not put a paragraph of comments at the top of the snippet.
+    5. PERIODIC CLEAN CODE CHECKS: Every time you finish a major logical block, output a completely clean, comment-free block of the code written SO FAR. Format it with [CODE_START], backticks, and [CODE_END] just like the snippets. Preface it with "Clean Code Checkpoint:"
+    6. Keep spoken explanations in the 1st person ("I", "my").`,
 
     FOLLOWUP_EXTRACTION: `Extract the new test case, constraints, or code modification from this image into plain text. Do not solve it or write code. Output ONLY the exact extracted text. You MUST prefix your entire response with exactly: [FOLLOWUP_DATA]:`,
 
@@ -121,39 +160,60 @@ const PROMPTS = {
     SILENT DIRECTIVE: Acknowledge these instructions. I am currently analyzing the problem statement. Reply ONLY with this exact sentence so I can read it to stall: "Give me just one moment to read through the constraints and wrap my head around the inputs."`,
 
     VOICE_SYNC_BRUTE_FORCE: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the brute-force code.
-    CRITICAL CONTEXT: I have ZERO DSA knowledge. Break down every concept as if teaching a beginner.
+    CRITICAL CONTEXT: I have ZERO DSA knowledge. You are the "Dictator". I will blindly read what you write.
     
     STRICT RULES:
     - APPROACH: Explain the core idea using a real-world analogy.
     - COMPLEXITY: Explain *why* the Time/Space complexity is what it is.
-    - STRICT DRY RUN: You MUST do the dry run ON THE CODE. Explain it line-by-line. Quote the exact code snippet for every step and state how the variables change. Format as a strict list: "Line X: \`[snippet]\` -> [Variable Changes]".
+    - STRICT DRY RUN: If a dry run is requested, you MUST act as my Dictator. Output line-by-line reading scripts. You MUST state the exact previous value of a variable before modifying it. Format as: "Say: 'Now we are at line X. Since variable Y was [old value], it now becomes [new value] because...'"
     - ERRORS: If I paste an ERROR, give me a script saying: "Ah, I see the bug. Let me fix that."
     
     Here is the code I wrote. Internalize it silently. Reply ONLY with: "Brute force synced. Feed me interviewer hints, errors, or ask for the snippet-mapped dry run."\n\nCODE: \n\n`,
-    
+
     VOICE_SYNC_OPTIMIZED: `SYSTEM DIRECTIVE: You are my teleprompter. The microphone is hot. I just wrote the optimized code.
-    CRITICAL CONTEXT: I have ZERO DSA knowledge. Keep explanations extremely detailed and analogy-based.
+    CRITICAL CONTEXT: I have ZERO DSA knowledge. You are the "Dictator". I will blindly read what you write.
     
     STRICT RULES:
     - APPROACH: Explain the clever trick used to optimize it using a simple real-world analogy.
-    - STRICT DRY RUN: You MUST do the dry run ON THE CODE. Explain it line-by-line. Quote the exact code snippet for every step and state how the variables change. Format as a strict list: "Line X: \`[snippet]\` -> [Variable Changes]".
-    - QUESTIONS: Answer any counter-question instantly with a simple 1st-person script.
+    - STRICT DRY RUN: If a dry run is requested, you MUST act as my Dictator. Output line-by-line reading scripts. You MUST state the exact previous value of a variable before modifying it. Format as: "Say: 'Now we are at line X. Since variable Y was [old value], it now becomes [new value] because...'"
+    - QUESTIONS: Answer any counter-question instantly with a simple 1st-person script for me to read.
     
     Here is the optimized code. Internalize it silently. Reply ONLY with: "Optimized code synced. Feed me errors, hints, or questions."\n\nCODE: \n\n`,
-    
+     
     // 🟢 COMPANION BRAIN PROMPTS
-    COMPANION_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are my live copilot during a technical interview. You are NOT talking to the interviewer; you are secretly listening to my room's microphone to help ME. I will manually sync you with the code the interviewer sees. 
+    COMPANION_INITIAL_CONTEXT: `SYSTEM DIRECTIVE: You are my live copilot and "Safety Net" Tracker during a technical interview. You listen strictly to MY room's microphone. You do not hear the interviewer.
     CRITICAL RULES:
-    1. When I ask you for help (e.g., "I am doing a dry run", "What do I say?", "Help me explain this"), you must give me EXACTLY what to say out loud to the interviewer.
-    2. Speak strictly in the 1st person ("I", "my", "me").
-    3. Keep sentences short so I don't stumble while reading.
-    4. NEVER output AI filler or break character. 
-    Acknowledge this silently by replying ONLY with: "🤝 Companion Brain Online. Listening to your mic..."`,
+    1. I will manually sync the code to you. I will also periodically silently sync the "Dictator Script" that the other AI generates for me.
+    2. Listen to my voice. If I am reading the script smoothly, explaining logic correctly, or successfully dry-running, REMAIN COMPLETELY SILENT. Do not clutter my screen.
+    3. THE RESCUE: If I pause for more than 3 seconds, say "umm/uhh", or ask "wait, what is this value?", you must IMMEDIATELY rescue me. 
+    4. When rescuing me, DO NOT give generic advice. Output massive, bold text telling me exactly what to say to recover. Example: **"Say this next: Since dp[j] is 4, we add 1, so it becomes 5."**
+    5. Speak strictly in the 1st person ("I", "my", "me"). NEVER output AI filler.
+    Acknowledge this silently by replying ONLY with: "🤝 Companion Brain Online. Listening to your mic as a safety net..."`,
 
-    COMPANION_SYNC_CODE: `SYSTEM DIRECTIVE: Here is the code I just wrote/pasted for the interviewer. Internalize it silently.
-    If I pause, stumble, or ask you to explain it, give me a short, 1st-person script to read out loud. 
-    If I ask for a dry run, explain it line-by-line mapping the exact code snippet to the variable changes.
-    Reply ONLY with: "🤝 Code synced to Companion. I am listening..."\n\nCODE: \n\n`
+    COMPANION_SYNC_CODE: `SYSTEM DIRECTIVE: Here is the code I just wrote/pasted for the interviewer. Internalize it silently. Do not explain it yet.
+    Just wait for my voice or for the Dictator Script sync. If I start a dry run and fumble, rescue me instantly with massive bold text indicating exactly what I should say next based on the variable states in this code.
+    Reply ONLY with: "🤝 Code synced to Companion. I am tracking your voice..."\n\nCODE: \n\n`,
+
+    FUSION_DRY_RUN: `SYSTEM DIRECTIVE: You are my dictator for a live dry run. 
+    I am providing you an image of my screen (which may contain code or just a problem statement) AND a transcript of what the interviewer and I just said.
+    
+    CRITICAL RULES:
+    1. TEST CASE SELECTION: Prioritize any specific test cases or inputs mentioned in the transcripts.
+    2. DETECT SCENARIO: Check if actual code is visible on the screen.
+    
+    === SCENARIO A: IF CODE IS VISIBLE ===
+    - Walk through the code exactly in execution order.
+    - LOOPS: You MUST go through EVERY iteration of the loops. Do NOT summarize or skip ahead. Track 'i' and 'j' step-by-step.
+    - SNIPPETS: You MUST quote the exact short code snippet for the line you are currently executing.
+    - VARIABLES: You MUST state the exact previous value of a variable before modifying it.
+    - FORMAT: "Say: 'Looking at \`[short code snippet]\`, since [variable] was [old value], it now becomes [new value] because...'"
+    
+    === SCENARIO B: IF NO CODE IS VISIBLE ===
+    - Walk through the conceptual algorithm or logic using the test case.
+    - Track the conceptual variables and data structures step-by-step as if the code existed.
+    - FORMAT: "Say: 'In this step, we evaluate [element]. Since our current state is [old state], we update it to [new state] because...'"
+    
+    3. You MUST end your entire response with exactly this tag: [DRY_RUN_END]`,
 };
 
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen } = require('electron');
@@ -671,11 +731,35 @@ function startDualScrapers(voiceProvider, codeProvider) {
         }
 
         // Pipe the winner's text to your overlay UI
+        // Pipe the winner's text to your overlay UI and INJECT the Invisible Relay
         if (winnerData) {
             if (winnerData.count > lastVoiceMsg.count) {
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-new-message', winnerData.text); });
+                global.voiceStableTicks = 0;
+                global.voiceScriptJustSent = false;
             } else if (winnerData.count === lastVoiceMsg.count && winnerData.text !== lastVoiceMsg.text) {
                 BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('voice-update-message', winnerData.text); });
+                global.voiceStableTicks = 0;
+            } else if (winnerData.count === lastVoiceMsg.count && winnerData.text === lastVoiceMsg.text && winnerData.text.length > 30) {
+                global.voiceStableTicks = (global.voiceStableTicks || 0) + 1;
+                
+                // 🟢 THE INVISIBLE RELAY: If text hasn't changed for 3 seconds, it's finished generating.
+                if (global.voiceStableTicks === 3 && !global.voiceScriptJustSent) {
+                    global.voiceScriptJustSent = true;
+                    
+                    // Extract just the latest chunk (ignore the history backlog from the scraper)
+                    let latestVoiceScript = winnerData.text.split('\\n\\n---\\n\\n').pop().replace(/🤖 \\*\\*AI:\\*\\*\\n/, '');
+                    
+                    // Formulate the silent payload
+                    let compPrompt = `[VOICE_BRAIN_SCRIPT_SYNC]: The Voice Brain just generated this script for me to read:\n\n"${latestVoiceScript}"\n\nTRACKER DIRECTIVE: Listen to my microphone. I am trying to explain this or read this. If I pause for too long, say 'umm', or fumble the variables, IMMEDIATELY give me the next sentence to say in massive bold text. If I am speaking fine, REMAIN SILENT.`;
+                    
+                    let compIdx = activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0;
+                    if (AI_CONFIGS[compIdx].name === 'Gemini') compPrompt = '@Fast ' + compPrompt;
+                    
+                    if (companionWebWindow && !companionWebWindow.isDestroyed()) {
+                        sendPayloadToWindow(companionWebWindow, compPrompt, [], AI_CONFIGS[compIdx].name).catch(()=>{});
+                    }
+                }
             }
             lastVoiceMsg = winnerData;
         }
@@ -823,6 +907,26 @@ function startDualScrapers(voiceProvider, codeProvider) {
                     // 🟢 Auto-sync disabled per user request. User will sync manually.
                     if (codeStableTicks === 3 && global.currentSessionMode === 'proctored_live_interview' && global.bruteForceSyncPending) {
                         global.bruteForceSyncPending = false; 
+                    }
+
+                    // 🟢 FUSION DRY RUN INVISIBLE RELAY
+                    if (cData.text.includes('[DRY_RUN_END]') && !global.fusionDryRunSent && codeStableTicks >= 3) {
+                        global.fusionDryRunSent = true;
+                        
+                        // Extract text, safely stripping the end tag
+                        let cleanScript = cData.text.split('[DRY_RUN_END]')[0].trim();
+                        
+                        let compPrompt = `[VOICE_BRAIN_SCRIPT_SYNC]: The Code Brain just generated this dictation script for me to read:\n\n"${cleanScript}"\n\nTRACKER DIRECTIVE: Listen to my microphone. I am reading this dry run script. If I pause for too long, say 'umm', or fumble the variables, IMMEDIATELY give me the next sentence to say in massive bold text. If I am speaking fine, REMAIN SILENT.`;
+                        
+                        let compIdx = activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0;
+                        if (AI_CONFIGS[compIdx].name === 'Gemini') compPrompt = '@Fast ' + compPrompt;
+                        
+                        // Beam silently to Companion Tracker
+                        if (companionWebWindow && !companionWebWindow.isDestroyed()) {
+                            sendPayloadToWindow(companionWebWindow, compPrompt, [], AI_CONFIGS[compIdx].name).catch(()=>{});
+                        }
+                        
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('show-radial-toast', '✅ TRACKER ENGAGED'); });
                     }
                 }
                 lastCodeMsg = cData;
@@ -1342,6 +1446,10 @@ function setupGeneralIpcHandlers() {
         const b = bounds || { cornerSize: 15, centerX: 40, centerY: 40 };
 
         hotCornerInterval = setInterval(() => {
+            if (global.isRadialModeActive || global.isCtrlHeld) {
+                currentDwellZone = null;
+                return;
+            }
             const point = screen.getCursorScreenPoint();
             const display = screen.getDisplayNearestPoint(point);
             if (!display) return;
@@ -1424,6 +1532,21 @@ function setupGeneralIpcHandlers() {
         }
     });
 
+    // 🟢 FIX: Safely kill the Radial HUD without triggering a slice (used when scrolling)
+    ipcMain.on('abort-radial-hud', () => {
+        if (global.ctrlHoldTimer) { clearTimeout(global.ctrlHoldTimer); global.ctrlHoldTimer = null; }
+        
+        if (global.isRadialModeActive) {
+            if (radialTelemetryLoop) { clearInterval(radialTelemetryLoop); radialTelemetryLoop = null; }
+            currentRadialSlice = null;
+            global.isRadialModeActive = false;
+            
+            if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) {
+                global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: global.isGhostHidden === true });
+            }
+        }
+    });
+
     ipcMain.on('live-resize-main-window', (event, { width, height }) => {
         if (mainWindow && !mainWindow.isDestroyed()) {
             const safeWidth = Math.max(600, width); const safeHeight = Math.max(400, height);
@@ -1473,6 +1596,7 @@ function setupGeneralIpcHandlers() {
                     for (let output of lines) {
                         output = output.trim();
                         if (output === 'CTRL_DOWN') {
+                            global.isCtrlHeld = true;
                             if (global.isGhostHidden) return;
                             
                             // 🟢 NEW: Instantly drop the click-through wall to catch the scroll!
@@ -1523,6 +1647,7 @@ function setupGeneralIpcHandlers() {
                         }
 
                         if (output === 'CTRL_UP') {
+                            global.isCtrlHeld = false;
                             // 🟢 NEW: Restore the stealth click-through wall instantly!
                             if (mainWindow && !mainWindow.isDestroyed()) {
                                 mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
@@ -1615,7 +1740,6 @@ function setupGeneralIpcHandlers() {
                 if (AI_CONFIGS[compIdx].name === 'Gemini') compPromptInit = '@Fast ' + compPromptInit;
 
                 currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
-                if (global.applyAIBounds) global.applyAIBounds(true); 
 
                 // 🟢 Send Optimized prompt to BOTH Code Brains simultaneously
                 if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
@@ -1647,7 +1771,6 @@ function setupGeneralIpcHandlers() {
                 if (AI_CONFIGS[compIdx].name === 'Gemini') compPromptInit = getModePrefix() + compPromptInit;
 
                 currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
-                if (global.applyAIBounds) global.applyAIBounds(true); 
 
                 if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
                 if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
@@ -1678,6 +1801,50 @@ function setupGeneralIpcHandlers() {
             if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
 
             // 3. Beam the image silently to the SURVIVING Code Brain!
+            const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
+            const activeCodeIdx = currentCodeWinner === 'secondary' ? (activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1) : c1Idx;
+
+            if (activeCode && !activeCode.isDestroyed()) {
+                await sendPayloadToWindow(activeCode, codePrompt, [screenImage], AI_CONFIGS[activeCodeIdx].name);
+            }
+            return true;
+        } catch(e) { return false; }
+    });
+
+    // 🟢 NEW: ON-THE-GO DICTATOR
+    ipcMain.handle('trigger-on-the-go', async (event, currentCodeText) => {
+        try {
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+            let codePrompt = PROMPTS.ON_THE_GO_DICTATOR + '\n\n### THE CODE TO DICTATE:\n' + currentCodeText;
+            
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
+
+            // Beam payload to the SURVIVING Code Brain
+            const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
+            const activeCodeIdx = currentCodeWinner === 'secondary' ? (activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1) : c1Idx;
+
+            if (activeCode && !activeCode.isDestroyed()) {
+                await sendPayloadToWindow(activeCode, codePrompt, [], AI_CONFIGS[activeCodeIdx].name);
+            }
+            return true;
+        } catch(e) { return false; }
+    });
+
+    ipcMain.handle('trigger-fusion-dry-run', async (event, transcriptContext) => {
+        try {
+            // 1. Instantly capture screen
+            const sources = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+            const screenImage = sources[0].thumbnail.toDataURL(); 
+
+            // 2. Reset the relay lock
+            global.fusionDryRunSent = false;
+
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+            let codePrompt = PROMPTS.FUSION_DRY_RUN + '\n\n### RECENT TRANSCRIPT CONTEXT:\n' + transcriptContext;
+            
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
+
+            // 3. Beam context + image to the SURVIVING Code Brain
             const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
             const activeCodeIdx = currentCodeWinner === 'secondary' ? (activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1) : c1Idx;
 

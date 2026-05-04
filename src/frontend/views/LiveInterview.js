@@ -6,7 +6,7 @@ export class LiveInterview extends LitElement {
         :host { display: flex; flex-direction: column; height: 100%; width: 100%; background: transparent; }
         * { box-sizing: border-box; font-family: 'Inter', -apple-system, sans-serif; cursor: default !important; user-select: none; }
         .split-container { display: flex; width: 100%; height: 100%; background: transparent; position: relative; gap: 10px; padding-bottom: 10px; }
-        .pane { flex: 1; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s; display: flex; flex-direction: column; border: 1px solid var(--border-color); }
+        .pane { flex: 1; border-radius: 8px; overflow-y: auto; padding: 15px 10px; background: var(--bg-secondary); transition: border-color 0.2s; display: flex; flex-direction: column; border: 1px solid var(--border-color); position: relative; }
         .pane.hovered-code { border-color: #4285f4; }
         .pane.hovered-voice { border-color: #a142f4; }
         .pane.hovered-comp { border-color: #00cc66; }
@@ -29,6 +29,19 @@ export class LiveInterview extends LitElement {
         ::-webkit-scrollbar { width: 8px; height: 8px; }
         ::-webkit-scrollbar-track { background: transparent; }
         ::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+        .sync-reminder { 
+            position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); 
+            background: #f59e0b; color: #000; padding: 6px 14px; border-radius: 20px; 
+            font-size: 11px; font-weight: bold; text-transform: uppercase;
+            box-shadow: 0 4px 15px rgba(245, 158, 11, 0.4); 
+            z-index: 100; pointer-events: none; border: 2px solid #fff;
+            animation: pulse-reminder 2s infinite; 
+        }
+        @keyframes pulse-reminder { 
+            0% { transform: translateX(-50%) scale(1); } 
+            50% { transform: translateX(-50%) scale(1.05); box-shadow: 0 0 20px rgba(245, 158, 11, 0.8); } 
+            100% { transform: translateX(-50%) scale(1); } 
+        }
     `;
 
     static properties = {
@@ -75,6 +88,10 @@ export class LiveInterview extends LitElement {
         this.wheelHandler = (e) => {
             if (e.ctrlKey) {
                 e.preventDefault(); // Stop browser zooming/navigation
+
+                if (window.require) {
+                    window.require('electron').ipcRenderer.send('abort-radial-hud');
+                }
 
                 if (Math.abs(e.deltaX) > Math.abs(e.deltaY)) {
                     // 🟢 Horizontal Swipe Detected
@@ -221,6 +238,9 @@ export class LiveInterview extends LitElement {
                 this.scrollToBottom('voice-feed');
             };
             this.codeNewHandler = (_, text) => { 
+                // 🟢 TRIGGER: Code block finished! Turn on the reminder.
+                if (text.includes('[CODE_END]') && !this.hasSyncedOptimized) this.optimizedReady = true;
+
                 if (this.codeChatHistory.length > 0) {
                     const currentBlock = this.codeChatHistory[this.codeChatIndex] || "";
                     const images = currentBlock.match(/<img[^>]+>/g) || [];
@@ -239,6 +259,9 @@ export class LiveInterview extends LitElement {
             };
 
             this.codeUpdateHandler = (_, text) => { 
+                // 🟢 TRIGGER: Code block finished! Turn on the reminder.
+                if (text.includes('[CODE_END]') && !this.hasSyncedOptimized) this.optimizedReady = true;
+
                 if (this.codeChatHistory.length > 0) { 
                     const a = [...this.codeChatHistory]; 
                     const currentBlock = a[a.length - 1] || "";
@@ -403,7 +426,8 @@ export class LiveInterview extends LitElement {
             'fix_error': '🌟 Sync Optimized', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'toggle_page2': '🔄 Page 1 / 2', 'regenerate': '🔄 Regen', 'abort_oa': '🚪 Abort',
             'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
-            'swap_panes': '🔀 Swap Panes'
+            'swap_panes': '🔀 Swap Panes', 'fusion_dry_run': '🎯 Fusion Dry Run',
+            'on_the_go': '🏃 On-The-Go Dictator'
         };
         return labels[action] || action || '—';
     }
@@ -427,26 +451,46 @@ export class LiveInterview extends LitElement {
                 ipcRenderer.invoke('capture-screenshot');
                 break;
             case 'send_ai': 
-                ipcRenderer.invoke('send-oa-automation', this.prefs.selectedLanguage || 'Auto / Text').then(success => {
+                const targetCodeLang = this.prefs.programmingLanguage || 'C++';
+                ipcRenderer.invoke('send-oa-automation', targetCodeLang).then(success => {
                     if (success) {
-                        this.showToast('🚀 FIRING TO AI');
-                        // 🟢 CYCLE RESET: Wipe UI history clean for the new problem!
+                        this.showToast(`🚀 FIRING TO AI (${targetCodeLang})`);
                         this.codeChatHistory = []; 
                         this.voiceChatHistory = [];
                         this.codeChatIndex = 0; 
                         this.voiceChatIndex = 0;
                         this.hasSyncedOptimized = false;
+                        this.optimizedReady = false; // 🟢 RESET BANNER
                         this.requestUpdate();
                     } else {
                         this.showToast('❌ CAPTURE IMAGE FIRST');
                     }
                 });
                 break;
+                
+            case 'language':
+                // 🟢 NEW: Instantly toggle coding languages via Hot Corner!
+                const langs = ['C++', 'Python', 'Java', 'JavaScript'];
+                let currentLang = this.prefs.programmingLanguage || 'C++';
+                let nextLangIndex = (langs.indexOf(currentLang) + 1) % langs.length;
+                let nextLang = langs[nextLangIndex];
+                
+                this.showToast(`💻 Language: ${nextLang}`);
+                
+                if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+                    window.cheatingDaddy.storage.updatePreference('programmingLanguage', nextLang);
+                    window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'programmingLanguage', value: nextLang } }));
+                    this.prefs.programmingLanguage = nextLang;
+                }
+                break;
             case 'fix_error': 
                 if (this.codeChatHistory.length > 0) {
                     this.showToast('🌟 SYNCED TO VOICE');
                     this.codeChatIndex = this.codeChatHistory.length - 1; 
+                    this.hasSyncedOptimized = true; // 🟢 MARK AS SYNCED
+                    this.optimizedReady = false;    // 🟢 HIDE BANNER
                     this.requestUpdate();
+                    
                     const cleanCodeText = this.codeChatHistory[this.codeChatIndex].replace(/<img[^>]*>/g, '').replace(/🟢 \*\*Code Engine Online\*\*.*?captures.../gs, '');
                     ipcRenderer.invoke('sync-optimized-to-voice', cleanCodeText);
                 } else {
@@ -457,6 +501,55 @@ export class LiveInterview extends LitElement {
                 this.showToast('🔍 CAPTURING & EXTRACTING...');
                 ipcRenderer.invoke('send-sync-followup');
                 break;
+
+            case 'fusion_dry_run':
+                this.showToast('🎯 INITIATING FUSION DRY RUN...');
+                
+                // 1. Scrape the 3 most recent context blocks from both conversational brains
+                const recentVoice = this.voiceChatHistory.slice(-3).join('\n\n---\n\n');
+                const recentComp = this.companionChatHistory.slice(-3).join('\n\n---\n\n');
+                
+                // 2. Build the unified text payload
+                const payload = `--- INTERVIEWER RECENT SPEECH (Voice Brain) ---\n${recentVoice || 'None'}\n\n--- MY RECENT SPEECH (Companion Brain) ---\n${recentComp || 'None'}`;
+                
+                // 3. Fire to Backend
+                if (window.require) {
+                    window.require('electron').ipcRenderer.invoke('trigger-fusion-dry-run', payload).then(success => {
+                        if (success) {
+                            // 🟢 THE FIX: We NO LONGER wipe 'this.codeChatHistory = []'!
+                            // We keep the history intact so you can swipe back to your code.
+                            // We just reset the sync banners for the incoming script.
+                            this.codeChatIndex = Math.max(0, this.codeChatHistory.length - 1);
+                            this.hasSyncedOptimized = false;
+                            this.optimizedReady = false; 
+                            this.requestUpdate();
+                        }
+                    });
+                }
+                break;
+
+            case 'on_the_go':
+                this.showToast('🏃 ON-THE-GO DICTATOR...');
+                if (this.codeChatHistory.length > 0) {
+                    // Extract the raw text from the current code slide, stripping HTML
+                    const currentCode = this.codeChatHistory[this.codeChatIndex].replace(/<img[^>]*>/g, '').replace(/🟢 \*\*Code Engine Online\*\*.*?captures.../gs, '');
+                    
+                    if (window.require) {
+                        window.require('electron').ipcRenderer.invoke('trigger-on-the-go', currentCode).then(success => {
+                            if (success) {
+                                // Slide to the new page when it arrives
+                                this.codeChatIndex = Math.max(0, this.codeChatHistory.length - 1);
+                                this.hasSyncedOptimized = false;
+                                this.optimizedReady = false; 
+                                this.requestUpdate();
+                            }
+                        });
+                    }
+                } else {
+                    this.showToast('⏳ NO CODE TO DICTATE');
+                }
+                break;
+            
             case 'regenerate':
                 this.showToast('🔄 Regenerating...');
                 ipcRenderer.invoke('send-oa-regenerate');
@@ -523,6 +616,8 @@ export class LiveInterview extends LitElement {
                 this.codeChatHistory = []; this.voiceChatHistory = [];
                 this.codeChatIndex = 0; this.voiceChatIndex = 0;
                 this.companionChatHistory = []; this.companionChatIndex = 0;
+                this.optimizedReady = false; 
+                this.hasSyncedOptimized = false;
                 ipcRenderer.invoke('new-chat');
                 this.requestUpdate();
                 this._autoStartMic(); 
@@ -560,6 +655,8 @@ export class LiveInterview extends LitElement {
                 this.voiceChatIndex = 0;
                 this.companionChatHistory = []; 
                 this.companionChatIndex = 0;
+                this.optimizedReady = false; 
+                this.hasSyncedOptimized = false;
                 
                 // 🟢 FIX: Tell the backend to force-reload the AI URLs, resetting their memory
                 ipcRenderer.invoke('new-chat');
@@ -635,6 +732,7 @@ export class LiveInterview extends LitElement {
                         <div class="chat-feed-wrapper" id="voice-feed-wrapper">
                             <chat-feed id="voice-feed" .content=${rightContent}></chat-feed>
                         </div>
+                        ${this.optimizedReady ? html`<div class="sync-reminder">⚠️ PENDING: SYNC OPTIMIZED CODE</div>` : ''}
                     </div>
                     
                     <div class="pane ${this.paneHoverState === 'comp' ? 'hovered-comp' : ''}" @mouseenter=${() => this.paneHoverState = 'comp'}>
@@ -644,6 +742,7 @@ export class LiveInterview extends LitElement {
                         <div class="chat-feed-wrapper" id="comp-feed-wrapper">
                             <chat-feed id="comp-feed" .content=${compContent}></chat-feed>
                         </div>
+                        ${this.optimizedReady ? html`<div class="sync-reminder">⚠️ PENDING: SYNC OPTIMIZED CODE</div>` : ''}
                     </div>
                 </div>
             </div>
