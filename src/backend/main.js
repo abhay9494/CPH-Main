@@ -194,26 +194,66 @@ const PROMPTS = {
     Just wait for my voice or for the Dictator Script sync. If I start a dry run and fumble, rescue me instantly with massive bold text indicating exactly what I should say next based on the variable states in this code.
     Reply ONLY with: "🤝 Code synced to Companion. I am tracking your voice..."\n\nCODE: \n\n`,
 
-    FUSION_DRY_RUN: `SYSTEM DIRECTIVE: You are my dictator for a live dry run. 
-    I am providing you an image of my screen (which may contain code or just a problem statement) AND a transcript of what the interviewer and I just said.
+    FUSION_DRY_RUN: `SYSTEM DIRECTIVE: You are my live dictator for a dry run. 
+    I am providing a screenshot of my screen and a transcript of the recent conversation.
     
-    CRITICAL RULES:
-    1. TEST CASE SELECTION: Prioritize any specific test cases or inputs mentioned in the transcripts.
-    2. DETECT SCENARIO: Check if actual code is visible on the screen.
+    CRITICAL CONTEXT (DSA KNOWLEDGE): I have ZERO knowledge of Data Structures and Algorithms. No jargon without plain English analogies.
+
+    STEP 1: CLASSIFY THE SCENARIO
+    Determine if actual code is visible on the screen, and determine if a test case is provided (prioritize test cases spoken in the Transcript over visual ones). 
+    If NO test case exists, invent a small, simple one (e.g., array of 3-4 elements).
+
+    STEP 2: EXECUTE FORMAT BASED ON SCENARIO
+
+    === SCENARIO A: CODE EXISTS (With or Without Test Case) ===
+    You must output repeated code blocks, tracing the execution step-by-step.
+    - For loops, fully trace every iteration (if N <= 5). 
+    - You MUST use inline comments to show the exact state. 
+    - FORMAT YOUR COMMENTS EXACTLY LIKE THIS: 
+      // [Current Value] ; [Upcoming Values] ; [Loop runs X times] ; [Explanation/Why this DataType]
     
-    === SCENARIO A: IF CODE IS VISIBLE ===
-    - Walk through the code exactly in execution order.
-    - LOOPS: You MUST go through EVERY iteration of the loops. Do NOT summarize or skip ahead. Track 'i' and 'j' step-by-step.
-    - SNIPPETS: You MUST quote the exact short code snippet for the line you are currently executing.
-    - VARIABLES: You MUST state the exact previous value of a variable before modifying it.
-    - FORMAT: "Say: 'Looking at \`[short code snippet]\`, since [variable] was [old value], it now becomes [new value] because...'"
+    Example Output for Scenario A:
+    ### Iteration 1 (i = 0)
+    [CODE_START]
+    \`\`\`cpp
+    void f() {
+        int n; 
+        cin >> n; // 3 ; 
+        priority_queue<int> q; // Empty ; Will store top elements ; Used because we need O(1) access to max
+        for(int i=0; i<n; i++) { // i=0 ; Upcoming: 1, 2 ; Loop runs 3 times
+            int v; cin >> v; // 9
+            q.push(v); // q now contains [9]
+        }
+    }
+    \`\`\`
+    [CODE_END]
+
+    === SCENARIO B: NO CODE EXISTS (Conceptual Whiteboarding) ===
+    The screen is empty or only has the question. I need to explain my approach while typing pseudo-code or variables.
+    You MUST format your response using strict TYPE, HIGHLIGHT, and READ markers.
+    - TYPE: What I should literally type on my keyboard.
+    - HIGHLIGHT: What I should highlight with my mouse.
+    - READ: What I must say out loud. You MUST wrap all READ text in a blockquote (>) so it stands out visually.
+    - CHECKPOINT: After every 2-3 steps, output a "Screen Checkpoint" showing what my screen should currently look like.
     
-    === SCENARIO B: IF NO CODE IS VISIBLE ===
-    - Walk through the conceptual algorithm or logic using the test case.
-    - Track the conceptual variables and data structures step-by-step as if the code existed.
-    - FORMAT: "Say: 'In this step, we evaluate [element]. Since our current state is [old state], we update it to [new state] because...'"
+    Example Output for Scenario B:
+    **Type:** \`int largest;\`
+    **Highlight:** \`largest\`
+    > **READ:** This variable will store the largest number as we evaluate them.
     
-    3. You MUST end your entire response with exactly this tag: [DRY_RUN_END]`,
+    **Type:** \`45 21 74\`
+    > **READ:** Suppose our three numbers are forty-five, twenty-one, and seventy-four.
+    
+    **Screen Checkpoint:**
+    [CODE_START]
+    \`\`\`cpp
+    int largest;
+    45 21 74
+    \`\`\`
+    [CODE_END]
+
+    STEP 3: CLOSING
+    You MUST end your entire response with exactly this tag: [DRY_RUN_END]`,
 };
 
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen } = require('electron');
@@ -663,6 +703,7 @@ function startDualScrapers(voiceProvider, codeProvider) {
     global.bruteForceSyncPending = false; 
 
     // 🟢 NEW: The script we inject into BOTH Voice Brains to extract text
+    // 🟢 NEW: The script we inject into BOTH Voice Brains to extract text
     const voiceExtractScript = `
         (() => {
             try {
@@ -674,9 +715,6 @@ function startDualScrapers(voiceProvider, codeProvider) {
                 uniqueMsgs.forEach(el => {
                     let txt = (el.innerText || '').trim();
                     if(!txt) return;
-                    if (txt.includes('SYSTEM DIRECTIVE') || txt.includes('Brute force synced') || 
-                        txt.includes('Optimized code synced') || txt.includes('Act as a senior') || 
-                        txt.includes('Give me just one moment')) return;
 
                     let isUser = false;
                     if (window.location.hostname.includes('grok')) {
@@ -685,12 +723,23 @@ function startDualScrapers(voiceProvider, codeProvider) {
                         isUser = el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message') || el.tagName.toLowerCase() === 'user-query' || el.className.toLowerCase().includes('user');
                     }
 
-                    // 🟢 THE SMART FILTER: 
-                    // Hide our massive injected system prompts so they don't clutter the UI.
-                    // But allow ALL normal spoken transcripts and 100% of AI responses through!
-                    if (isUser && (txt.includes('SYSTEM DIRECTIVE') || txt.includes('Act as a senior') || txt.includes('[FOLLOWUP_DATA]'))) {
-                        return; 
-                    }
+                    // 🟢 THE SMART FILTER: Aggressively hide all backend prompt injections
+                    if (isUser && (
+                        txt.includes('SYSTEM DIRECTIVE') || 
+                        txt.includes('Act as a senior') || 
+                        txt.includes('[FOLLOWUP_DATA]') || 
+                        txt.includes('[VOICE_BRAIN_SCRIPT_SYNC]') || 
+                        txt.includes('TRACKER DIRECTIVE')
+                    )) return; 
+
+                    // 🟢 THE SILENCER: Hide the AI's robotic acknowledgment responses from the UI
+                    if (!isUser && (
+                        txt.includes('Companion Brain Online') || 
+                        txt.includes('Code synced to Companion') || 
+                        txt.includes('Brute force synced') || 
+                        txt.includes('Optimized code synced') || 
+                        txt.includes('Give me just one moment')
+                    )) return;
 
                     filtered.push((isUser ? "🎙️ **Transcript:**\\n" : "🤖 **AI:**\\n") + txt);
                 });
@@ -1045,7 +1094,7 @@ async function ensureVoiceAndMic(win, providerName) {
 async function sendPayloadToWindow(win, customText, images = [], providerName = 'ChatGPT') {
     if (!win || win.isDestroyed()) return;
     
-    // 🟢 FIX: Broadened selector with priority for Grok's specific textarea
+    // 🟢 Broadened selector with priority for Grok's specific textarea
     const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('textarea[placeholder*="Grok"], textarea, rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el && el.offsetParent !== null) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
     if (!isBoxReady) return;
 
@@ -1058,45 +1107,31 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
         textToPaste = textToPaste.substring(modeTag === 'Pro' ? 5 : 6); 
     }
 
-    // 1. Paste the massive prompt text FIRST
-    if (textToPaste) {
-        clipboard.writeText(textToPaste); 
-        win.webContents.paste(); 
-        await new Promise(r => setTimeout(r, 400));
-    }
+    const modifier = process.platform === 'darwin' ? 'meta' : 'control';
 
-    // 2. Inject the @Fast / @Pro macro safely with Human Typing Simulation
-    if (modeTag && providerName === 'Gemini') {
-        // Deselect text
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Right' });
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Right' });
-        await new Promise(r => setTimeout(r, 100));
+    // 🟢 HELPER: Forcefully locks focus and moves cursor to the very end of the text box
+    const focusAndMoveToEnd = async () => {
+        await win.webContents.executeJavaScript(`(() => {
+            try {
+                const box = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor');
+                if (box) {
+                    box.focus();
+                    if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
+                        const range = document.createRange();
+                        range.selectNodeContents(box);
+                        range.collapse(false);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }
+            } catch(e) {}
+        })();`);
+    };
 
-        // Shift+Enter to drop to new line
-        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
-        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
-        await new Promise(r => setTimeout(r, 100));
-
-        // 🟢 BUG 1 FIX: Type @ -> Pause -> Type Fast -> Pause -> Enter to lock chip
-        win.webContents.insertText('@');
-        await new Promise(r => setTimeout(r, 600)); 
-        
-        for (let i = 0; i < modeTag.length; i++) {
-            win.webContents.insertText(modeTag[i]);
-            await new Promise(r => setTimeout(r, 150)); 
-        }
-        await new Promise(r => setTimeout(r, 400)); 
-        
-        // Hit ENTER to lock the blue chip in Gemini
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' }); 
-        await new Promise(r => setTimeout(r, 300));
-    }
-
-    // 3. Paste Images LAST
+    // 🟢 1. PASTE IMAGES FIRST
     for (let imgData of images) {
         if (providerName === 'Grok') {
-            // 🟢 Method A: Direct DOM File Injection (Strictly for Grok's React UI)
             await win.webContents.executeJavaScript(`
                 (async () => {
                     try {
@@ -1122,32 +1157,69 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
                 })();
             `);
         } else {
-            // 🟢 Method B: Hardware Keystroke (Strictly for Gemini & ChatGPT)
             const img = nativeImage.createFromDataURL(imgData);
             clipboard.writeImage(img);
             
-            // Force focus back to Gemini/ChatGPT text box before pasting
-            await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor'); if (el) el.focus(); } catch(e) {} })()`);
+            await focusAndMoveToEnd();
             
-            const modifier = process.platform === 'darwin' ? 'meta' : 'control';
             win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
             win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
         }
         
         await new Promise(r => setTimeout(r, 600)); 
+        await focusAndMoveToEnd(); // Explicitly deselect image by moving cursor to end
+        await new Promise(r => setTimeout(r, 100));
     }
 
-    // 🟢 THE FIX: Ultimate Separation of Concerns. Hardcoded URL check for Grok.
+    // 🟢 2. PASTE TEXT SECOND
+    if (textToPaste) {
+        await focusAndMoveToEnd();
+        clipboard.writeText(textToPaste); 
+        
+        // Use hardware-level keystroke instead of webContents.paste() to guarantee insertion
+        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
+        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
+        
+        await new Promise(r => setTimeout(r, 400));
+        await focusAndMoveToEnd(); // Move to end of text
+    }
+
+    // 🟢 3. INJECT MACRO LAST (With safe Tab-Locking)
+    if (modeTag && providerName === 'Gemini') {
+        await focusAndMoveToEnd();
+
+        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
+        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
+        await new Promise(r => setTimeout(r, 100));
+
+        win.webContents.insertText('@');
+        await new Promise(r => setTimeout(r, 600)); 
+        
+        for (let i = 0; i < modeTag.length; i++) {
+            win.webContents.insertText(modeTag[i]);
+            await new Promise(r => setTimeout(r, 150)); 
+        }
+        
+        await new Promise(r => setTimeout(r, 600)); // Wait for dropdown UI to appear
+        
+        // Use TAB to safely lock the chip without triggering an early submission!
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' }); 
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' }); 
+        await new Promise(r => setTimeout(r, 200));
+        
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' }); 
+        await new Promise(r => setTimeout(r, 300));
+    }
+
+    // 🟢 4. SUBMIT
     const isGrok = providerName === 'Grok' || win.webContents.getURL().includes('grok.com');
 
     if (isGrok) {
-        // Grok requires absolute zero UI automation. No button hunting. No false clicks.
-        // We just simulate the human pressing the physical 'Enter' key to submit the pasted text.
         await new Promise(r => setTimeout(r, 200));
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
     } else {
-        // Legacy "Send Button Hunter" for ChatGPT and Gemini ONLY.
         const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Enter" i]';
         
         let isReady = false, attempts = 0;
@@ -1165,7 +1237,7 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
                 win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
             }
             
-            if (win === voiceWebWindow) {
+            if (win === voiceWebWindowPrimary) {
                 setTimeout(async () => {
                     await ensureVoiceAndMic(win, providerName);
                 }, 3500);
@@ -1817,7 +1889,7 @@ function setupGeneralIpcHandlers() {
             let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
             let codePrompt = PROMPTS.ON_THE_GO_DICTATOR + '\n\n### THE CODE TO DICTATE:\n' + currentCodeText;
             
-            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Pro ' + codePrompt;
 
             // Beam payload to the SURVIVING Code Brain
             const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
@@ -1842,7 +1914,7 @@ function setupGeneralIpcHandlers() {
             let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
             let codePrompt = PROMPTS.FUSION_DRY_RUN + '\n\n### RECENT TRANSCRIPT CONTEXT:\n' + transcriptContext;
             
-            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Pro ' + codePrompt;
 
             // 3. Beam context + image to the SURVIVING Code Brain
             const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;

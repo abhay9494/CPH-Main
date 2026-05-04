@@ -505,9 +505,21 @@ export class LiveInterview extends LitElement {
             case 'fusion_dry_run':
                 this.showToast('🎯 INITIATING FUSION DRY RUN...');
                 
-                // 1. Scrape the 3 most recent context blocks from both conversational brains
-                const recentVoice = this.voiceChatHistory.slice(-3).join('\n\n---\n\n');
-                const recentComp = this.companionChatHistory.slice(-3).join('\n\n---\n\n');
+                // 🟢 FAIL-SAFE PRE-FILTER: Ensure absolutely no system/loading text gets sent as transcript context!
+                const cleanHistory = (historyArr) => {
+                    return historyArr.filter(msg => 
+                        !msg.includes('SYSTEM DIRECTIVE') && 
+                        !msg.includes('TRACKER DIRECTIVE') && 
+                        !msg.includes('Code synced') && 
+                        !msg.includes('Companion Brain Online') && 
+                        !msg.includes('Initializing') &&
+                        !msg.includes('Syncing optimized code')
+                    );
+                };
+
+                // 1. Scrape the 3 most recent context blocks from the cleaned arrays
+                const recentVoice = cleanHistory(this.voiceChatHistory).slice(-5).join('\n\n---\n\n');
+                const recentComp = cleanHistory(this.companionChatHistory).slice(-5).join('\n\n---\n\n');
                 
                 // 2. Build the unified text payload
                 const payload = `--- INTERVIEWER RECENT SPEECH (Voice Brain) ---\n${recentVoice || 'None'}\n\n--- MY RECENT SPEECH (Companion Brain) ---\n${recentComp || 'None'}`;
@@ -516,9 +528,6 @@ export class LiveInterview extends LitElement {
                 if (window.require) {
                     window.require('electron').ipcRenderer.invoke('trigger-fusion-dry-run', payload).then(success => {
                         if (success) {
-                            // 🟢 THE FIX: We NO LONGER wipe 'this.codeChatHistory = []'!
-                            // We keep the history intact so you can swipe back to your code.
-                            // We just reset the sync banners for the incoming script.
                             this.codeChatIndex = Math.max(0, this.codeChatHistory.length - 1);
                             this.hasSyncedOptimized = false;
                             this.optimizedReady = false; 
@@ -527,7 +536,7 @@ export class LiveInterview extends LitElement {
                     });
                 }
                 break;
-
+            
             case 'on_the_go':
                 this.showToast('🏃 ON-THE-GO DICTATOR...');
                 if (this.codeChatHistory.length > 0) {
