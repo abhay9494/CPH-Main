@@ -331,12 +331,11 @@ function launchDualBrains() {
     const prefs = storage.getPreferences();
     const loadouts = prefs.dualBrainLoadouts || [];
     
-    // 🟢 STRONGER FALLBACK: Ensure all 4 brains have default IDs mapped if legacy settings exist
+    // 🟢 STRONGER FALLBACK: Ensure all brains have default IDs mapped
     activeLoadout = loadouts.find(l => l.id === (prefs.activeLoadoutId || 'loadout_1')) || 
                     loadouts[0] ||
                     { voiceEngine: 0, voiceProfileId: '1', voiceEngine2: 0, voiceProfile2Id: '3', codeEngine: 1, codeProfileId: '2', codeEngine2: 1, codeProfile2Id: '4' };
 
-    // 🟢 BULLETPROOF INDICES: Force a valid integer even if the saved setting is completely undefined
     const v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
     const v2Idx = activeLoadout.voiceEngine2 !== undefined ? activeLoadout.voiceEngine2 : 0;
     const c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
@@ -347,8 +346,8 @@ function launchDualBrains() {
     const codeProviderPrimary = AI_CONFIGS[c1Idx];
     const codeProviderSecondary = AI_CONFIGS[c2Idx];
 
-    // 🟢 UNIVERSAL MIC INJECTOR HELPER
-    const injectVoiceScripts = async (win, targetAudioMode) => {
+    // 🟢 UNIVERSAL MIC INJECTOR HELPER (BLUETOOTH COMPATIBLE)
+    const injectVoiceScripts = async (win, targetAudioMode, micId) => {
         win.webContents.insertCSS('* { cursor: default !important; }');
         try {
             const sources = await desktopCapturer.getSources({ types: ['screen'] });
@@ -359,6 +358,7 @@ function launchDualBrains() {
                 if (!window.__micHijacked) {
                     window.__micHijacked = true;
                     const mode = '${targetAudioMode}';
+                    const micId = '${micId}';
                     const sourceId = '${screenSourceId}';
                     const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
                     const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia ? navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices) : null;
@@ -396,7 +396,11 @@ function launchDualBrains() {
 
                                 if (mode === 'mic_only' || mode === 'both') {
                                     try {
-                                        const micStream = await originalGetUserMedia({ audio: true });
+                                        const audioConstraints = micId && micId !== 'default' 
+                                            ? { deviceId: { exact: micId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                                            : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+
+                                        const micStream = await originalGetUserMedia({ audio: audioConstraints });
                                         const micTrack = micStream.getAudioTracks()[0];
                                         if (micTrack) {
                                             const micSource = ctx.createMediaStreamSource(new MediaStream([micTrack]));
@@ -456,7 +460,35 @@ function launchDualBrains() {
         } catch (err) { }
     };
 
+    // 🟢 ISOLATED COMPANION INJECTOR
+    const injectCompanionScripts = async (win, micId) => {
+        win.webContents.insertCSS('* { cursor: default !important; }');
+        const compScript = `
+            if (!window.__compHijacked) {
+                window.__compHijacked = true;
+                const micId = '${micId}';
+                const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
+                
+                navigator.mediaDevices.getUserMedia = async (constraints) => {
+                    if (constraints && constraints.audio) {
+                        try {
+                            const audioConstraints = micId && micId !== 'default' 
+                                ? { deviceId: { exact: micId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+                                : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
+                                
+                            return originalGetUserMedia({ audio: audioConstraints });
+                        } catch(e) { return originalGetUserMedia(constraints); }
+                    }
+                    return originalGetUserMedia(constraints);
+                };
+            }
+            true;
+        `;
+        await win.webContents.executeJavaScript(compScript).catch(()=>{});
+    };
+
     const targetAudioMode = prefs.audioMode || 'speaker_only';
+    const targetMicId = prefs.selectedMic || 'default';
 
     // 🟢 1. LAUNCH PRIMARY VOICE BRAIN
     if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.destroy();
@@ -470,8 +502,9 @@ function launchDualBrains() {
     voiceWebWindowPrimary.webContents.setAudioMuted(true);
     if (process.platform === 'win32') voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
     voiceWebWindowPrimary.loadURL(voiceProviderPrimary.url);
-    voiceWebWindowPrimary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowPrimary, targetAudioMode));
-
+    
+    // Attach listener AFTER creation
+    voiceWebWindowPrimary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowPrimary, targetAudioMode, targetMicId));
     voiceWebWindow = voiceWebWindowPrimary; // Alias default
 
     // 🟢 2. LAUNCH SECONDARY BACKUP VOICE BRAIN (THE RACER)
@@ -486,7 +519,9 @@ function launchDualBrains() {
     voiceWebWindowSecondary.webContents.setAudioMuted(true);
     if (process.platform === 'win32') voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
     voiceWebWindowSecondary.loadURL(voiceProviderSecondary.url);
-    voiceWebWindowSecondary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowSecondary, targetAudioMode));
+    
+    // Attach listener AFTER creation
+    voiceWebWindowSecondary.webContents.on('dom-ready', () => injectVoiceScripts(voiceWebWindowSecondary, targetAudioMode, targetMicId));
 
     // 🟢 3. LAUNCH PRIMARY CODE BRAIN
     if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.destroy();
@@ -524,7 +559,7 @@ function launchDualBrains() {
         await codeWebWindowSecondary.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked")); true;`).catch(() => {});
     });
 
-    // 🟢 5. LAUNCH COMPANION BRAIN (NO HIJACK SCRIPT - USES RAW MIC)
+    // 🟢 5. LAUNCH COMPANION BRAIN
     const compProvider = AI_CONFIGS[activeLoadout.companionEngine !== undefined ? activeLoadout.companionEngine : 0];
     if (companionWebWindow && !companionWebWindow.isDestroyed()) companionWebWindow.destroy();
     companionWebWindow = new BrowserWindow({
@@ -536,6 +571,9 @@ function launchDualBrains() {
     companionWebWindow.setContentProtection(true);
     if (process.platform === 'win32') companionWebWindow.setAlwaysOnTop(true, 'floating', 1);
     companionWebWindow.loadURL(compProvider.url);
+    
+    // Attach listener AFTER creation
+    companionWebWindow.webContents.on('dom-ready', () => injectCompanionScripts(companionWebWindow, targetMicId));
 
     const preventDeath = (win) => {
         if (!win) return;

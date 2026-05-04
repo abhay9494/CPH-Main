@@ -285,7 +285,8 @@ export class SettingsView extends LitElement {
         showToast: { type: Boolean },
         listeningKey: { type: String },
         activeDropdown: { type: String },
-        editingZone: { type: String }
+        editingZone: { type: String },
+        audioDevices: { type: Object }
     };
 
     constructor() {
@@ -313,6 +314,7 @@ export class SettingsView extends LitElement {
         this.keybinds = {};
         this.showToast = false;
         this.listeningKey = null;
+        this.audioDevices = { mics: [], speakers: [] };
         this.activeDropdown = null;
         
         this.tabs = [
@@ -378,6 +380,8 @@ export class SettingsView extends LitElement {
             }
         };
         window.addEventListener('sync-preference', this.syncListener);
+        
+        this.loadAudioDevices();
     }
 
     disconnectedCallback() {
@@ -387,6 +391,25 @@ export class SettingsView extends LitElement {
         if (window.require) {
             window.require('electron').ipcRenderer.send('preview-radial-hud', false);
         }
+    }
+
+    // 🟢 NEW: Live Hardware Scanner
+    async loadAudioDevices() {
+        try {
+            // Request temporary permission to force the OS to unmask device labels
+            await navigator.mediaDevices.getUserMedia({ audio: true }).then(s => s.getTracks().forEach(t => t.stop())).catch(()=>{});
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            
+            const mics = devices.filter(d => d.kind === 'audioinput').map(d => ({ value: d.deviceId, label: d.label || 'Unknown Microphone' }));
+            const speakers = devices.filter(d => d.kind === 'audiooutput').map(d => ({ value: d.deviceId, label: d.label || 'Unknown Speaker' }));
+            
+            mics.unshift({ value: 'default', label: 'Default System Microphone' });
+            speakers.unshift({ value: 'default', label: 'Default System Speaker' });
+            
+            this.audioDevices = { mics, speakers };
+            this.requestUpdate();
+            this.showToast('🔄 Devices Refreshed');
+        } catch (e) { console.error("Error loading devices", e); }
     }
 
     // 🐛 FIX: Custom Dropdown Handlers
@@ -824,19 +847,40 @@ export class SettingsView extends LitElement {
                     {value: 'speakers', label: '🔊 Laptop Speakers (Mixed/Echo Audio)'}
                 ];
                 return html`
-                    <h2>Audio Capture & Environment</h2>
-                    <div class="form-group">
-                        <label>Hardware Environment</label>
-                        <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px; line-height: 1.4;">
-                            Crucial for the AI to understand the transcript context. If using speakers, the AI will be primed to filter out your own echo.
-                        </p>
-                        ${this.renderCustomDropdown('hardwareSetup', hardwareOpts, this.prefs.hardwareSetup || 'headphones', (val) => this.savePref('hardwareSetup', val))}
-                    </div>
-                    <div class="form-group" style="margin-top: 15px;">
-                        <label>Capture Mode</label>
-                        ${this.renderCustomDropdown('audioMode', audioOpts, this.prefs.audioMode, (val) => this.savePref('audioMode', val))}
+                    <div class="scrollable-tab">
+                        <h2>Audio Capture & Environment</h2>
+                        
+                        <!-- 🟢 NEW: DYNAMIC BLUETOOTH HARDWARE ROUTING -->
+                        <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
+                                <h3 style="margin: 0; font-size: 14px;">🎙️ Hardware Devices (Bluetooth Support)</h3>
+                                <button @click=${() => this.loadAudioDevices()} style="background: rgba(66, 133, 244, 0.1); color: #4285f4; border: 1px solid #4285f4; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">🔄 Refresh Devices</button>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label>Microphone Source (Your Voice)</label>
+                                ${this.renderCustomDropdown('selectedMic', this.audioDevices.mics.length ? this.audioDevices.mics : [{value:'default', label:'Default'}], this.prefs.selectedMic || 'default', (val) => this.savePref('selectedMic', val))}
+                            </div>
+                            <div class="form-group" style="margin-bottom: 0;">
+                                <label>Audio Output Source (Interviewer's Voice)</label>
+                                ${this.renderCustomDropdown('selectedSpeaker', this.audioDevices.speakers.length ? this.audioDevices.speakers : [{value:'default', label:'Default'}], this.prefs.selectedSpeaker || 'default', (val) => this.savePref('selectedSpeaker', val))}
+                            </div>
+                        </div>
+
+                        <div class="form-group">
+                            <label>Hardware Environment</label>
+                            <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px; line-height: 1.4;">
+                                Crucial for the AI to understand the transcript context. If using speakers, the AI will be primed to filter out your own echo.
+                            </p>
+                            ${this.renderCustomDropdown('hardwareSetup', hardwareOpts, this.prefs.hardwareSetup || 'headphones', (val) => this.savePref('hardwareSetup', val))}
+                        </div>
+                        <div class="form-group" style="margin-top: 15px;">
+                            <label>Capture Mode</label>
+                            ${this.renderCustomDropdown('audioMode', audioOpts, this.prefs.audioMode, (val) => this.savePref('audioMode', val))}
+                        </div>
                     </div>
                 `;
+
             case 'language':
                 const langOpts = [
                     {value: 'en-US', label: 'English (US)'}, {value: 'en-GB', label: 'English (UK)'},
