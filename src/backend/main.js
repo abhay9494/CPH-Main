@@ -267,7 +267,7 @@ const PROMPTS = {
     You MUST end your entire response with exactly this tag: [DRY_RUN_END]`,
 };
 
-const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen } = require('electron');
+const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen, globalShortcut } = require('electron');
 require('events').EventEmitter.defaultMaxListeners = 25; // 🟢 FIX BUG 1: Stop MaxListeners Warning
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => { event.preventDefault(); callback(true); }); // 🟢 FIX BUG 1: Suppress SSL Drops
 
@@ -1312,8 +1312,11 @@ app.whenReady().then(async () => {
     setupStorageIpcHandlers();
     setupGeneralIpcHandlers();
     launchDualBrains(); 
+    
+    registerTrackpadGestures();
+    setTimeout(() => registerTrackpadGestures(), 3000);
 });
-
+app.on('will-quit', () => { globalShortcut.unregisterAll(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
 app.on('before-quit', () => { isAppQuitting = true; });
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow(); });
@@ -1341,6 +1344,37 @@ function setupStorageIpcHandlers() {
         for (let i = 1; i <= 20; i++) { const part = session.fromPartition(`persist:ai_profile_${i}`); await part.clearStorageData(); }
         return { success: true };
     });
+}
+
+// 🟢 NEW: HARDCODED TRACKPAD GESTURE SUITE (Defined globally to prevent crash)
+function registerTrackpadGestures() {
+    const gestureMap = {
+        'CommandOrControl+Alt+H': 'hide_unhide',
+        'CommandOrControl+Alt+Up': 'scroll_up',
+        'CommandOrControl+Alt+Down': 'scroll_down',
+        'CommandOrControl+Alt+Left': 'prev_resp',
+        'CommandOrControl+Alt+Right': 'next_resp',
+        'CommandOrControl+Alt+C': 'capture',
+        'CommandOrControl+Alt+Return': 'send_ai',
+        'CommandOrControl+Alt+S': 'fix_error',
+        'CommandOrControl+Alt+O': 'on_the_go',
+        'CommandOrControl+Alt+R': 'fusion_dry_run'
+    };
+
+    for (const [key, action] of Object.entries(gestureMap)) {
+        try {
+            globalShortcut.unregister(key); 
+            globalShortcut.register(key, () => {
+                if (action === 'hide_unhide') {
+                    if(global.toggleStealthMode) global.toggleStealthMode();
+                } else {
+                    BrowserWindow.getAllWindows().forEach(w => {
+                        if (!w.isDestroyed()) w.webContents.send('execute-direct-action', action);
+                    });
+                }
+            });
+        } catch (e) { console.error('Failed to bind gesture:', key); }
+    }
 }
 
 function setupGeneralIpcHandlers() {
@@ -2305,7 +2339,10 @@ function setupGeneralIpcHandlers() {
     });
 
     ipcMain.handle('window-minimize', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize(); });
-    ipcMain.on('update-keybinds', (event, newKeybinds) => { if (mainWindow && !mainWindow.isDestroyed()) updateGlobalShortcuts(newKeybinds, mainWindow); });
+    ipcMain.on('update-keybinds', (event, newKeybinds) => { 
+        if (mainWindow && !mainWindow.isDestroyed()) updateGlobalShortcuts(newKeybinds, mainWindow); 
+        setTimeout(() => { registerTrackpadGestures(); }, 500);
+    });
     ipcMain.handle('toggle-window-visibility', async event => {
         try {
             if (mainWindow.isDestroyed()) return { success: false, error: 'Window has been destroyed' };

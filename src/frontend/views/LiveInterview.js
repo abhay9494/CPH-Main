@@ -355,6 +355,9 @@ export class LiveInterview extends LitElement {
             ipcRenderer.on('companion-new-message', this.compNewHandler);
             ipcRenderer.on('companion-update-message', this.compUpdateHandler);
 
+            this.directActionHandler = (_, action) => { this.executeHotCorner(action); };
+            ipcRenderer.on('execute-direct-action', this.directActionHandler);
+
             this._autoStartMic();
             
             this._autoStartMic();
@@ -382,6 +385,7 @@ export class LiveInterview extends LitElement {
             ipcRenderer.removeListener('radial-continuous-hold', this.radialContinuousHandler);
             ipcRenderer.removeListener('companion-new-message', this.compNewHandler);
             ipcRenderer.removeListener('companion-update-message', this.compUpdateHandler);
+            ipcRenderer.removeListener('execute-direct-action', this.directActionHandler);
         }
     }
 

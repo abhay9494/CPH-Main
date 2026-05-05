@@ -934,23 +934,94 @@ export class SettingsView extends LitElement {
             case 'shortcuts':
                 return html`
                     <div class="scrollable-tab">
-                    <h2>Keyboard Shortcuts</h2>
-                    <p style="font-size: 12px; color: var(--text-muted); margin-top: -10px; margin-bottom: 20px;">
-                        Click a button below, then press the new key combination you want to bind.
-                    </p>
-                    <div style="display: flex; flex-direction: column;">
-                        ${Object.entries(this.shortcutLabels).map(([key, label]) => html`
-                            <div class="shortcut-row">
-                                <span>${label}</span>
-                                <button class="shortcut-btn ${this.listeningKey === key ? 'listening' : ''}" @click=${() => this.startListening(key)}>
-                                    ${this.listeningKey === key ? 'Press keys...' : this.keybinds[key] || 'Unbound'}
-                                </button>
-                            </div>
-                        `)}
-                    </div>
+                        <h2>Keyboard Shortcuts</h2>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-top: -10px; margin-bottom: 20px;">
+                            Click a button below, then press the new key combination you want to bind.
+                        </p>
+                        <div style="display: flex; flex-direction: column;">
+                            ${Object.entries(this.shortcutLabels).map(([key, label]) => html`
+                                <div class="shortcut-row">
+                                    <span>${label}</span>
+                                    <button class="shortcut-btn ${this.listeningKey === key ? 'listening' : ''}" @click=${() => this.startListening(key)}>
+                                        ${this.listeningKey === key ? 'Press keys...' : this.keybinds[key] || 'Unbound'}
+                                    </button>
+                                </div>
+                            `)}
+                        </div>
+
+                        <!-- 🟢 NEW: Trackpad Cheat Sheet -->
+                        <div style="background: rgba(161, 66, 244, 0.05); padding: 20px; border-radius: 8px; border: 1px solid rgba(161, 66, 244, 0.3); margin-top: 30px;">
+                            <h3 style="margin-top: 0; font-size: 16px; margin-bottom: 5px; color: #a142f4;">🖐️ Hardware Trackpad Gestures</h3>
+                            <p style="font-size: 12px; color: #ccc; margin-bottom: 15px; line-height: 1.5;">
+                                Go to <strong>Windows Settings > Bluetooth & devices > Touchpad > Advanced gestures</strong>.<br>
+                                Select "Custom shortcut" and map your 3-finger and 4-finger gestures to these exact keys:
+                            </p>
+                            
+                            <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; background: var(--bg-tertiary); border-radius: 6px; overflow: hidden;">
+                                <thead>
+                                    <tr style="background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border-color);">
+                                        <th style="padding: 10px; color: var(--text-secondary);">Fingers & Gesture</th>
+                                        <th style="padding: 10px; color: #4285f4;">Action</th>
+                                        <th style="padding: 10px; color: #00cc66;">Type this into Windows</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 10px;"><strong>3 Finger</strong> Tap</td>
+                                        <td style="padding: 10px; font-weight: bold;">👻 Toggle Hide / Unhide</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + H</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Up</td>
+                                        <td style="padding: 10px;">⬆️ Scroll Overlay Up</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Up Arrow</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Down</td>
+                                        <td style="padding: 10px;">⬇️ Scroll Overlay Down</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Down Arrow</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Left</td>
+                                        <td style="padding: 10px;">◀ Previous Response</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Left Arrow</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color);">
+                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Right</td>
+                                        <td style="padding: 10px;">▶ Next Response</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Right Arrow</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
+                                        <td style="padding: 10px;"><strong>4 Finger</strong> Tap</td>
+                                        <td style="padding: 10px; font-weight: bold; color: #a142f4;">📸 Capture Screen</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + C</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
+                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Up</td>
+                                        <td style="padding: 10px; font-weight: bold; color: #f59e0b;">🚀 Send to AI</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Enter</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
+                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Down</td>
+                                        <td style="padding: 10px; font-weight: bold; color: #00cc66;">🌟 Sync Optimized</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + S</td>
+                                    </tr>
+                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
+                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Left</td>
+                                        <td style="padding: 10px;">🏃 On-The-Go Dictator</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + O</td>
+                                    </tr>
+                                    <tr style="background: rgba(0,0,0,0.2);">
+                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Right</td>
+                                        <td style="padding: 10px;">🎯 Fusion Dry Run</td>
+                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + R</td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
                     </div>
                 `;
-            
+                
             case 'hotcorners': {
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
