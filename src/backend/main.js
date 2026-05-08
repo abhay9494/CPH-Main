@@ -291,6 +291,8 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
+const net = require('net');
+const PIPE_NAME = '\\\\.\\pipe\\CPH_GhostPipe';
 
 let mainWindow = null;
 let voiceWebWindow = null;
@@ -1354,6 +1356,57 @@ app.whenReady().then(async () => {
     setupStorageIpcHandlers();
     setupGeneralIpcHandlers();
     launchDualBrains(); 
+
+    // ==========================================
+    // THE DEAD DROP RADAR (C++ to Electron)
+    // ==========================================
+    const triggerDir = 'C:\\Users\\Public';
+
+    setInterval(() => {
+        for (let i = 0; i <= 9; i++) {
+            const trgPath = path.join(triggerDir, `cph_num${i}.trg`);
+            
+            // If the C++ hook dropped the file...
+            if (fs.existsSync(trgPath)) {
+                try { fs.unlinkSync(trgPath); } catch (e) {} // Instantly delete the file
+                
+                console.log("[DEAD DROP] Triggered Action for Numpad:", i);
+
+                // Route the invisible triggers directly to your app!
+                if (i === 0) {
+                    if (global.toggleStealthMode) global.toggleStealthMode();
+                } 
+                else if (i === 1) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'scroll_up'); });
+                }
+                else if (i === 2) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'scroll_down'); });
+                }
+                else if (i === 3) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'prev_resp'); });
+                }
+                else if (i === 4) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'next_resp'); });
+                }
+                else if (i === 5) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'capture'); });
+                }
+                else if (i === 6) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'send_ai'); });
+                }
+                else if (i === 7) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'fix_error'); });
+                }
+                else if (i === 8) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'on_the_go'); });
+                }
+                else if (i === 9) {
+                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'fusion_dry_run'); });
+                }
+            }
+        }
+    }, 30); // Polls every 30ms (Instant to human perception, 0% CPU cost)
+    // ==========================================
     
     registerTrackpadGestures();
     setTimeout(() => registerTrackpadGestures(), 3000);
