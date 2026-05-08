@@ -267,7 +267,10 @@ const PROMPTS = {
     You MUST end your entire response with exactly this tag: [DRY_RUN_END]`,
 };
 
+global.PROMPTS = PROMPTS;
+
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen, globalShortcut } = require('electron');
+app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 require('events').EventEmitter.defaultMaxListeners = 25; // 🟢 FIX BUG 1: Stop MaxListeners Warning
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => { event.preventDefault(); callback(true); }); // 🟢 FIX BUG 1: Suppress SSL Drops
 
@@ -278,8 +281,11 @@ process.on('unhandledRejection', (reason, promise) => { console.error('[CRASH PR
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-features', 'Autofill,AutofillServerCommunication,PasswordGeneration,PasswordManager');
+// 🟢 FIX: Stops the -8 Critical Error by running AI webviews entirely in RAM
+app.commandLine.appendSwitch('disable-disk-cache');
 
 const { createWindow, updateGlobalShortcuts } = require('./windowManager'); 
+const { launchInstantInterview } = require('./ipc/instant_interview_ctrl');
 const storage = require('./storage'); 
 const fs = require('fs');
 const path = require('path');
@@ -555,16 +561,18 @@ function launchDualBrains() {
             await win.webContents.executeJavaScript(hijackScript);
 
             const assassinScript = `
-                setInterval(() => {
-                    try {
-                        const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
-                        const badBtns = btns.filter(b => {
-                            const txt = (b.innerText || '').toLowerCase();
-                            return txt.includes('keep talking') || txt.includes('continue') || txt === 'x' || txt === 'close' || txt.includes('stay logged in');
-                        });
-                        badBtns.forEach(b => b.click());
-                    } catch(e) {}
-                }, 3000);
+                if (!window.location.hostname.includes('grok')) {
+                    setInterval(() => {
+                        try {
+                            const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                            const badBtns = btns.filter(b => {
+                                const txt = (b.innerText || '').toLowerCase();
+                                return txt.includes('keep talking') || txt.includes('continue') || txt === 'x' || txt === 'close' || txt.includes('stay logged in');
+                            });
+                            badBtns.forEach(b => b.click());
+                        } catch(e) {}
+                    }, 3000);
+                }
             `;
             win.webContents.executeJavaScript(assassinScript).catch(()=>{});
             
@@ -582,13 +590,19 @@ function launchDualBrains() {
                 
                 navigator.mediaDevices.getUserMedia = async (constraints) => {
                     if (constraints && constraints.audio) {
+                        let stream;
                         try {
                             const audioConstraints = micId && micId !== 'default' 
                                 ? { deviceId: { exact: micId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                                 : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
                                 
-                            return originalGetUserMedia({ audio: audioConstraints });
-                        } catch(e) { return originalGetUserMedia(constraints); }
+                            stream = await originalGetUserMedia({ audio: audioConstraints });
+                            return stream;
+                        } catch(e) { 
+                            console.log("Hardware ID rejected by Origin-Isolation! Falling back to System Default...");
+                            // 🟢 FIX: If the ID fails, instantly try again using the raw default System Microphone!
+                            return originalGetUserMedia({ audio: true }); 
+                        }
                     }
                     return originalGetUserMedia(constraints);
                 };
@@ -1228,8 +1242,27 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
 
     if (isGrok) {
         await new Promise(r => setTimeout(r, 200));
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+        
+        // Safely attempt to click the send button first
+        const sent = await win.webContents.executeJavaScript(`(() => {
+            try {
+                const btn = document.querySelector('button[aria-label="Send message"], button[aria-label*="Send"]');
+                if (btn && !btn.disabled) { btn.click(); return true; }
+                return false;
+            } catch(e) { return false; }
+        })()`);
+        
+        // If button click failed, fallback to safe Enter key (ONLY if textarea is focused)
+        if (!sent) {
+            await focusAndMoveToEnd();
+            const isFocused = await win.webContents.executeJavaScript(`document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.getAttribute('contenteditable') === 'true')`);
+            if (isFocused) {
+                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+            } else {
+                console.log("[SILENT GUARD] Grok textarea lost focus! Aborting Enter key to prevent stray UI clicks.");
+            }
+        }
     } else {
         const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Enter" i]';
         
@@ -1258,10 +1291,16 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
 }
 
 app.whenReady().then(async () => {
-    // 🛡️ THE PERFECT CHROME MASK
-    const pristineChromeUA = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36';
+    // 🛡️ THE PERFECT CHROME MASK & TRACKER BLOCKER
+    // 🟢 FIX: Dynamically strip "Electron" from the actual native User-Agent so it never expires!
+    const rawUA = session.defaultSession.getUserAgent();
+    global.pristineChromeUA = rawUA.split('Electron')[0].trim();
+    
+    const blockedUrls = ['*://*.facebook.com/*', '*://*.google-analytics.com/*', '*://*.analytics.x.com/*'];
 
     app.on('session-created', (sess) => {
+        sess.webRequest.onBeforeRequest({ urls: blockedUrls }, (details, callback) => { callback({ cancel: true }); });
+        
         sess.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
         sess.setPermissionCheckHandler(() => true);
         sess.setDisplayMediaRequestHandler((request, callback) => {
@@ -1270,7 +1309,7 @@ app.whenReady().then(async () => {
 
         // Apply clean headers to EVERY window and completely delete Electron leak headers
         sess.webRequest.onBeforeSendHeaders((details, callback) => {
-            details.requestHeaders['User-Agent'] = pristineChromeUA;
+            details.requestHeaders['User-Agent'] = global.pristineChromeUA;
             delete details.requestHeaders['sec-ch-ua'];
             delete details.requestHeaders['sec-ch-ua-mobile'];
             delete details.requestHeaders['sec-ch-ua-platform'];
@@ -1278,6 +1317,7 @@ app.whenReady().then(async () => {
         });
     });
 
+    session.defaultSession.webRequest.onBeforeRequest({ urls: blockedUrls }, (details, callback) => { callback({ cancel: true }); });
     session.defaultSession.setPermissionRequestHandler((webContents, permission, callback) => callback(true));
     session.defaultSession.setPermissionCheckHandler(() => true);
     session.defaultSession.setDisplayMediaRequestHandler((request, callback) => {
@@ -1285,12 +1325,14 @@ app.whenReady().then(async () => {
     }, { useSystemPicker: false });
 
     session.defaultSession.webRequest.onBeforeSendHeaders((details, callback) => {
-        details.requestHeaders['User-Agent'] = pristineChromeUA;
+        details.requestHeaders['User-Agent'] = global.pristineChromeUA;
         delete details.requestHeaders['sec-ch-ua'];
         delete details.requestHeaders['sec-ch-ua-mobile'];
         delete details.requestHeaders['sec-ch-ua-platform'];
         callback({ cancel: false, requestHeaders: details.requestHeaders });
     });
+
+    await session.defaultSession.clearCache();
 
     storage.initializeStorage();
     mainWindow = createWindow(); 
@@ -1328,10 +1370,33 @@ function setupStorageIpcHandlers() {
     ipcMain.handle('storage:get-credentials', async () => { return { success: true, data: storage.getCredentials() }; });
     ipcMain.handle('storage:set-credentials', async (event, credentials) => { storage.setCredentials(credentials); return { success: true }; });
     ipcMain.handle('storage:get-preferences', async () => { return { success: true, data: storage.getPreferences() }; });
-    ipcMain.handle('storage:set-preferences', async (event, preferences) => { storage.setPreferences(preferences); return { success: true }; });
-    ipcMain.handle('storage:update-preference', async (event, key, value) => { storage.updatePreference(key, value); return { success: true }; });
+    
+    ipcMain.handle('storage:set-preferences', async (event, preferences) => { 
+        storage.setPreferences(preferences); 
+        // 🐛 FIX: Re-bind globals and trackpad keys immediately when prefs save
+        if (mainWindow) updateGlobalShortcuts(storage.getKeybinds(), mainWindow);
+        registerTrackpadGestures();
+        return { success: true }; 
+    });
+    
+    ipcMain.handle('storage:update-preference', async (event, key, value) => { 
+        storage.updatePreference(key, value); 
+        // 🐛 FIX: Re-bind globals and trackpad keys immediately when prefs save
+        if (mainWindow) updateGlobalShortcuts(storage.getKeybinds(), mainWindow);
+        registerTrackpadGestures();
+        return { success: true }; 
+    });
+    
     ipcMain.handle('storage:get-keybinds', async () => { return { success: true, data: storage.getKeybinds() }; });
-    ipcMain.handle('storage:set-keybinds', async (event, keybinds) => { storage.setKeybinds(keybinds); return { success: true }; });
+    
+    ipcMain.handle('storage:set-keybinds', async (event, keybinds) => { 
+        storage.setKeybinds(keybinds); 
+        // 🐛 FIX: Re-bind globals and trackpad keys immediately when keybinds save
+        if (mainWindow) updateGlobalShortcuts(keybinds, mainWindow);
+        registerTrackpadGestures();
+        return { success: true }; 
+    });
+    
     ipcMain.handle('storage:get-all-sessions', async () => { return { success: true, data: storage.getAllSessions() }; });
     ipcMain.handle('storage:get-session', async (event, sessionId) => { return { success: true, data: storage.getSession(sessionId) }; });
     ipcMain.handle('storage:save-session', async (event, sessionId, data) => { storage.saveSession(sessionId, data); return { success: true }; });
@@ -1346,25 +1411,86 @@ function setupStorageIpcHandlers() {
     });
 }
 
-// 🟢 NEW: HARDCODED TRACKPAD GESTURE SUITE (Defined globally to prevent crash)
+// Add this global tracking array near the top of your main.js
+let activeTrackpadShortcuts = [];
+
+// 🟢 UPGRADED: MODE-AWARE TRACKPAD GESTURE SUITE (DYNAMIC KEYS)
 function registerTrackpadGestures() {
-    const gestureMap = {
-        'CommandOrControl+Alt+H': 'hide_unhide',
-        'CommandOrControl+Alt+Up': 'scroll_up',
-        'CommandOrControl+Alt+Down': 'scroll_down',
-        'CommandOrControl+Alt+Left': 'prev_resp',
-        'CommandOrControl+Alt+Right': 'next_resp',
-        'CommandOrControl+Alt+C': 'capture',
-        'CommandOrControl+Alt+Return': 'send_ai',
-        'CommandOrControl+Alt+S': 'fix_error',
-        'CommandOrControl+Alt+O': 'on_the_go',
-        'CommandOrControl+Alt+R': 'fusion_dry_run'
+    const prefs = storage.getPreferences();
+    const mode = global.currentSessionMode || 'main';
+    
+    // 🐛 FIX: Unregister all PREVIOUSLY active trackpad shortcuts before applying new ones
+    if (activeTrackpadShortcuts.length > 0) {
+        activeTrackpadShortcuts.forEach(key => {
+            try { globalShortcut.unregister(key); } catch (e) {}
+        });
+        activeTrackpadShortcuts = []; // Reset the tracking array
+    }
+
+    // 1. Get the assigned ACTIONS based on the current mode
+    let tp;
+    if (mode === 'instant_interview') {
+        tp = prefs.instantInterview || {
+            tap_3: 'hide_unhide', swipe_left_3: 'sync_v_to_c', swipe_right_3: 'sync_c_to_v', swipe_up_3: 'restart_voice', swipe_down_3: 'swap_windows',
+            tap_4: 'capture', swipe_down_4: 'send_pro', swipe_left_4: 'on_the_go', swipe_right_4: 'dry_run', swipe_up_4: 'abort'
+        };
+    } else {
+        tp = prefs.trackpadActions || {
+            'tap_3': 'hide_unhide', 'swipe_up_3': 'scroll_up', 'swipe_down_3': 'scroll_down', 'swipe_left_3': 'prev_resp', 'swipe_right_3': 'next_resp',
+            'tap_4': 'capture', 'swipe_up_4': 'send_ai', 'swipe_down_4': 'fix_error', 'swipe_left_4': 'on_the_go', 'swipe_right_4': 'fusion_dry_run'
+        };
+    }
+
+    // 2. 🟢 Read custom trigger KEYS from preferences (with WASD defaults)
+    // const tk = prefs.trackpadKeys || {
+    //     tap_3: 'Ctrl+Alt+H', swipe_up_3: 'Ctrl+Alt+W', swipe_down_3: 'Ctrl+Alt+S', swipe_left_3: 'Ctrl+Alt+A', swipe_right_3: 'Ctrl+Alt+D',
+    //     tap_4: 'Ctrl+Alt+C', swipe_up_4: 'Ctrl+Alt+Enter', swipe_down_4: 'Ctrl+Alt+P', swipe_left_4: 'Ctrl+Alt+O', swipe_right_4: 'Ctrl+Alt+R'
+    // };
+
+    // 2. 🟢 Read custom trigger KEYS from preferences
+    const tk = prefs.trackpadKeys || {
+        tap_3: 'Ctrl+Alt+num0', 
+        swipe_up_3: 'Ctrl+Alt+num1', 
+        swipe_down_3: 'Ctrl+Alt+num2', 
+        swipe_left_3: 'Ctrl+Alt+num3', 
+        swipe_right_3: 'Ctrl+Alt+num4',
+        tap_4: 'Ctrl+Alt+num5', 
+        swipe_up_4: 'Ctrl+Alt+num6', 
+        swipe_down_4: 'Ctrl+Alt+num7', 
+        swipe_left_4: 'Ctrl+Alt+num8', 
+        swipe_right_4: 'Ctrl+Alt+num9'
     };
 
+    // Helper to translate 'Ctrl' or 'Cmd' into Electron's globalShortcut format
+    const fmt = (k) => k ? k.replace(/Ctrl/g, 'CommandOrControl').replace(/Cmd/g, 'CommandOrControl') : '';
+
+    // 3. 🟢 Build the dynamic map linking KEYS to ACTIONS
+    const gestureMap = {
+        [fmt(tk.tap_3)]: tp.tap_3,
+        [fmt(tk.swipe_up_3)]: tp.swipe_up_3,
+        [fmt(tk.swipe_down_3)]: tp.swipe_down_3,
+        [fmt(tk.swipe_left_3)]: tp.swipe_left_3,
+        [fmt(tk.swipe_right_3)]: tp.swipe_right_3,
+        [fmt(tk.tap_4)]: tp.tap_4,
+        [fmt(tk.swipe_up_4)]: tp.swipe_up_4,
+        [fmt(tk.swipe_left_4)]: tp.swipe_left_4,
+        [fmt(tk.swipe_right_4)]: tp.swipe_right_4,
+        [fmt(tk.swipe_down_4)]: tp.swipe_down_4
+    };
+
+    // 4. Register the shortcuts
     for (const [key, action] of Object.entries(gestureMap)) {
+        if (!key || !action || action === 'none') continue;
         try {
-            globalShortcut.unregister(key); 
+            // Note: globalShortcut.unregister(key) is removed here because our array handles the old keys now!
             globalShortcut.register(key, () => {
+                // Route to Instant Interview Controller if active
+                if (mode === 'instant_interview') {
+                    if (global.executeInstantAction) global.executeInstantAction(action);
+                    return;
+                }
+                
+                // Normal Mode Routing
                 if (action === 'hide_unhide') {
                     if(global.toggleStealthMode) global.toggleStealthMode();
                 } else {
@@ -1373,6 +1499,8 @@ function registerTrackpadGestures() {
                     });
                 }
             });
+            // 🐛 FIX: Add the successfully registered key to our tracking array
+            activeTrackpadShortcuts.push(key);
         } catch (e) { console.error('Failed to bind gesture:', key); }
     }
 }
@@ -1518,8 +1646,17 @@ function setupGeneralIpcHandlers() {
         const provider = AI_CONFIGS[aiIndex];
         const partitionId = `persist:ai_profile_${profileId}`;
         return new Promise((resolve) => {
-            const loginWin = new BrowserWindow({ width: 1000, height: 800, show: true, autoHideMenuBar: true, title: `Login to ${provider.name}`, webPreferences: { nodeIntegration: false, contextIsolation: true, partition: partitionId } });
-            loginWin.loadURL(provider.url); loginWin.on('closed', () => { resolve(true); });
+            const loginWin = new BrowserWindow({ 
+                width: 1000, height: 800, show: true, autoHideMenuBar: true, 
+                title: `Login to ${provider.name}`, 
+                webPreferences: { nodeIntegration: false, contextIsolation: true, partition: partitionId } 
+            });
+            
+            // 🟢 FIX: Force the pristine UA directly onto the webContents of the Login Window
+            loginWin.webContents.setUserAgent(global.pristineChromeUA);
+            
+            loginWin.loadURL(provider.url); 
+            loginWin.on('closed', () => { resolve(true); });
         });
     });
 
@@ -2019,6 +2156,14 @@ function setupGeneralIpcHandlers() {
         } catch(e) { return false; }
     });
 
+    ipcMain.on('launch-instant-interview', () => { 
+        if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.hide(); // 🟢 FIX: Completely drops the overlay UI!
+        }
+        launchInstantInterview(); 
+        registerTrackpadGestures(); 
+    });
+
     ipcMain.on('set-session-mode', (event, mode) => { 
         global.currentSessionMode = mode; 
         if (mode === 'proctored_live_interview') {
@@ -2343,6 +2488,7 @@ function setupGeneralIpcHandlers() {
         if (mainWindow && !mainWindow.isDestroyed()) updateGlobalShortcuts(newKeybinds, mainWindow); 
         setTimeout(() => { registerTrackpadGestures(); }, 500);
     });
+    ipcMain.on('reload-trackpad-gestures', () => { registerTrackpadGestures(); });
     ipcMain.handle('toggle-window-visibility', async event => {
         try {
             if (mainWindow.isDestroyed()) return { success: false, error: 'Window has been destroyed' };

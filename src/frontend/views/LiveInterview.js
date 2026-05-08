@@ -446,6 +446,28 @@ export class LiveInterview extends LitElement {
         window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
     }
 
+    // 🟢 NEW: Contextual Scroll (Hover-Aware & Direction-Corrected)
+    performContextualScroll(directionMultiplier) {
+        const hoveredElements = this.shadowRoot.querySelectorAll(':hover');
+        let scrollTarget = null;
+
+        for (let i = hoveredElements.length - 1; i >= 0; i--) {
+            const el = hoveredElements[i];
+            const overflowY = window.getComputedStyle(el).overflowY;
+            if ((overflowY === 'auto' || overflowY === 'scroll' || overflowY === 'overlay') && el.scrollHeight > el.clientHeight) {
+                scrollTarget = el; break;
+            }
+        }
+        if (!scrollTarget) {
+            const wrapperId = this.paneHoverState === 'voice' ? 'voice-feed-wrapper' : (this.paneHoverState === 'comp' ? 'comp-feed-wrapper' : 'code-feed-wrapper');
+            scrollTarget = this.shadowRoot.getElementById(wrapperId);
+        }
+        if (scrollTarget) {
+            const scrollAmount = 300 * directionMultiplier; 
+            scrollTarget.scrollBy({ top: scrollAmount, behavior: 'smooth' });
+        }
+    }
+
     executeHotCorner(action) {
         if (!window.require) return;
         const { ipcRenderer } = window.require('electron');
@@ -581,12 +603,12 @@ export class LiveInterview extends LitElement {
                 this.syncRadialToBackend(); 
                 break;
             case 'scroll_up':
-                if (this.paneHoverState === 'voice') this.shadowRoot.querySelector('#voice-feed-wrapper')?.scrollBy({top: -150, behavior: 'smooth'});
-                else this.shadowRoot.querySelector('#code-feed-wrapper')?.scrollBy({top: -150, behavior: 'smooth'});
+                // Swipe UP means pushing text UP -> We scroll DOWN (+1)
+                this.performContextualScroll(1);
                 break;
             case 'scroll_down':
-                if (this.paneHoverState === 'voice') this.shadowRoot.querySelector('#voice-feed-wrapper')?.scrollBy({top: 150, behavior: 'smooth'});
-                else this.shadowRoot.querySelector('#code-feed-wrapper')?.scrollBy({top: 150, behavior: 'smooth'});
+                // Swipe DOWN means pulling text DOWN -> We scroll UP (-1)
+                this.performContextualScroll(-1);
                 break;
             case 'prev_resp':
                 this.showToast('◀ Previous');

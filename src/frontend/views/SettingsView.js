@@ -331,6 +331,7 @@ export class SettingsView extends LitElement {
             { id: 'minimap', icon: '🧭', label: 'Minimap Settings' },
             { id: 'search', icon: '🔍', label: 'Search' },
             { id: 'zoom', icon: '📹', label: 'Zoom Web' },
+            { id: 'instant', icon: '⚡', label: 'Instant Interview' },
             { id: 'advanced', icon: '⚠️', label: 'Advanced' },  
         ];
 
@@ -499,13 +500,57 @@ export class SettingsView extends LitElement {
             keys.push(keyName);
             
             const shortcutStr = keys.join('+');
-            this.keybinds = { ...this.keybinds, [this.listeningKey]: shortcutStr };
+            
+            if (this.listeningKey.startsWith('tp_')) {
+                // 🟢 Trackpad Trigger Routing
+                const tkId = this.listeningKey.replace('tp_', '');
+                // const currentTk = this.prefs.trackpadKeys || {
+                //     tap_3: 'Ctrl+Alt+H', swipe_up_3: 'Ctrl+Alt+W', swipe_down_3: 'Ctrl+Alt+S', swipe_left_3: 'Ctrl+Alt+A', swipe_right_3: 'Ctrl+Alt+D',
+                //     tap_4: 'Ctrl+Alt+C', swipe_up_4: 'Ctrl+Alt+Enter', swipe_down_4: 'Ctrl+Alt+P', swipe_left_4: 'Ctrl+Alt+O', swipe_right_4: 'Ctrl+Alt+R'
+                // };
+                const currentTk = this.prefs.trackpadKeys || {
+                    tap_3: 'F13', swipe_up_3: 'F14', swipe_down_3: 'F15', swipe_left_3: 'F16', swipe_right_3: 'F17',
+                    tap_4: 'F18', swipe_up_4: 'F19', swipe_down_4: 'F20', swipe_left_4: 'F21', swipe_right_4: 'F22'
+                };
+                currentTk[tkId] = shortcutStr;
+                this.savePref('trackpadKeys', currentTk);
+                if (window.require) window.require('electron').ipcRenderer.send('reload-trackpad-gestures');
+            } else {
+                // Standard Shortcut Routing
+                this.keybinds = { ...this.keybinds, [this.listeningKey]: shortcutStr };
+                this.saveKeybinds();
+            }
             this.listeningKey = null;
-            this.saveKeybinds();
         }
     }
 
     startListening(key) { this.listeningKey = key; }
+
+    async resetTrackpadKeysToDefault() {
+        if (confirm("Reset all trackpad bindings to F13 - F22?")) {
+            const defaultTk = {
+                tap_3: 'Ctrl+Alt+num0', 
+                swipe_up_3: 'Ctrl+Alt+num1', 
+                swipe_down_3: 'Ctrl+Alt+num2', 
+                swipe_left_3: 'Ctrl+Alt+num3', 
+                swipe_right_3: 'Ctrl+Alt+num4',
+                tap_4: 'Ctrl+Alt+num5', 
+                swipe_up_4: 'Ctrl+Alt+num6', 
+                swipe_down_4: 'Ctrl+Alt+num7', 
+                swipe_left_4: 'Ctrl+Alt+num8', 
+                swipe_right_4: 'Ctrl+Alt+num9'
+            };
+            // Update local state instantly
+            this.prefs = { ...this.prefs, trackpadKeys: defaultTk };
+
+            // Save to DB and alert main process
+            await this.savePref('trackpadKeys', defaultTk);
+            if (window.require) window.require('electron').ipcRenderer.send('reload-trackpad-gestures');
+
+            this.triggerToast();
+            this.requestUpdate();
+        }
+    }
 
     async handleClearData() {
         if (confirm("⚠️ Are you sure? This will wipe all history, settings, and profiles. The app will immediately close.")) {
@@ -852,7 +897,6 @@ export class SettingsView extends LitElement {
                     <div class="scrollable-tab">
                         <h2>Audio Capture & Environment</h2>
                         
-                        <!-- 🟢 NEW: DYNAMIC BLUETOOTH HARDWARE ROUTING -->
                         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <h3 style="margin: 0; font-size: 14px;">🎙️ Hardware Devices (Bluetooth Support)</h3>
@@ -861,11 +905,19 @@ export class SettingsView extends LitElement {
                             
                             <div class="form-group">
                                 <label>Microphone Source (Your Voice)</label>
-                                ${this.renderCustomDropdown('selectedMic', this.audioDevices.mics.length ? this.audioDevices.mics : [{value:'default', label:'Default'}], this.prefs.selectedMic || 'default', (val) => this.savePref('selectedMic', val))}
+                                ${this.renderCustomDropdown('selectedMic', this.audioDevices.mics.length ? this.audioDevices.mics : [{value:'default', label:'Default'}], this.prefs.selectedMic || 'default', (val) => {
+                                    this.savePref('selectedMic', val);
+                                    // 🟢 FIX: Hot-reload the AI brains so the new hardware ID is injected instantly!
+                                    if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                })}
                             </div>
                             <div class="form-group" style="margin-bottom: 0;">
                                 <label>Audio Output Source (Interviewer's Voice)</label>
-                                ${this.renderCustomDropdown('selectedSpeaker', this.audioDevices.speakers.length ? this.audioDevices.speakers : [{value:'default', label:'Default'}], this.prefs.selectedSpeaker || 'default', (val) => this.savePref('selectedSpeaker', val))}
+                                ${this.renderCustomDropdown('selectedSpeaker', this.audioDevices.speakers.length ? this.audioDevices.speakers : [{value:'default', label:'Default'}], this.prefs.selectedSpeaker || 'default', (val) => {
+                                    this.savePref('selectedSpeaker', val);
+                                    // 🟢 FIX: Hot-reload the AI brains so the new hardware ID is injected instantly!
+                                    if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                                })}
                             </div>
                         </div>
 
@@ -878,7 +930,11 @@ export class SettingsView extends LitElement {
                         </div>
                         <div class="form-group" style="margin-top: 15px;">
                             <label>Capture Mode</label>
-                            ${this.renderCustomDropdown('audioMode', audioOpts, this.prefs.audioMode, (val) => this.savePref('audioMode', val))}
+                            ${this.renderCustomDropdown('audioMode', audioOpts, this.prefs.audioMode, (val) => {
+                                this.savePref('audioMode', val);
+                                // 🟢 FIX: Hot-reload the AI brains to apply the new capture constraints
+                                if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
+                            })}
                         </div>
                     </div>
                 `;
@@ -931,13 +987,43 @@ export class SettingsView extends LitElement {
                         ${this.renderCustomDropdown('selectedImageQuality', qualOpts, this.prefs.selectedImageQuality, (val) => this.savePref('selectedImageQuality', val))}
                     </div>
                 `;
+            
             case 'shortcuts':
+                const trackpadList = [
+                    { id: 'tap_3', label: '3 Finger Tap', keyStr: 'Ctrl + Alt + Num 0' },
+                    { id: 'swipe_up_3', label: '3 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 1' },
+                    { id: 'swipe_down_3', label: '3 Finger Swipe Down', keyStr: 'Ctrl + Alt + Num 2' },
+                    { id: 'swipe_left_3', label: '3 Finger Swipe Left', keyStr: 'Ctrl + Alt + Num 3' },
+                    { id: 'swipe_right_3', label: '3 Finger Swipe Right', keyStr: 'Ctrl + Alt + Num 4' },
+                    { id: 'tap_4', label: '4 Finger Tap', keyStr: 'Ctrl + Alt + Num 5' },
+                    { id: 'swipe_up_4', label: '4 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 6' },
+                    { id: 'swipe_down_4', label: '4 Finger Swipe Down', keyStr: 'Ctrl + Alt + Num 7' },
+                    { id: 'swipe_left_4', label: '4 Finger Swipe Left', keyStr: 'Ctrl + Alt + Num 8' },
+                    { id: 'swipe_right_4', label: '4 Finger Swipe Right', keyStr: 'Ctrl + Alt + Num 9' }
+                ];
+                
+                const trackpadActionsList = [
+                    {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🌟 Sync Optimized'},
+                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
+                    {value: 'hide_unhide', label: '👻 Toggle Hide / Unhide'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
+                    {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
+                    {value: 'change_profile', label: '👤 Switch Profile'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
+                    {value: 'language', label: '💻 Change Language'}, {value: 'mic', label: '🎙️ Toggle Mic'},
+                    {value: 'reset', label: '✨ Reset Session'}, {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}, {value: 'swap_panes', label: '🔀 Swap Brain Panes'},
+                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'}, {value: 'on_the_go', label: '🏃 On-The-Go Dictator'}
+                ];
+
+                const currentTrackpad = this.prefs.trackpadActions || {
+                    'tap_3': 'hide_unhide', 'swipe_up_3': 'scroll_up', 'swipe_down_3': 'scroll_down', 'swipe_left_3': 'prev_resp', 'swipe_right_3': 'next_resp',
+                    'tap_4': 'capture', 'swipe_up_4': 'send_ai', 'swipe_down_4': 'fix_error', 'swipe_left_4': 'on_the_go', 'swipe_right_4': 'fusion_dry_run'
+                };
+
                 return html`
                     <div class="scrollable-tab">
                         <h2>Keyboard Shortcuts</h2>
-                        <p style="font-size: 12px; color: var(--text-muted); margin-top: -10px; margin-bottom: 20px;">
-                            Click a button below, then press the new key combination you want to bind.
-                        </p>
                         <div style="display: flex; flex-direction: column;">
                             ${Object.entries(this.shortcutLabels).map(([key, label]) => html`
                                 <div class="shortcut-row">
@@ -949,75 +1035,40 @@ export class SettingsView extends LitElement {
                             `)}
                         </div>
 
-                        <!-- 🟢 NEW: Trackpad Cheat Sheet -->
+                        <!-- 🟢 NEW: Customizable Trackpad Gestures -->
                         <div style="background: rgba(161, 66, 244, 0.05); padding: 20px; border-radius: 8px; border: 1px solid rgba(161, 66, 244, 0.3); margin-top: 30px;">
-                            <h3 style="margin-top: 0; font-size: 16px; margin-bottom: 5px; color: #a142f4;">🖐️ Hardware Trackpad Gestures</h3>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <h3 style="margin-top: 0; font-size: 16px; margin-bottom: 0; color: #a142f4;">🖐️ Hardware Trackpad Gestures</h3>
+                                <button @click=${() => this.resetTrackpadKeysToDefault()} style="background: rgba(161, 66, 244, 0.2); color: #a142f4; border: 1px solid #a142f4; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer !important; transition: 0.2s;">🔄 Reset Keys to Defaults</button>
+                            </div>
                             <p style="font-size: 12px; color: #ccc; margin-bottom: 15px; line-height: 1.5;">
-                                Go to <strong>Windows Settings > Bluetooth & devices > Touchpad > Advanced gestures</strong>.<br>
-                                Select "Custom shortcut" and map your 3-finger and 4-finger gestures to these exact keys:
+                                Go to <strong>Windows Settings > Touchpad > Advanced gestures</strong> and map your physical trackpad gestures to the exact keys shown in green. Then, customize what action those keys trigger below!
                             </p>
                             
-                            <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left; background: var(--bg-tertiary); border-radius: 6px; overflow: hidden;">
-                                <thead>
-                                    <tr style="background: rgba(0,0,0,0.4); border-bottom: 1px solid var(--border-color);">
-                                        <th style="padding: 10px; color: var(--text-secondary);">Fingers & Gesture</th>
-                                        <th style="padding: 10px; color: #4285f4;">Action</th>
-                                        <th style="padding: 10px; color: #00cc66;">Type this into Windows</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 10px;"><strong>3 Finger</strong> Tap</td>
-                                        <td style="padding: 10px; font-weight: bold;">👻 Toggle Hide / Unhide</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + H</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Up</td>
-                                        <td style="padding: 10px;">⬆️ Scroll Overlay Up</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Up Arrow</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Down</td>
-                                        <td style="padding: 10px;">⬇️ Scroll Overlay Down</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Down Arrow</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Left</td>
-                                        <td style="padding: 10px;">◀ Previous Response</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Left Arrow</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color);">
-                                        <td style="padding: 10px;"><strong>3 Finger</strong> Swipe Right</td>
-                                        <td style="padding: 10px;">▶ Next Response</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Right Arrow</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
-                                        <td style="padding: 10px;"><strong>4 Finger</strong> Tap</td>
-                                        <td style="padding: 10px; font-weight: bold; color: #a142f4;">📸 Capture Screen</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + C</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
-                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Up</td>
-                                        <td style="padding: 10px; font-weight: bold; color: #f59e0b;">🚀 Send to AI</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + Enter</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
-                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Down</td>
-                                        <td style="padding: 10px; font-weight: bold; color: #00cc66;">🌟 Sync Optimized</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + S</td>
-                                    </tr>
-                                    <tr style="border-bottom: 1px solid var(--border-color); background: rgba(0,0,0,0.2);">
-                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Left</td>
-                                        <td style="padding: 10px;">🏃 On-The-Go Dictator</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + O</td>
-                                    </tr>
-                                    <tr style="background: rgba(0,0,0,0.2);">
-                                        <td style="padding: 10px;"><strong>4 Finger</strong> Swipe Right</td>
-                                        <td style="padding: 10px;">🎯 Fusion Dry Run</td>
-                                        <td style="padding: 10px; font-family: monospace;">Ctrl + Alt + R</td>
-                                    </tr>
-                                </tbody>
-                            </table>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                ${trackpadList.map(t => html`
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span style="font-weight: bold; font-size: 13px; color: var(--text-color);">${t.label}</span>
+                                            <div style="font-size: 11px; font-family: monospace; color: #00cc66; margin-top: 5px;">
+                                                Map to: 
+                                                <button class="shortcut-btn ${this.listeningKey === 'tp_' + t.id ? 'listening' : ''}" 
+                                                    style="background: transparent; border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; min-width: 80px;" 
+                                                    @click=${() => this.startListening('tp_' + t.id)}>
+                                                    ${this.listeningKey === 'tp_' + t.id ? 'Press keys...' : (this.prefs.trackpadKeys?.[t.id] || t.keyStr)}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div style="width: 200px;">
+                                            ${this.renderCustomDropdown(t.id, trackpadActionsList, currentTrackpad[t.id], (val) => {
+                                                const newActions = { ...currentTrackpad, [t.id]: val };
+                                                this.savePref('trackpadActions', newActions);
+                                                if (window.require) window.require('electron').ipcRenderer.send('reload-trackpad-gestures');
+                                            })}
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
                         </div>
                     </div>
                 `;
@@ -1505,6 +1556,126 @@ export class SettingsView extends LitElement {
                         </div>
                     </div>
                 `;
+
+            case 'instant': {
+                const iiPrefs = this.prefs.instantInterview || {
+                    width: 45, gap: 2,
+                    tap_3: 'hide_unhide', swipe_left_3: 'sync_v_to_c', swipe_right_3: 'sync_c_to_v', swipe_up_3: 'restart_voice', swipe_down_3: 'swap_windows',
+                    tap_4: 'capture', swipe_down_4: 'send_pro', swipe_left_4: 'on_the_go', swipe_right_4: 'dry_run', swipe_up_4: 'abort'
+                };
+                
+                const iiActions = [
+                    {value: 'none', label: 'None (Disabled)'},
+                    {value: 'hide_unhide', label: '👻 Hide / Unhide Windows'},
+                    {value: 'sync_v_to_c', label: '⬅️ Sync Voice to Code (Left)'},
+                    {value: 'sync_c_to_v', label: '➡️ Sync Code to Voice (Right)'},
+                    {value: 'restart_voice', label: '🔄 Restart Voice & Dump Vaults'},
+                    {value: 'swap_windows', label: '🔀 Swap Windows'},
+                    {value: 'capture', label: '📸 Capture Screen'},
+                    {value: 'send_pro', label: '🚀 Send to AI (@Pro)'},
+                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
+                    {value: 'dry_run', label: '🎯 Fusion Dry Run'},
+                    {value: 'abort', label: '🚪 Abort to Main Hub'}
+                ];
+
+                const gestureList = [
+                    { id: 'tap_3', label: '3 Finger Tap', keyStr: 'Ctrl + Alt + H' },
+                    { id: 'swipe_left_3', label: '3 Finger Swipe Left', keyStr: 'Ctrl + Alt + A' },
+                    { id: 'swipe_right_3', label: '3 Finger Swipe Right', keyStr: 'Ctrl + Alt + D' },
+                    { id: 'swipe_up_3', label: '3 Finger Swipe Up', keyStr: 'Ctrl + Alt + W' },
+                    { id: 'swipe_down_3', label: '3 Finger Swipe Down', keyStr: 'Ctrl + Alt + S' },
+                    { id: 'tap_4', label: '4 Finger Tap', keyStr: 'Ctrl + Alt + C' },
+                    { id: 'swipe_down_4', label: '4 Finger Swipe Down', keyStr: 'Ctrl + Alt + P' }, // Check your mapping!
+                    { id: 'swipe_left_4', label: '4 Finger Swipe Left', keyStr: 'Ctrl + Alt + O' },
+                    { id: 'swipe_right_4', label: '4 Finger Swipe Right', keyStr: 'Ctrl + Alt + R' },
+                    { id: 'swipe_up_4', label: '4 Finger Swipe Up', keyStr: 'Ctrl + Alt + Enter' }
+                ];
+
+                return html`
+                    <div class="scrollable-tab">
+                        <h2>Instant Interview (Lightweight)</h2>
+                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 0; margin-bottom: 20px;">
+                            Configure the exact window sizes and gesture mappings for your 2-Window stealth setup.
+                        </p>
+
+                        <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #fff;">🧠 Instant Mode Accounts</h3>
+                            <div style="display: flex; gap: 15px;">
+                                <div style="flex: 1; border: 1px dashed rgba(66, 133, 244, 0.5); padding: 10px; border-radius: 4px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain (Left Window)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('ii_codeEngine', [ {value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'} ], iiPrefs.codeEngine || 1, (val) => {
+                                            this.savePref('instantInterview', { ...iiPrefs, codeEngine: val });
+                                        })}
+                                        ${this.renderCustomDropdown('ii_codeProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.codeProfileId || '', (val) => {
+                                            this.savePref('instantInterview', { ...iiPrefs, codeProfileId: val });
+                                        })}
+                                    </div>
+                                </div>
+                                <div style="flex: 1; border: 1px dashed rgba(161, 66, 244, 0.5); padding: 10px; border-radius: 4px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #a142f4;">🗣️ Voice Brain (Right Window)</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('ii_voiceEngine', [ {value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'} ], iiPrefs.voiceEngine || 0, (val) => {
+                                            this.savePref('instantInterview', { ...iiPrefs, voiceEngine: val });
+                                        })}
+                                        ${this.renderCustomDropdown('ii_voiceProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.voiceProfileId || '', (val) => {
+                                            this.savePref('instantInterview', { ...iiPrefs, voiceProfileId: val });
+                                        })}
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
+                            <div style="flex: 1; background: var(--bg-tertiary); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center;">
+                                <h3 style="margin-top: 0; font-size: 13px; color: #fff;">Window Geometry Preview</h3>
+                                <div style="width: 100%; height: 150px; background: #000; border: 2px solid #333; border-radius: 6px; position: relative; display: flex; justify-content: center; align-items: center; gap: ${iiPrefs.gap}%;">
+                                    <div style="width: ${iiPrefs.width}%; height: 80%; background: rgba(66, 133, 244, 0.4); border: 2px solid #4285f4; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #4285f4;">CODE</div>
+                                    <div style="width: ${iiPrefs.width}%; height: 80%; background: rgba(161, 66, 244, 0.4); border: 2px solid #a142f4; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #a142f4;">VOICE</div>
+                                </div>
+                                <div style="width: 100%; margin-top: 15px; display: flex; gap: 15px;">
+                                    <div class="slider-row">
+                                        <label><span>Window Width</span> <span style="color: #4285f4;">${iiPrefs.width}%</span></label>
+                                        <input type="range" min="20" max="48" step="1" .value=${iiPrefs.width} @input=${(e) => this.savePref('instantInterview', {...iiPrefs, width: parseInt(e.target.value)})}>
+                                    </div>
+                                    <div class="slider-row">
+                                        <label><span>Center Gap</span> <span style="color: #a142f4;">${iiPrefs.gap}%</span></label>
+                                        <input type="range" min="0" max="20" step="1" .value=${iiPrefs.gap} @input=${(e) => this.savePref('instantInterview', {...iiPrefs, gap: parseInt(e.target.value)})}>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div style="background: rgba(0, 204, 102, 0.05); padding: 20px; border-radius: 8px; border: 1px solid rgba(0, 204, 102, 0.3);">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 15px; color: #00cc66;">⚡ Instant Mode Gestures</h3>
+                            <div style="display: flex; flex-direction: column; gap: 8px;">
+                                ${gestureList.map(t => html`
+                                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
+                                        <div style="display: flex; flex-direction: column;">
+                                            <span style="font-weight: bold; font-size: 13px; color: var(--text-color);">${t.label}</span>
+                                            <div style="font-size: 11px; font-family: monospace; color: #00cc66; margin-top: 5px;">
+                                                Map to: 
+                                                <button class="shortcut-btn ${this.listeningKey === 'tp_' + t.id ? 'listening' : ''}" 
+                                                    style="background: transparent; border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; min-width: 80px;" 
+                                                    @click=${() => this.startListening('tp_' + t.id)}>
+                                                    ${this.listeningKey === 'tp_' + t.id ? 'Press keys...' : (this.prefs.trackpadKeys?.[t.id] || t.keyStr)}
+                                                </button>
+                                            </div>
+                                        </div>
+                                        <div style="width: 240px;">
+                                            ${this.renderCustomDropdown('ii_' + t.id, iiActions, iiPrefs[t.id], (val) => {
+                                                const newActions = { ...iiPrefs, [t.id]: val };
+                                                this.savePref('instantInterview', newActions);
+                                                if (window.require) window.require('electron').ipcRenderer.send('reload-trackpad-gestures');
+                                            })}
+                                        </div>
+                                    </div>
+                                `)}
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
                 
             case 'advanced':
                 return html`

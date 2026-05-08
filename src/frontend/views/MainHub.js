@@ -47,8 +47,14 @@ export class MainHub extends LitElement {
 
         .card-oa::before { background: rgba(161, 66, 244, var(--bg-alpha, 1)); }
         .card-oa .icon-wrapper { background: rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.15)); color: #a142f4; border: 1px solid rgba(161, 66, 244, calc(var(--bg-alpha, 1) * 0.3)); }
+        
         .card-interview::before { background: rgba(66, 133, 244, var(--bg-alpha, 1)); }
         .card-interview .icon-wrapper { background: rgba(66, 133, 244, calc(var(--bg-alpha, 1) * 0.15)); color: #4285f4; border: 1px solid rgba(66, 133, 244, calc(var(--bg-alpha, 1) * 0.3)); }
+
+        /* 🟢 NEW: Instant Interview Styling */
+        .card-instant::before { background: rgba(0, 204, 102, var(--bg-alpha, 1)); }
+        .card-instant .icon-wrapper { background: rgba(0, 204, 102, calc(var(--bg-alpha, 1) * 0.15)); color: #00cc66; border: 1px solid rgba(0, 204, 102, calc(var(--bg-alpha, 1) * 0.3)); }
+
         .card-companion::before { background: rgba(245, 158, 11, var(--bg-alpha, 1)); }
         .card-companion .icon-wrapper { background: rgba(245, 158, 11, calc(var(--bg-alpha, 1) * 0.15)); color: #f59e0b; border: 1px solid rgba(245, 158, 11, calc(var(--bg-alpha, 1) * 0.3)); }
 
@@ -101,7 +107,14 @@ export class MainHub extends LitElement {
                     <div class="mode-card card-interview ${isSetupIncomplete ? 'disabled' : ''}" @click=${() => !isSetupIncomplete && this.onNavigate('proctored_live_interview')}>
                         <div class="icon-wrapper">🕵️</div>
                         <div class="card-title">Proctored Live Interview</div>
-                        <div class="card-desc">Dual-Brain execution. Zero-click 16-zone radial wrist-flicks to execute commands silently.</div>
+                        <div class="card-desc">Heavy 5-Brain execution. UI Overlays and 16-zone radial wrist-flicks to execute commands silently.</div>
+                    </div>
+
+                    <!-- 🟢 NEW: Instant Interview Card -->
+                    <div class="mode-card card-instant ${isSetupIncomplete ? 'disabled' : ''}" @click=${() => !isSetupIncomplete && this.onNavigate('instant_interview')}>
+                        <div class="icon-wrapper">⚡</div>
+                        <div class="card-title">Instant Interview</div>
+                        <div class="card-desc">Ultra-lightweight 2-window mode. Zero UI overlays, direct OS-level gestures, and maximum CPU stealth.</div>
                     </div>
 
                     <div class="mode-card card-companion" @click=${() => this.onNavigate('companion')}>

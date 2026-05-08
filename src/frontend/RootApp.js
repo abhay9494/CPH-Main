@@ -192,6 +192,13 @@ export class RootApp extends LitElement {
             ipcRenderer.send('toggle-radial-permanent', true);
             setTimeout(() => ipcRenderer.send('set-ignore-mouse-events', true), 200); 
         }
+        // 🟢 NEW: Instant Interview Routing
+        else if (destination === 'instant_interview') {
+            ipcRenderer.send('stop-hot-corners'); // No mouse dwells
+            ipcRenderer.send('toggle-radial-permanent', false); // No radial menu
+            ipcRenderer.send('set-ignore-mouse-events', true); // Drop the click wall
+            ipcRenderer.send('launch-instant-interview'); // 🟢 FIRE TO BACKEND CONTROLLER!
+        }
         else if (destination === 'companion') {
             ipcRenderer.send('stop-hot-corners');
             ipcRenderer.send('set-ignore-mouse-events', false); 
@@ -211,6 +218,7 @@ export class RootApp extends LitElement {
             case 'help': return 'CP Helper 20 - Help';
             case 'proctored_oa': return 'CP Helper 20 - Online Assessment';
             case 'proctored_live_interview': return 'CP Helper 20 - Proctored Live Interview';
+            case 'instant_interview': return 'CP Helper 20 - Instant Interview (Lightweight)'; // 🟢
             case 'companion': return 'CP Helper 20 - Helping Other';
             default: return 'CP Helper 20';
         }
@@ -221,7 +229,19 @@ export class RootApp extends LitElement {
             case 'main':
                 return html`<main-hub .missingAccount=${this.missingAccount} .missingContext=${this.missingContext} .onNavigate=${(dest) => this.handleHubNavigation(dest)}></main-hub>`;
             
-            // These will be wired up in the next steps!
+            // 🟢 NEW: Instant Interview Loading Screen (Since there is no actual UI)
+            case 'instant_interview': 
+                return html`
+                    <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--text-secondary);">
+                        <div style="font-size: 40px; margin-bottom: 20px;">⚡</div>
+                        <h2 style="margin-top: 0; color: #00cc66;">Instant Interview Active</h2>
+                        <p style="font-size: 13px; max-width: 400px; line-height: 1.5;">
+                            The UI has been stripped away. Your two native AI windows are now running in the background.<br><br>
+                            Use your <strong>3-Finger and 4-Finger Trackpad Gestures</strong> to hide, sync, and control the flow.
+                        </p>
+                    </div>
+                `;
+
             case 'settings': return html`<settings-view></settings-view>`;
             case 'history': return html`<history-view></history-view>`;
             case 'help': return html`<help-view></help-view>`;
