@@ -259,13 +259,15 @@ export class RootApp extends LitElement {
             <div class="window-container">
                 <div class="vertical-slider-wrapper slider-left">
                     <span>BG</span>
-                    <input type="range" class="vertical-slider" min="0" max="1" step="0.05" .value=${this.bgTransparency} 
-                        @input=${async (e) => {
-                            this.bgTransparency = parseFloat(e.target.value);
-                            this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency);
-                            if(window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
-                            window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: this.bgTransparency } }));
-                        }} />
+                    <input type="range" class="vertical-slider" min="0" max="1" step="0.05" .value=${this.bgTransparency} @input=${async (e) => {
+                        this.bgTransparency = parseFloat(e.target.value);
+                        this.applyBackgroundAppearance('#1e1e1e', this.bgTransparency);
+                        if(window.require) {
+                            window.require('electron').ipcRenderer.send('rebuild-radial-hud');
+                            await window.cheatingDaddy.storage.updatePreference('backgroundTransparency', this.bgTransparency);
+                        }
+                        window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key: 'backgroundTransparency', value: this.bgTransparency } }));
+                    }} />
                 </div>
 
                 <div class="vertical-slider-wrapper slider-right">

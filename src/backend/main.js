@@ -1355,7 +1355,7 @@ app.whenReady().then(async () => {
 
     setupStorageIpcHandlers();
     setupGeneralIpcHandlers();
-    launchDualBrains(); 
+    // launchDualBrains(); 
 
     // ==========================================
     // THE DEAD DROP RADAR (C++ to Electron)
@@ -1372,40 +1372,68 @@ app.whenReady().then(async () => {
                 
                 console.log("[DEAD DROP] Triggered Action for Numpad:", i);
 
-                // Route the invisible triggers directly to your app!
-                if (i === 0) {
-                    if (global.toggleStealthMode) global.toggleStealthMode();
+                // 🟢 FIX: ROUTE ACTIONS BASED ON THE ACTIVE MODE!
+                if (global.currentSessionMode === 'instant_interview') {
+                    
+                    // Instant Interview Mode Action Map
+                    const instantMap = {
+                        0: 'hide_unhide',
+                        1: 'restart_voice',
+                        2: 'swap_windows',
+                        3: 'sync_v_to_c',
+                        4: 'sync_c_to_v',
+                        5: 'capture',
+                        6: 'abort', // Abort back to Main Hub
+                        7: 'send_pro',
+                        8: 'on_the_go',
+                        9: 'dry_run'
+                    };
+                    
+                    const targetAction = instantMap[i];
+                    if (targetAction && global.executeInstantAction) {
+                        global.executeInstantAction(targetAction);
+                    }
                 } 
-                else if (i === 1) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'scroll_up'); });
-                }
-                else if (i === 2) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'scroll_down'); });
-                }
-                else if (i === 3) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'prev_resp'); });
-                }
-                else if (i === 4) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'next_resp'); });
-                }
-                else if (i === 5) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'capture'); });
-                }
-                else if (i === 6) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'send_ai'); });
-                }
-                else if (i === 7) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'fix_error'); });
-                }
-                else if (i === 8) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'on_the_go'); });
-                }
-                else if (i === 9) {
-                    BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'fusion_dry_run'); });
+                else {
+                    if (global.isGhostHidden && i !== 0) {
+                        console.log("[DEAD DROP] Blocked by Stealth Lock!");
+                        return;
+                    }
+                    // Standard Proctored Live Interview Mode Action Map
+                    if (i === 0) {
+                        if (global.toggleStealthMode) global.toggleStealthMode();
+                    } 
+                    else if (i === 1) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'scroll_up'); });
+                    }
+                    else if (i === 2) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'scroll_down'); });
+                    }
+                    else if (i === 3) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'prev_resp'); });
+                    }
+                    else if (i === 4) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'next_resp'); });
+                    }
+                    else if (i === 5) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'capture'); });
+                    }
+                    else if (i === 6) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'send_ai'); });
+                    }
+                    else if (i === 7) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'fix_error'); });
+                    }
+                    else if (i === 8) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'on_the_go'); });
+                    }
+                    else if (i === 9) {
+                        BrowserWindow.getAllWindows().forEach(w => { if (!w.isDestroyed()) w.webContents.send('execute-direct-action', 'fusion_dry_run'); });
+                    }
                 }
             }
         }
-    }, 30); // Polls every 30ms (Instant to human perception, 0% CPU cost)
+    }, 30);
     // ==========================================
     
     registerTrackpadGestures();
@@ -1413,7 +1441,15 @@ app.whenReady().then(async () => {
 });
 app.on('will-quit', () => { globalShortcut.unregisterAll(); });
 app.on('window-all-closed', () => { if (process.platform !== 'darwin') app.quit(); });
-app.on('before-quit', () => { isAppQuitting = true; });
+app.on('before-quit', () => {
+    isAppQuitting = true;
+    BrowserWindow.getAllWindows().forEach(w => {
+        if (!w.isDestroyed()) {
+            w.webContents.executeJavaScript(`try { navigator.mediaDevices.getUserMedia({audio:true}).then(s=>s.getTracks().forEach(t=>t.stop())).catch(()=>{}); } catch(e){}`).catch(()=>{});
+            w.destroy();
+        }
+    });
+});
 app.on('activate', () => { if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow(); });
 
 function setupStorageIpcHandlers() {
@@ -1467,95 +1503,21 @@ function setupStorageIpcHandlers() {
 // Add this global tracking array near the top of your main.js
 let activeTrackpadShortcuts = [];
 
-// 🟢 UPGRADED: MODE-AWARE TRACKPAD GESTURE SUITE (DYNAMIC KEYS)
+// 🟢 UPGRADED: C++ DEAD DROP ARCHITECTURE
 function registerTrackpadGestures() {
-    const prefs = storage.getPreferences();
-    const mode = global.currentSessionMode || 'main';
+    // 🟢 FIX: We no longer use Electron's globalShortcut for trackpad gestures!
+    // If we do, it accidentally steals the top-row number keys from the user.
+    // The C++ Injector's Dead Drop Radar handles everything natively now.
     
-    // 🐛 FIX: Unregister all PREVIOUSLY active trackpad shortcuts before applying new ones
+    // Unregister any lingering shortcuts from the old system to free up the keyboard
     if (activeTrackpadShortcuts.length > 0) {
         activeTrackpadShortcuts.forEach(key => {
             try { globalShortcut.unregister(key); } catch (e) {}
         });
-        activeTrackpadShortcuts = []; // Reset the tracking array
+        activeTrackpadShortcuts = []; 
     }
-
-    // 1. Get the assigned ACTIONS based on the current mode
-    let tp;
-    if (mode === 'instant_interview') {
-        tp = prefs.instantInterview || {
-            tap_3: 'hide_unhide', swipe_left_3: 'sync_v_to_c', swipe_right_3: 'sync_c_to_v', swipe_up_3: 'restart_voice', swipe_down_3: 'swap_windows',
-            tap_4: 'capture', swipe_down_4: 'send_pro', swipe_left_4: 'on_the_go', swipe_right_4: 'dry_run', swipe_up_4: 'abort'
-        };
-    } else {
-        tp = prefs.trackpadActions || {
-            'tap_3': 'hide_unhide', 'swipe_up_3': 'scroll_up', 'swipe_down_3': 'scroll_down', 'swipe_left_3': 'prev_resp', 'swipe_right_3': 'next_resp',
-            'tap_4': 'capture', 'swipe_up_4': 'send_ai', 'swipe_down_4': 'fix_error', 'swipe_left_4': 'on_the_go', 'swipe_right_4': 'fusion_dry_run'
-        };
-    }
-
-    // 2. 🟢 Read custom trigger KEYS from preferences (with WASD defaults)
-    // const tk = prefs.trackpadKeys || {
-    //     tap_3: 'Ctrl+Alt+H', swipe_up_3: 'Ctrl+Alt+W', swipe_down_3: 'Ctrl+Alt+S', swipe_left_3: 'Ctrl+Alt+A', swipe_right_3: 'Ctrl+Alt+D',
-    //     tap_4: 'Ctrl+Alt+C', swipe_up_4: 'Ctrl+Alt+Enter', swipe_down_4: 'Ctrl+Alt+P', swipe_left_4: 'Ctrl+Alt+O', swipe_right_4: 'Ctrl+Alt+R'
-    // };
-
-    // 2. 🟢 Read custom trigger KEYS from preferences
-    const tk = prefs.trackpadKeys || {
-        tap_3: 'Ctrl+Alt+num0', 
-        swipe_up_3: 'Ctrl+Alt+num1', 
-        swipe_down_3: 'Ctrl+Alt+num2', 
-        swipe_left_3: 'Ctrl+Alt+num3', 
-        swipe_right_3: 'Ctrl+Alt+num4',
-        tap_4: 'Ctrl+Alt+num5', 
-        swipe_up_4: 'Ctrl+Alt+num6', 
-        swipe_down_4: 'Ctrl+Alt+num7', 
-        swipe_left_4: 'Ctrl+Alt+num8', 
-        swipe_right_4: 'Ctrl+Alt+num9'
-    };
-
-    // Helper to translate 'Ctrl' or 'Cmd' into Electron's globalShortcut format
-    const fmt = (k) => k ? k.replace(/Ctrl/g, 'CommandOrControl').replace(/Cmd/g, 'CommandOrControl') : '';
-
-    // 3. 🟢 Build the dynamic map linking KEYS to ACTIONS
-    const gestureMap = {
-        [fmt(tk.tap_3)]: tp.tap_3,
-        [fmt(tk.swipe_up_3)]: tp.swipe_up_3,
-        [fmt(tk.swipe_down_3)]: tp.swipe_down_3,
-        [fmt(tk.swipe_left_3)]: tp.swipe_left_3,
-        [fmt(tk.swipe_right_3)]: tp.swipe_right_3,
-        [fmt(tk.tap_4)]: tp.tap_4,
-        [fmt(tk.swipe_up_4)]: tp.swipe_up_4,
-        [fmt(tk.swipe_left_4)]: tp.swipe_left_4,
-        [fmt(tk.swipe_right_4)]: tp.swipe_right_4,
-        [fmt(tk.swipe_down_4)]: tp.swipe_down_4
-    };
-
-    // 4. Register the shortcuts
-    for (const [key, action] of Object.entries(gestureMap)) {
-        if (!key || !action || action === 'none') continue;
-        try {
-            // Note: globalShortcut.unregister(key) is removed here because our array handles the old keys now!
-            globalShortcut.register(key, () => {
-                // Route to Instant Interview Controller if active
-                if (mode === 'instant_interview') {
-                    if (global.executeInstantAction) global.executeInstantAction(action);
-                    return;
-                }
-                
-                // Normal Mode Routing
-                if (action === 'hide_unhide') {
-                    if(global.toggleStealthMode) global.toggleStealthMode();
-                } else {
-                    BrowserWindow.getAllWindows().forEach(w => {
-                        if (!w.isDestroyed()) w.webContents.send('execute-direct-action', action);
-                    });
-                }
-            });
-            // 🐛 FIX: Add the successfully registered key to our tracking array
-            activeTrackpadShortcuts.push(key);
-        } catch (e) { console.error('Failed to bind gesture:', key); }
-    }
+    
+    console.log("[Stealth] Trackpad gestures are now handled exclusively by the C++ Dead Drop Radar.");
 }
 
 function setupGeneralIpcHandlers() {
@@ -1567,6 +1529,12 @@ function setupGeneralIpcHandlers() {
     let radialAnchorY = 0;
     let currentRadialSlice = null;
     const DEADZONE_PX = 25; 
+
+    ipcMain.on('live-update-instant-bounds', (event, iiPrefs) => {
+        storage.updatePreference('instantInterview', iiPrefs);
+        const { applyWindowBounds } = require('./ipc/instant_interview_ctrl');
+        if (applyWindowBounds) applyWindowBounds();
+    });
 
     // 🟢 STEALTH ZOOM HANDLER
     ipcMain.handle('toggle-zoom-window', () => {
@@ -1726,18 +1694,18 @@ function setupGeneralIpcHandlers() {
             global.currentSessionMode = 'main';
             global.isLiveInterviewMode = false;
             global.isGhostHidden = false;
-            global.isClickThroughState = false; 
+            global.isClickThroughState = false;
 
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(false);
                 mainWindow.webContents.send('ghost-state-changed', false);
             }
-            
-            // 🟢 Target all 5 AI windows explicitly so none are left behind on Abort
+
+            // 🟢 FIX: DESTROY the windows! Do not just hide them! This drops the WebRTC mic lock!
             [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].forEach(w => {
                 if (w && !w.isDestroyed()) {
-                    w.hide(); w.setOpacity(1); w.setIgnoreMouseEvents(false);
+                    w.destroy(); 
                 }
             });
 
@@ -2209,24 +2177,31 @@ function setupGeneralIpcHandlers() {
         } catch(e) { return false; }
     });
 
-    ipcMain.on('launch-instant-interview', () => { 
+    ipcMain.on('launch-instant-interview', () => {
         if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.hide(); // 🟢 FIX: Completely drops the overlay UI!
+            mainWindow.hide(); // Completely drops the overlay UI!
         }
-        launchInstantInterview(); 
-        registerTrackpadGestures(); 
+        launchInstantInterview(false);
+        registerTrackpadGestures();
     });
 
-    ipcMain.on('set-session-mode', (event, mode) => { 
-        global.currentSessionMode = mode; 
+    ipcMain.on('preview-instant-windows', () => {
+        launchInstantInterview(true); 
+    });
+
+    ipcMain.on('set-session-mode', (event, mode) => {
+        global.currentSessionMode = mode;
         if (mode === 'proctored_live_interview') {
-            if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
-                const providerName = AI_CONFIGS[activeLoadout.voiceEngine].name;
-                // 🟢 FIX: Do not auto-ignite Grok! User handles it manually.
-                if (providerName !== 'Grok') {
-                    ensureVoiceAndMic(voiceWebWindow, providerName);
+            launchDualBrains();
+            
+            setTimeout(() => {
+                if (voiceWebWindow && !voiceWebWindow.isDestroyed()) {
+                    const providerName = AI_CONFIGS[activeLoadout.voiceEngine].name;
+                    if (providerName !== 'Grok') {
+                        ensureVoiceAndMic(voiceWebWindow, providerName);
+                    }
                 }
-            }
+            }, 3000);
         }
     });
 
@@ -2402,8 +2377,9 @@ function setupGeneralIpcHandlers() {
             });
 
             [voiceWebWindowPrimary, voiceWebWindowSecondary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].forEach(w => {
-                if (w && !w.isDestroyed() && w.isVisible()) {
-                    w.setOpacity(0); w.setIgnoreMouseEvents(true, { forward: true });
+                if (w && !w.isDestroyed()) {
+                    w.webContents.executeJavaScript(`try { navigator.mediaDevices.getUserMedia({audio:true}).then(s=>s.getTracks().forEach(t=>t.stop())).catch(()=>{}); } catch(e){}`).catch(()=>{});
+                    w.destroy();
                 }
             });
             return true;

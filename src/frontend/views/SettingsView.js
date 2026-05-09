@@ -1051,12 +1051,10 @@ export class SettingsView extends LitElement {
                                         <div style="display: flex; flex-direction: column;">
                                             <span style="font-weight: bold; font-size: 13px; color: var(--text-color);">${t.label}</span>
                                             <div style="font-size: 11px; font-family: monospace; color: #00cc66; margin-top: 5px;">
-                                                Map to: 
-                                                <button class="shortcut-btn ${this.listeningKey === 'tp_' + t.id ? 'listening' : ''}" 
-                                                    style="background: transparent; border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; min-width: 80px;" 
-                                                    @click=${() => this.startListening('tp_' + t.id)}>
-                                                    ${this.listeningKey === 'tp_' + t.id ? 'Press keys...' : (this.prefs.trackpadKeys?.[t.id] || t.keyStr)}
-                                                </button>
+                                                Hardcoded to: 
+                                                <span style="background: rgba(0,204,102,0.1); border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block;">
+                                                    ${t.keyStr} (via Injector)
+                                                </span>
                                             </div>
                                         </div>
                                         <div style="width: 200px;">
@@ -1559,16 +1557,20 @@ export class SettingsView extends LitElement {
 
             case 'instant': {
                 const iiPrefs = this.prefs.instantInterview || {
-                    width: 45, gap: 2,
-                    tap_3: 'hide_unhide', swipe_left_3: 'sync_v_to_c', swipe_right_3: 'sync_c_to_v', swipe_up_3: 'restart_voice', swipe_down_3: 'swap_windows',
+                    codeW: 48, codeH: 85, codeX: 1, codeY: 7,
+                    voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7,
+                    tap_3: 'hide_unhide', swipe_left_3: 'sync_right_to_left', swipe_right_3: 'sync_left_to_right',
+                    swipe_up_3: 'restart_voice', swipe_down_3: 'swap_windows',
                     tap_4: 'capture', swipe_down_4: 'send_pro', swipe_left_4: 'on_the_go', swipe_right_4: 'dry_run', swipe_up_4: 'abort'
                 };
-                
+
                 const iiActions = [
                     {value: 'none', label: 'None (Disabled)'},
                     {value: 'hide_unhide', label: '👻 Hide / Unhide Windows'},
-                    {value: 'sync_v_to_c', label: '⬅️ Sync Voice to Code (Left)'},
-                    {value: 'sync_c_to_v', label: '➡️ Sync Code to Voice (Right)'},
+                    {value: 'sync_left_to_right', label: '➡️ Sync Left Window to Right Window'},
+                    {value: 'sync_right_to_left', label: '⬅️ Sync Right Window to Left Window'},
+                    {value: 'sync_v_to_c', label: '⬇️ Force Sync Voice to Code'},
+                    {value: 'sync_c_to_v', label: '⬇️ Force Sync Code to Voice'},
                     {value: 'restart_voice', label: '🔄 Restart Voice & Dump Vaults'},
                     {value: 'swap_windows', label: '🔀 Swap Windows'},
                     {value: 'capture', label: '📸 Capture Screen'},
@@ -1579,70 +1581,125 @@ export class SettingsView extends LitElement {
                 ];
 
                 const gestureList = [
-                    { id: 'tap_3', label: '3 Finger Tap', keyStr: 'Ctrl + Alt + H' },
-                    { id: 'swipe_left_3', label: '3 Finger Swipe Left', keyStr: 'Ctrl + Alt + A' },
-                    { id: 'swipe_right_3', label: '3 Finger Swipe Right', keyStr: 'Ctrl + Alt + D' },
-                    { id: 'swipe_up_3', label: '3 Finger Swipe Up', keyStr: 'Ctrl + Alt + W' },
-                    { id: 'swipe_down_3', label: '3 Finger Swipe Down', keyStr: 'Ctrl + Alt + S' },
-                    { id: 'tap_4', label: '4 Finger Tap', keyStr: 'Ctrl + Alt + C' },
-                    { id: 'swipe_down_4', label: '4 Finger Swipe Down', keyStr: 'Ctrl + Alt + P' }, // Check your mapping!
-                    { id: 'swipe_left_4', label: '4 Finger Swipe Left', keyStr: 'Ctrl + Alt + O' },
-                    { id: 'swipe_right_4', label: '4 Finger Swipe Right', keyStr: 'Ctrl + Alt + R' },
-                    { id: 'swipe_up_4', label: '4 Finger Swipe Up', keyStr: 'Ctrl + Alt + Enter' }
+                    { id: 'tap_3', label: '3 Finger Tap', keyStr: 'Ctrl + Alt + Num 0' },
+                    { id: 'swipe_left_3', label: '3 Finger Swipe Left', keyStr: 'Ctrl + Alt + Num 3' },
+                    { id: 'swipe_right_3', label: '3 Finger Swipe Right', keyStr: 'Ctrl + Alt + Num 4' },
+                    { id: 'swipe_up_3', label: '3 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 1' },
+                    { id: 'swipe_down_3', label: '3 Finger Swipe Down', keyStr: 'Ctrl + Alt + Num 2' },
+                    { id: 'tap_4', label: '4 Finger Tap', keyStr: 'Ctrl + Alt + Num 5' },
+                    { id: 'swipe_down_4', label: '4 Finger Swipe Down', keyStr: 'Ctrl + Alt + Num 7' },
+                    { id: 'swipe_left_4', label: '4 Finger Swipe Left', keyStr: 'Ctrl + Alt + Num 8' },
+                    { id: 'swipe_right_4', label: '4 Finger Swipe Right', keyStr: 'Ctrl + Alt + Num 9' },
+                    { id: 'swipe_up_4', label: '4 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 6' }
                 ];
 
                 return html`
                     <div class="scrollable-tab">
                         <h2>Instant Interview (Lightweight)</h2>
-                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 0; margin-bottom: 20px;">
-                            Configure the exact window sizes and gesture mappings for your 2-Window stealth setup.
-                        </p>
 
                         <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px;">
                             <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #fff;">🧠 Instant Mode Accounts</h3>
                             <div style="display: flex; gap: 15px;">
                                 <div style="flex: 1; border: 1px dashed rgba(66, 133, 244, 0.5); padding: 10px; border-radius: 4px;">
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain (Left Window)</div>
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Left Window AI</div>
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
-                                        ${this.renderCustomDropdown('ii_codeEngine', [ {value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'} ], iiPrefs.codeEngine || 1, (val) => {
-                                            this.savePref('instantInterview', { ...iiPrefs, codeEngine: val });
-                                        })}
-                                        ${this.renderCustomDropdown('ii_codeProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.codeProfileId || '', (val) => {
-                                            this.savePref('instantInterview', { ...iiPrefs, codeProfileId: val });
-                                        })}
+                                        ${this.renderCustomDropdown('ii_codeEngine', [
+                                            {value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'}
+                                        ], iiPrefs.codeEngine || 1, (val) => { this.savePref('instantInterview', { ...iiPrefs, codeEngine: val }); })}
+                                        ${this.renderCustomDropdown('ii_codeProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.codeProfileId || '', (val) => { this.savePref('instantInterview', { ...iiPrefs, codeProfileId: val }); })}
                                     </div>
                                 </div>
                                 <div style="flex: 1; border: 1px dashed rgba(161, 66, 244, 0.5); padding: 10px; border-radius: 4px;">
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #a142f4;">🗣️ Voice Brain (Right Window)</div>
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #a142f4;">🗣️ Right Window AI</div>
                                     <div style="display: flex; flex-direction: column; gap: 8px;">
-                                        ${this.renderCustomDropdown('ii_voiceEngine', [ {value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'} ], iiPrefs.voiceEngine || 0, (val) => {
-                                            this.savePref('instantInterview', { ...iiPrefs, voiceEngine: val });
-                                        })}
-                                        ${this.renderCustomDropdown('ii_voiceProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.voiceProfileId || '', (val) => {
-                                            this.savePref('instantInterview', { ...iiPrefs, voiceProfileId: val });
-                                        })}
+                                        ${this.renderCustomDropdown('ii_voiceEngine', [
+                                            {value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'}
+                                        ], iiPrefs.voiceEngine || 0, (val) => { this.savePref('instantInterview', { ...iiPrefs, voiceEngine: val }); })}
+                                        ${this.renderCustomDropdown('ii_voiceProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.voiceProfileId || '', (val) => { this.savePref('instantInterview', { ...iiPrefs, voiceProfileId: val }); })}
                                     </div>
                                 </div>
                             </div>
                         </div>
-                        
-                        <div style="display: flex; gap: 20px; margin-bottom: 20px;">
-                            <div style="flex: 1; background: var(--bg-tertiary); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; align-items: center;">
-                                <h3 style="margin-top: 0; font-size: 13px; color: #fff;">Window Geometry Preview</h3>
-                                <div style="width: 100%; height: 150px; background: #000; border: 2px solid #333; border-radius: 6px; position: relative; display: flex; justify-content: center; align-items: center; gap: ${iiPrefs.gap}%;">
-                                    <div style="width: ${iiPrefs.width}%; height: 80%; background: rgba(66, 133, 244, 0.4); border: 2px solid #4285f4; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #4285f4;">CODE</div>
-                                    <div style="width: ${iiPrefs.width}%; height: 80%; background: rgba(161, 66, 244, 0.4); border: 2px solid #a142f4; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: bold; color: #a142f4;">VOICE</div>
-                                </div>
-                                <div style="width: 100%; margin-top: 15px; display: flex; gap: 15px;">
-                                    <div class="slider-row">
-                                        <label><span>Window Width</span> <span style="color: #4285f4;">${iiPrefs.width}%</span></label>
-                                        <input type="range" min="20" max="48" step="1" .value=${iiPrefs.width} @input=${(e) => this.savePref('instantInterview', {...iiPrefs, width: parseInt(e.target.value)})}>
+
+                        <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                            <h3 style="margin-top: 0; font-size: 13px; color: #fff;">Independent Window Geometry</h3>
+                            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Adjust the physical size and location of the AI windows. Click <strong>Test Live Windows</strong> to view your changes in real-time on your screen.</p>
+                                    
+                            <div style="width: 100%; display: flex; gap: 15px;">
+                                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; border: 1px solid #4285f4; padding: 10px; border-radius: 6px; background: rgba(66, 133, 244, 0.05);">
+                                    <h4 style="margin:0; color:#4285f4; font-size: 12px;">💻 Left Pane Configuration</h4>
+                                    <div class="slider-row"><label><span>Width</span> <span>${iiPrefs.codeW}%</span></label>
+                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.codeW} @input=${(e) => {
+                                            const newP = {...iiPrefs, codeW: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
                                     </div>
-                                    <div class="slider-row">
-                                        <label><span>Center Gap</span> <span style="color: #a142f4;">${iiPrefs.gap}%</span></label>
-                                        <input type="range" min="0" max="20" step="1" .value=${iiPrefs.gap} @input=${(e) => this.savePref('instantInterview', {...iiPrefs, gap: parseInt(e.target.value)})}>
+                                    <div class="slider-row"><label><span>Height</span> <span>${iiPrefs.codeH}%</span></label>
+                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.codeH} @input=${(e) => {
+                                            const newP = {...iiPrefs, codeH: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
+                                    </div>
+                                    <div class="slider-row"><label><span>X Position (Left)</span> <span>${iiPrefs.codeX}%</span></label>
+                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.codeX} @input=${(e) => {
+                                            const newP = {...iiPrefs, codeX: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
+                                    </div>
+                                    <div class="slider-row"><label><span>Y Position (Top)</span> <span>${iiPrefs.codeY}%</span></label>
+                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.codeY} @input=${(e) => {
+                                            const newP = {...iiPrefs, codeY: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
                                     </div>
                                 </div>
+                                    
+                                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; border: 1px solid #a142f4; padding: 10px; border-radius: 6px; background: rgba(161, 66, 244, 0.05);">
+                                    <h4 style="margin:0; color:#a142f4; font-size: 12px;">🗣️ Right Pane Configuration</h4>
+                                    <div class="slider-row"><label><span>Width</span> <span>${iiPrefs.voiceW}%</span></label>
+                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.voiceW} @input=${(e) => {
+                                            const newP = {...iiPrefs, voiceW: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
+                                    </div>
+                                    <div class="slider-row"><label><span>Height</span> <span>${iiPrefs.voiceH}%</span></label>
+                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.voiceH} @input=${(e) => {
+                                            const newP = {...iiPrefs, voiceH: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
+                                    </div>
+                                    <div class="slider-row"><label><span>X Position (Left)</span> <span>${iiPrefs.voiceX}%</span></label>
+                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.voiceX} @input=${(e) => {
+                                            const newP = {...iiPrefs, voiceX: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
+                                    </div>
+                                    <div class="slider-row"><label><span>Y Position (Top)</span> <span>${iiPrefs.voiceY}%</span></label>
+                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.voiceY} @input=${(e) => {
+                                            const newP = {...iiPrefs, voiceY: parseInt(e.target.value)};
+                                            this.savePref('instantInterview', newP);
+                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
+                                        }}>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div style="display: flex; gap: 10px; margin-top: 15px; width: 100%; justify-content: center;">
+                                <button @click=${() => {
+                                    if(window.require) window.require('electron').ipcRenderer.send('preview-instant-windows');
+                                }} style="background: rgba(0, 204, 102, 0.2); color: #00cc66; border: 1px solid #00cc66; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">👀 Test Live Windows</button>
+                                <button @click=${() => {
+                                    const resetP = {...iiPrefs, codeW: 48, codeH: 85, codeX: 1, codeY: 7, voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7};
+                                    this.savePref('instantInterview', resetP);
+                                    if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', resetP);
+                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">🔄 Reset Bounds</button>
                             </div>
                         </div>
 
@@ -1654,19 +1711,16 @@ export class SettingsView extends LitElement {
                                         <div style="display: flex; flex-direction: column;">
                                             <span style="font-weight: bold; font-size: 13px; color: var(--text-color);">${t.label}</span>
                                             <div style="font-size: 11px; font-family: monospace; color: #00cc66; margin-top: 5px;">
-                                                Map to: 
-                                                <button class="shortcut-btn ${this.listeningKey === 'tp_' + t.id ? 'listening' : ''}" 
-                                                    style="background: transparent; border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; min-width: 80px;" 
-                                                    @click=${() => this.startListening('tp_' + t.id)}>
-                                                    ${this.listeningKey === 'tp_' + t.id ? 'Press keys...' : (this.prefs.trackpadKeys?.[t.id] || t.keyStr)}
-                                                </button>
+                                                Hardcoded to: 
+                                                <span style="background: rgba(0,204,102,0.1); border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block;">
+                                                    ${t.keyStr} (via Injector)
+                                                </span>
                                             </div>
                                         </div>
                                         <div style="width: 240px;">
                                             ${this.renderCustomDropdown('ii_' + t.id, iiActions, iiPrefs[t.id], (val) => {
                                                 const newActions = { ...iiPrefs, [t.id]: val };
                                                 this.savePref('instantInterview', newActions);
-                                                if (window.require) window.require('electron').ipcRenderer.send('reload-trackpad-gestures');
                                             })}
                                         </div>
                                     </div>

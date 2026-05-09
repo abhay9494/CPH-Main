@@ -96,26 +96,33 @@ const injectAudioHijack = async (win) => {
 
 const applyWindowBounds = () => {
     if (!codeWin || !voiceWin || codeWin.isDestroyed() || voiceWin.isDestroyed()) return;
-
     const prefs = storage.getPreferences();
-    const iiPrefs = prefs.instantInterview || { width: 45, gap: 2 };
+    
+    // Fallback defaults if they haven't set them yet
+    const ii = prefs.instantInterview || {
+        codeW: 48, codeH: 85, codeX: 1, codeY: 7,
+        voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7
+    };
     
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: sw, height: sh } = primaryDisplay.workAreaSize;
 
-    const boxWidth = Math.floor(sw * (iiPrefs.width / 100));
-    const gapWidth = Math.floor(sw * (iiPrefs.gap / 100));
-    const boxHeight = Math.floor(sh * 0.85); 
-    const yPos = Math.floor((sh - boxHeight) / 2);
+    // Flip configurations if the user swapped the panes!
+    const cConf = isSwapped ? {w: ii.voiceW, h: ii.voiceH, x: ii.voiceX, y: ii.voiceY} : {w: ii.codeW, h: ii.codeH, x: ii.codeX, y: ii.codeY};
+    const vConf = isSwapped ? {w: ii.codeW, h: ii.codeH, x: ii.codeX, y: ii.codeY} : {w: ii.voiceW, h: ii.voiceH, x: ii.voiceX, y: ii.voiceY};
 
-    const leftX = Math.floor((sw / 2) - (gapWidth / 2) - boxWidth);
-    const rightX = Math.floor((sw / 2) + (gapWidth / 2));
-
-    const codeX = isSwapped ? rightX : leftX;
-    const voiceX = isSwapped ? leftX : rightX;
-
-    codeWin.setBounds({ x: codeX, y: yPos, width: boxWidth, height: boxHeight });
-    voiceWin.setBounds({ x: voiceX, y: yPos, width: boxWidth, height: boxHeight });
+    codeWin.setBounds({
+        x: Math.floor(sw * (cConf.x / 100)),
+        y: Math.floor(sh * (cConf.y / 100)),
+        width: Math.floor(sw * (cConf.w / 100)),
+        height: Math.floor(sh * (cConf.h / 100))
+    });
+    voiceWin.setBounds({
+        x: Math.floor(sw * (vConf.x / 100)),
+        y: Math.floor(sh * (vConf.y / 100)),
+        width: Math.floor(sw * (vConf.w / 100)),
+        height: Math.floor(sh * (vConf.h / 100))
+    });
 };
 
 // 🟢 FIX: Aggressive 1.5s Background Scraper (Creates the Transcription and Stores it)
@@ -127,9 +134,16 @@ const startVaultScrapers = () => {
             const voiceScript = `
                 (() => {
                     try {
-                        const msgs = Array.from(document.querySelectorAll('[data-testid="user-message"], .message, .user-message, user-query, .prose'));
+                        let msgs = [];
+                        if (window.location.hostname.includes('grok')) {
+                            msgs = Array.from(document.querySelectorAll('.message-row, div.items-end > div')).filter(el => !el.querySelector('.prose') && !el.classList.contains('prose'));
+                        } else if (window.location.hostname.includes('chatgpt')) {
+                            msgs = Array.from(document.querySelectorAll('[data-message-author-role="user"]'));
+                        } else {
+                            msgs = Array.from(document.querySelectorAll('user-query, [data-testid="user-message"], .user-message'));
+                        }
                         let texts = msgs.map(el => (el.innerText || '').trim()).filter(t => t.length > 0 && !t.includes('SYSTEM DIRECTIVE') && !t.includes('TRACKER DIRECTIVE'));
-                        return texts.slice(-3).join('\\n\\n'); 
+                        return texts.slice(-3).join('\\n\\n');
                     } catch(e) { return ""; }
                 })();
             `;
@@ -307,11 +321,26 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
 global.executeInstantAction = async (action) => {
     if (!codeWin || !voiceWin || codeWin.isDestroyed() || voiceWin.isDestroyed()) return;
     
+    // 🟢 FIX: Global Stealth Lock for Instant Interview
+    if (isHidden && action !== 'hide_unhide') {
+        console.log("[Instant Interview] Action blocked because windows are hidden!");
+        return;
+    }
+
+    // 🟢 FIX: Direction-Aware Swiping
+    if (action === 'sync_left_to_right') {
+        action = isSwapped ? 'sync_v_to_c' : 'sync_c_to_v';
+        return global.executeInstantAction(action);
+    }
+    if (action === 'sync_right_to_left') {
+        action = isSwapped ? 'sync_c_to_v' : 'sync_v_to_c';
+        return global.executeInstantAction(action);
+    }
+
     const PROMPTS = global.PROMPTS || {};
     const mainWin = BrowserWindow.getAllWindows().find(w => w.webContents && w.webContents.getURL().includes('index.html'));
-
     console.log("[Instant Interview] Executing:", action);
-
+    
     switch(action) {
         case 'hide_unhide':
             try {
@@ -473,8 +502,17 @@ global.executeInstantAction = async (action) => {
     }
 };
 
-const launchInstantInterview = () => {
+const launchInstantInterview = (isPreview = false) => {
     console.log("[Instant Interview] Spawning 2-Window Native Mode...");
+    
+    if (!isPreview) {
+        const mainWin = BrowserWindow.getAllWindows().find(w => w.webContents && w.webContents.getURL().includes('index.html'));
+        if (mainWin) {
+            mainWin.setOpacity(0);
+            mainWin.setIgnoreMouseEvents(true);
+        }
+    }
+
     const prefs = storage.getPreferences();
     const iiPrefs = prefs.instantInterview || {};
 
@@ -516,4 +554,4 @@ const launchInstantInterview = () => {
     startVaultScrapers();
 };
 
-module.exports = { launchInstantInterview };
+module.exports = { launchInstantInterview, applyWindowBounds };
