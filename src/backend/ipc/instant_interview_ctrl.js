@@ -177,143 +177,81 @@ const startVaultScrapers = () => {
     }, 1500); // Runs incredibly fast in the background
 };
 
-// 🟢 Native Paster Engine (Upgraded Grok Textarea Handler)
+// 🟢 Native Paster Engine (Upgraded for Gemini & Grok)
 const fireNativePayload = async (win, text, images = [], modeTag = null, autoSubmit = true) => {
     if (!win || win.isDestroyed()) return false;
-    
     const isGrok = win.webContents.getURL().includes('grok.com');
     const providerName = isGrok ? 'Grok' : (win.webContents.getURL().includes('gemini') ? 'Gemini' : 'ChatGPT');
 
-    const selector = 'textarea[placeholder*="Ask Grok"], textarea[placeholder*="How can Grok help"], textarea[placeholder*="Grok"], textarea[placeholder*="Ask Gemini"], rich-textarea p, #prompt-textarea, [contenteditable="true"][role="textbox"], .ql-editor';
+    // 🟢 FIX: Bulletproof selectors for Grok (textarea) and Gemini (contenteditable)
+    const selector = 'textarea, [contenteditable="true"][role="textbox"], rich-textarea p, #prompt-textarea, .ql-editor';
 
-    const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('${selector}'); if (el) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
+    const isBoxReady = await win.webContents.executeJavaScript(`(() => {
+        try {
+            const el = document.querySelector('${selector}');
+            if (el) { el.focus(); return true; }
+            return false;
+        } catch(e) { return false; }
+    })()`);
+
     if (!isBoxReady) return false;
 
-    const modifier = process.platform === 'darwin' ? 'meta' : 'control';
-
     const focusAndMoveToEnd = async () => {
-        await win.webContents.executeJavaScript(`(() => { 
-            try { 
-                const box = document.querySelector('${selector}'); 
-                if (box) { 
-                    box.focus(); 
-                    
-                    // 🟢 FIX: Standard <textarea> logic (Grok) vs ContentEditable logic (ChatGPT/Gemini)
+        await win.webContents.executeJavaScript(`(() => {
+            try {
+                const box = document.querySelector('${selector}');
+                if (box) {
+                    box.focus();
                     if (box.tagName === 'TEXTAREA' || box.tagName === 'INPUT') {
                         box.selectionStart = box.value.length;
                         box.selectionEnd = box.value.length;
-                    } else if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") { 
-                        const range = document.createRange(); 
-                        range.selectNodeContents(box); 
-                        range.collapse(false); 
-                        const sel = window.getSelection(); 
-                        sel.removeAllRanges(); 
-                        sel.addRange(range); 
-                    } 
-                } 
-            } catch(e) {} 
+                    } else if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") {
+                        const range = document.createRange();
+                        range.selectNodeContents(box);
+                        range.collapse(false);
+                        const sel = window.getSelection();
+                        sel.removeAllRanges();
+                        sel.addRange(range);
+                    }
+                }
+            } catch(e) {}
         })();`);
     };
 
-    // 1. Paste Images First
-    if (images && images.length > 0) {
-        for (let imgData of images) {
-            try {
-                if (isGrok) {
-                    await win.webContents.executeJavaScript(`
-                        (async () => {
-                            try {
-                                const res = await fetch("${imgData}");
-                                const blob = await res.blob();
-                                const file = new File([blob], "screenshot.png", { type: blob.type });
-                                const dt = new DataTransfer(); dt.items.add(file);
-                                const fileInput = document.querySelector('input[type="file"]');
-                                if (fileInput) { fileInput.files = dt.files; fileInput.dispatchEvent(new Event('change', { bubbles: true })); }
-                                const el = document.querySelector('${selector}');
-                                if (el) { el.focus(); const pasteEvent = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }); el.dispatchEvent(pasteEvent); }
-                            } catch(e) {}
-                        })();
-                    `);
-                } else {
-                    const img = nativeImage.createFromDataURL(imgData);
-                    clipboard.writeImage(img);
-                    await focusAndMoveToEnd();
-                    win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
-                    win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
-                }
-                await new Promise(r => setTimeout(r, 800)); 
-                await focusAndMoveToEnd(); 
-            } catch(e) { console.log("Screenshot failed"); }
-        }
-    }
-
-    // 2. Paste Text Second
+    // 1. Paste Text (🟢 FIX: Natively injects text without using the OS Clipboard!)
     if (text) {
         await focusAndMoveToEnd();
-        clipboard.writeText(text);
-        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
-        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
+        win.webContents.insertText(text); 
         await new Promise(r => setTimeout(r, 400));
-        await focusAndMoveToEnd();
+        await focusAndMoveToEnd(); 
     }
 
-    // 3. Typewriter Effect for @Pro and @Fast
+    // 2. Typewriter Effect for @Pro and @Fast (Gemini Only)
     if (modeTag && providerName === 'Gemini') {
         await focusAndMoveToEnd();
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
         await new Promise(r => setTimeout(r, 100));
-        
         win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
         win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
-        win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
-        win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
-        
         win.webContents.insertText(' @');
-        await new Promise(r => setTimeout(r, 800)); 
-        
+        await new Promise(r => setTimeout(r, 600));
         for (let i = 0; i < modeTag.length; i++) {
             win.webContents.insertText(modeTag[i]);
-            await new Promise(r => setTimeout(r, 200)); 
+            await new Promise(r => setTimeout(r, 150));
         }
-        
-        await new Promise(r => setTimeout(r, 800)); 
-        
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' }); 
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' }); 
+        await new Promise(r => setTimeout(r, 600));
+        // Safely lock the chip
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
         await new Promise(r => setTimeout(r, 300));
-        
-        win.webContents.insertText(' ');
-        await new Promise(r => setTimeout(r, 400)); 
     }
 
-    // 4. Submit
+    // 3. Submit
     if (autoSubmit) {
-        if (images && images.length > 0 && providerName === 'Gemini') {
-            await new Promise(r => setTimeout(r, 2500)); 
-        }
-
-        if (isGrok) {
-            await new Promise(r => setTimeout(r, 200));
-            // 🟢 FIX: Grok often ignores the button click if the React state isn't updated. Force Enter key directly.
-            await focusAndMoveToEnd();
-            win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-            win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-        } else {
-            const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Enter" i]';
-            let isReady = false, attempts = 0;
-            while (!isReady && attempts < 10) {
-                isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
-                if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-            }
-            await new Promise(r => setTimeout(r, 400)); 
-            const sent = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) { btn.click(); return true; } return false; } catch(e) { return false; } })()`);
-            if (!sent) {
-                await focusAndMoveToEnd();
-                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
-                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            }
-        }
+        await focusAndMoveToEnd();
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
     }
     return true;
 };
@@ -382,56 +320,63 @@ global.executeInstantAction = async (action) => {
                 await fireNativePayload(codeWin, PROMPTS.INTERVIEW_OPTIMIZED || "Provide the optimal solution.", [], 'Pro', true);
             } catch(e) { console.error("Send Pro Failed:", e); }
             break;
-            
+        
         case 'sync_v_to_c':
-            // 🟢 FIX: Instant Memory Dump - Swipe Left
+            // 🟢 FIX: Ignore poisoned vault memory and force a fresh DOM scrape!
             try {
-                if (!transcriptVault || transcriptVault.trim() === "") {
+                let finalTranscript = await voiceWin.webContents.executeJavaScript(`
+                    (() => {
+                        try {
+                            // 1. Target the exact chat bubbles
+                            const nodes = Array.from(document.querySelectorAll('[data-testid="user-message"], [data-testid="assistant-message"]'));
+                            if (nodes.length === 0) return "";
+                            
+                            // 2. Grab the last two (Prompt + Response)
+                            const lastTwo = nodes.slice(-2);
+                            
+                            return lastTwo.map(node => {
+                                // 3. Clone to avoid breaking the real page
+                                const clone = node.cloneNode(true);
+                                
+                                // 4. Violently delete ANY buttons inside the bubble just in case
+                                clone.querySelectorAll('button, svg, [role="button"]').forEach(b => b.remove());
+                                
+                                return clone.innerText.trim();
+                            }).filter(t => t.length > 0).join('\\n\\n[Voice AI Response]:\\n');
+                        } catch(e) { return ""; }
+                    })();
+                `).catch(()=>"");
+
+                if (!finalTranscript || finalTranscript.trim() === "") {
                     if (mainWin) mainWin.webContents.send('show-radial-toast', '⚠️ NO TRANSCRIPT READY');
                     return;
                 }
-                const v2cPrompt = `SYSTEM DIRECTIVE: Analyze this scenario. Here is the recent verbal context from the interviewer to help you understand their constraints:\n\n"${transcriptVault}"\n\nProvide the optimal solution.`;
-                await fireNativePayload(codeWin, v2cPrompt, [], 'Pro', true); // No image delay!
+
+                // 5. Build prompt and fire!
+                const v2cPrompt = `SYSTEM DIRECTIVE: Analyze this scenario. Here is the recent verbal context and the AI's initial thoughts from the voice brain:\n\n"${finalTranscript}"\n\nProvide the optimal solution.`;
+                
+                await fireNativePayload(codeWin, v2cPrompt, [], 'Pro', true);
                 if (mainWin) mainWin.webContents.send('show-radial-toast', '⬅️ TRANSCRIPT SYNCED');
             } catch(e) { console.error("Sync V to C Failed:", e); }
             break;
-            
+
         case 'sync_c_to_v':
-            // 🟢 FIX: Aggressive DOM Scraping via the Native 'Copy' Button
+            // 🟢 FIX: On-Demand Aggressive Gemini Scraper
             try {
-                let finalCode = codeVault; // Fallback to background scraper
-                
-                // 1. Inject script to click the latest "Copy" button on the screen
-                if (codeWin && !codeWin.isDestroyed()) {
-                    const clicked = await codeWin.webContents.executeJavaScript(`
+                let finalCode = codeVault;
+
+                if (!finalCode || finalCode.trim() === "") {
+                    finalCode = await codeWin.webContents.executeJavaScript(`
                         (() => {
                             try {
-                                const btns = Array.from(document.querySelectorAll('button'));
-                                const copyBtns = btns.filter(b => {
-                                    const aria = (b.getAttribute('aria-label') || '').toLowerCase();
-                                    const tooltip = (b.getAttribute('mattooltip') || '').toLowerCase();
-                                    const title = (b.getAttribute('title') || '').toLowerCase();
-                                    // Match Gemini's and ChatGPT's copy buttons
-                                    return aria.includes('copy') || tooltip.includes('copy') || title.includes('copy');
-                                });
-                                if (copyBtns.length > 0) {
-                                    // Click the very last one on the screen (the most recent response)
-                                    copyBtns[copyBtns.length - 1].click();
-                                    return true;
-                                }
-                                return false;
-                            } catch(e) { return false; }
+                                const responses = Array.from(document.querySelectorAll('model-response'));
+                                if (responses.length === 0) return "";
+                                const last = responses[responses.length - 1].innerText;
+                                if (last.includes('\`\`\`')) return last.split('\`\`\`')[1].trim();
+                                return last.trim();
+                            } catch(e) { return ""; }
                         })();
-                    `);
-                    
-                    // 2. If it successfully clicked, read the text from the OS Clipboard!
-                    if (clicked) {
-                        await new Promise(r => setTimeout(r, 300)); // Wait 300ms for OS clipboard to populate
-                        const clipText = clipboard.readText();
-                        if (clipText && clipText.length > 10) {
-                            finalCode = clipText; // Overwrite the vault with the perfectly formatted copied text
-                        }
-                    }
+                    `).catch(()=>"");
                 }
 
                 if (!finalCode || finalCode.trim() === "") {
@@ -439,10 +384,8 @@ global.executeInstantAction = async (action) => {
                     return;
                 }
 
-                // 3. Send to Voice Brain
                 const c2vPrompt = (PROMPTS.VOICE_SYNC_OPTIMIZED || "Explain this code simply:") + "\n\nCODE:\n\n" + finalCode;
-                await fireNativePayload(voiceWin, c2vPrompt, [], 'Fast', true); 
-                
+                await fireNativePayload(voiceWin, c2vPrompt, [], 'Fast', true);
                 if (mainWin) mainWin.webContents.send('show-radial-toast', '➡️ CODE SYNCED');
             } catch(e) { console.error("Sync C to V Failed:", e); }
             break;
