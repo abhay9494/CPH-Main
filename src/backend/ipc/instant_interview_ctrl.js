@@ -182,6 +182,9 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
     if (!win || win.isDestroyed()) return false;
     const isGrok = win.webContents.getURL().includes('grok.com');
     const providerName = isGrok ? 'Grok' : (win.webContents.getURL().includes('gemini') ? 'Gemini' : 'ChatGPT');
+    
+    // 🟢 FIX: Define the OS modifier for pasting
+    const modifier = process.platform === 'darwin' ? 'meta' : 'control';
 
     // 🟢 FIX: Bulletproof selectors for Grok (textarea) and Gemini (contenteditable)
     const selector = 'textarea, [contenteditable="true"][role="textbox"], rich-textarea p, #prompt-textarea, .ql-editor';
@@ -218,7 +221,51 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
         })();`);
     };
 
-    // 1. Paste Text (🟢 FIX: Natively injects text without using the OS Clipboard!)
+    // 🟢 1. PASTE IMAGES FIRST (This was missing!)
+    if (images && images.length > 0) {
+        for (let imgData of images) {
+            if (providerName === 'Grok') {
+                await win.webContents.executeJavaScript(`
+                    (async () => {
+                        try {
+                            const res = await fetch("${imgData}");
+                            const blob = await res.blob();
+                            const file = new File([blob], "screenshot.png", { type: blob.type });
+                            const dt = new DataTransfer();
+                            dt.items.add(file);
+
+                            const fileInput = document.querySelector('input[type="file"]');
+                            if (fileInput) {
+                                fileInput.files = dt.files;
+                                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+                            }
+
+                            const el = document.querySelector('textarea[placeholder*="Grok"], textarea');
+                            if (el) {
+                                el.focus();
+                                const pasteEvent = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true });
+                                el.dispatchEvent(pasteEvent);
+                            }
+                        } catch(e) {}
+                    })();
+                `);
+            } else {
+                const img = nativeImage.createFromDataURL(imgData);
+                clipboard.writeImage(img);
+                
+                await focusAndMoveToEnd();
+                
+                win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
+                win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
+            }
+            
+            await new Promise(r => setTimeout(r, 600)); 
+            await focusAndMoveToEnd(); // Explicitly deselect image by moving cursor to end
+            await new Promise(r => setTimeout(r, 100));
+        }
+    }
+
+    // 🟢 2. Paste Text Natively
     if (text) {
         await focusAndMoveToEnd();
         win.webContents.insertText(text); 
@@ -226,7 +273,7 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
         await focusAndMoveToEnd(); 
     }
 
-    // 2. Typewriter Effect for @Pro and @Fast (Gemini Only)
+    // 🟢 3. Typewriter Effect for @Pro and @Fast (Gemini Only)
     if (modeTag && providerName === 'Gemini') {
         await focusAndMoveToEnd();
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
@@ -247,7 +294,7 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
         await new Promise(r => setTimeout(r, 300));
     }
 
-    // 3. Submit
+    // 🟢 4. Submit
     if (autoSubmit) {
         await focusAndMoveToEnd();
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
