@@ -401,7 +401,7 @@ global.executeInstantAction = async (action) => {
                                 clone.querySelectorAll('button, svg, [role="button"]').forEach(b => b.remove());
                                 
                                 return clone.innerText.trim();
-                            }).filter(t => t.length > 0).join('\\n\\n[Voice AI Response]:\\n');
+                            }).filter(t => t.length > 0).join('\\n\\n[What I responded]:\\n');
                         } catch(e) { return ""; }
                     })();
                 `).catch(()=>"");
@@ -412,7 +412,7 @@ global.executeInstantAction = async (action) => {
                 }
 
                 // 5. Build prompt and fire!
-                const v2cPrompt = `SYSTEM DIRECTIVE: Analyze this scenario. Here is the recent verbal context and the AI's initial thoughts from the voice brain:\n\n"${finalTranscript}"\n\nProvide the optimal solution.`;
+                const v2cPrompt = `SYSTEM DIRECTIVE: Analyze this scenario. Here is the recent verbal conversation between me and the interviewer:\n\nInterviewer:"${finalTranscript}"\n\nProvide the optimal solution(if he is asking for an optimal solution) or give me the response what should i say.`;
                 
                 await fireNativePayload(codeWin, v2cPrompt, [], 'Pro', true);
                 if (mainWin) mainWin.webContents.send('show-radial-toast', '⬅️ TRANSCRIPT SYNCED');
@@ -420,32 +420,37 @@ global.executeInstantAction = async (action) => {
             break;
 
         case 'sync_c_to_v':
-            // 🟢 FIX: On-Demand Aggressive Gemini Scraper
+            // 🟢 FIX: Grab the ENTIRE response (Code + Explanations) directly from the DOM
             try {
-                let finalCode = codeVault;
-
-                if (!finalCode || finalCode.trim() === "") {
-                    finalCode = await codeWin.webContents.executeJavaScript(`
-                        (() => {
-                            try {
-                                const responses = Array.from(document.querySelectorAll('model-response'));
-                                if (responses.length === 0) return "";
-                                const last = responses[responses.length - 1].innerText;
-                                if (last.includes('\`\`\`')) return last.split('\`\`\`')[1].trim();
-                                return last.trim();
-                            } catch(e) { return ""; }
-                        })();
-                    `).catch(()=>"");
-                }
+                let finalCode = await codeWin.webContents.executeJavaScript(`
+                    (() => {
+                        try {
+                            // 1. Multi-model selector (Works for Gemini, Grok, and ChatGPT)
+                            const sel = window.location.hostname.includes('chatgpt') ? 'div[data-message-author-role="assistant"]' :
+                                        window.location.hostname.includes('grok') ? '.prose' : 'model-response';
+                            
+                            const responses = Array.from(document.querySelectorAll(sel)).filter(el => {
+                                if (el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message')) return false;
+                                return (el.innerText || '').trim().length > 0;
+                            });
+                            
+                            if (responses.length === 0) return "";
+                            
+                            // 2. 🟢 Return the literal entire text block, NO splitting or cutting!
+                            return responses[responses.length - 1].innerText.trim();
+                        } catch(e) { return ""; }
+                    })();
+                `).catch(()=>"");
 
                 if (!finalCode || finalCode.trim() === "") {
                     if (mainWin) mainWin.webContents.send('show-radial-toast', '⚠️ NO CODE READY');
                     return;
                 }
 
-                const c2vPrompt = (PROMPTS.VOICE_SYNC_OPTIMIZED || "Explain this code simply:") + "\n\nCODE:\n\n" + finalCode;
+                // 3. Send the full payload to the Voice Brain
+                const c2vPrompt = (PROMPTS.VOICE_SYNC_OPTIMIZED || "Explain this code simply:") + "\n\nFULL AI RESPONSE:\n\n" + finalCode;
                 await fireNativePayload(voiceWin, c2vPrompt, [], 'Fast', true);
-                if (mainWin) mainWin.webContents.send('show-radial-toast', '➡️ CODE SYNCED');
+                if (mainWin) mainWin.webContents.send('show-radial-toast', '➡️ FULL RESPONSE SYNCED');
             } catch(e) { console.error("Sync C to V Failed:", e); }
             break;
 
