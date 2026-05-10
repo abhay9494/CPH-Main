@@ -279,19 +279,31 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
         await new Promise(r => setTimeout(r, 100));
+        
         win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' });
         win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
-        win.webContents.insertText(' @');
-        await new Promise(r => setTimeout(r, 600));
+        await new Promise(r => setTimeout(r, 100));
+
+        // 1. Type @
+        win.webContents.insertText('@');
+        
+        // 2. Wait for the dropdown to load
+        await new Promise(r => setTimeout(r, 800));
+        
+        // 3. Type Pro or Fast
         for (let i = 0; i < modeTag.length; i++) {
             win.webContents.insertText(modeTag[i]);
             await new Promise(r => setTimeout(r, 150));
         }
-        await new Promise(r => setTimeout(r, 600));
-        // Safely lock the chip
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' });
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' });
-        await new Promise(r => setTimeout(r, 300));
+        
+        // 4. Wait for filtering
+        await new Promise(r => setTimeout(r, 800));
+        
+        // 5. Hit Enter to lock the chip
+        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+        
+        await new Promise(r => setTimeout(r, 400));
     }
 
     // 🟢 4. Submit

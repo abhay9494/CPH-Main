@@ -1211,7 +1211,7 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
         await focusAndMoveToEnd(); // Move to end of text
     }
 
-    // 🟢 3. INJECT MACRO LAST (With safe Tab-Locking)
+    // 🟢 3. INJECT MACRO LAST
     if (modeTag && providerName === 'Gemini') {
         await focusAndMoveToEnd();
 
@@ -1219,24 +1219,26 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
         win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
         await new Promise(r => setTimeout(r, 100));
 
+        // 1. Type @
         win.webContents.insertText('@');
-        await new Promise(r => setTimeout(r, 600)); 
         
+        // 2. Wait for the dropdown to load
+        await new Promise(r => setTimeout(r, 800)); 
+        
+        // 3. Type Pro or Fast
         for (let i = 0; i < modeTag.length; i++) {
             win.webContents.insertText(modeTag[i]);
             await new Promise(r => setTimeout(r, 150)); 
         }
         
-        await new Promise(r => setTimeout(r, 600)); // Wait for dropdown UI to appear
+        // 4. Wait for filtering
+        await new Promise(r => setTimeout(r, 800));
         
-        // Use TAB to safely lock the chip without triggering an early submission!
-        win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Tab' }); 
-        win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Tab' }); 
-        await new Promise(r => setTimeout(r, 200));
-        
+        // 5. Hit Enter to lock the chip
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' }); 
-        await new Promise(r => setTimeout(r, 300));
+        
+        await new Promise(r => setTimeout(r, 400));
     }
 
     // 🟢 4. SUBMIT
@@ -2277,14 +2279,17 @@ function setupGeneralIpcHandlers() {
                 // 1. Type '@'
                 win.webContents.insertText('@');
                 
-                // 2. Wait 600ms for Gemini to process the '@' and pop up the menu
-                await new Promise(r => setTimeout(r, 600)); 
+                // 2. Wait 800ms for Gemini to process the '@' and pop up the menu
+                await new Promise(r => setTimeout(r, 800)); 
                 
                 // 3. Type the word ('Pro' or 'Fast')
-                win.webContents.insertText(modeWord);
+                for (let i = 0; i < modeWord.length; i++) {
+                    win.webContents.insertText(modeWord[i]);
+                    await new Promise(r => setTimeout(r, 150)); 
+                }
                 
-                // 4. Wait 400ms for options to filter in the menu
-                await new Promise(r => setTimeout(r, 400));
+                // 4. Wait 800ms for options to filter in the menu
+                await new Promise(r => setTimeout(r, 800));
                 
                 // 5. Press Enter to lock it into the Blue UI Chip!
                 win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
