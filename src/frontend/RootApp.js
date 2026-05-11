@@ -288,7 +288,7 @@ export class RootApp extends LitElement {
                         .missingContext=${this.missingContext}
                         .onBackClick=${() => this.handleHubNavigation('main')}
                         .onHideClick=${async () => {
-                            if (window.require) await window.require('electron').ipcRenderer.invoke('hide-all-overlays');
+                            if (window.require) await window.require('electron').ipcRenderer.invoke('trigger-ghost-hide');
                         }}
                     ></app-header>
 

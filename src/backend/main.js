@@ -1715,7 +1715,22 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    ipcMain.handle('quit-application', async event => { try { app.quit(); return { success: true }; } catch (error) { return { success: false }; } });
+    ipcMain.handle('quit-application', async event => {
+        try {
+            // 🟢 FIX: Violently assassinate all zombie WebRTC processes EXACTLY like Ctrl+C does!
+            isAppQuitting = true;
+            BrowserWindow.getAllWindows().forEach(w => {
+                if (!w.isDestroyed()) {
+                    w.webContents.executeJavaScript(`try { navigator.mediaDevices.getUserMedia({audio:true}).then(s=>s.getTracks().forEach(t=>t.stop())).catch(()=>{}); } catch(e){}`).catch(()=>{});
+                    w.destroy();
+                }
+            });
+            app.quit();
+            return { success: true };
+        } catch (error) {
+            return { success: false };
+        }
+    });
     ipcMain.handle('open-external', async (event, url) => { try { await shell.openExternal(url); return { success: true }; } catch (error) { return { success: false }; } });
 
     ipcMain.on('start-hot-corners', (event, bounds) => {
