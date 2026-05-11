@@ -1593,6 +1593,26 @@ export class SettingsView extends LitElement {
                     { id: 'swipe_up_4', label: '4 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 6' }
                 ];
 
+                const panicZones = [
+                    {value: 'none', label: '🚫 None (Disabled)'},
+                    {value: 'top_left', label: '↖️ Top Left Corner'},
+                    {value: 'top_mid_left', label: '⬆️ Top Edge (Left)'},
+                    {value: 'top_center', label: '⬆️ Top Edge (Center)'},
+                    {value: 'top_mid_right', label: '⬆️ Top Edge (Right)'},
+                    {value: 'top_right', label: '↗️ Top Right Corner'},
+                    {value: 'right_mid_top', label: '➡️ Right Edge (Top)'},
+                    {value: 'middle_right', label: '➡️ Right Edge (Center)'},
+                    {value: 'right_mid_bottom', label: '➡️ Right Edge (Bottom)'},
+                    {value: 'bottom_right', label: '↘️ Bottom Right Corner'},
+                    {value: 'bottom_mid_right', label: '⬇️ Bottom Edge (Right)'},
+                    {value: 'bottom_center', label: '⬇️ Bottom Edge (Center)'},
+                    {value: 'bottom_mid_left', label: '⬇️ Bottom Edge (Left)'},
+                    {value: 'bottom_left', label: '↙️ Bottom Left Corner'},
+                    {value: 'left_mid_bottom', label: '⬅️ Left Edge (Bottom)'},
+                    {value: 'middle_left', label: '⬅️ Left Edge (Center)'},
+                    {value: 'left_mid_top', label: '⬅️ Left Edge (Top)'}
+                ];
+
                 return html`
                     <div class="scrollable-tab">
                         <h2>Instant Interview (Lightweight)</h2>
@@ -1701,6 +1721,39 @@ export class SettingsView extends LitElement {
                                     if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', resetP);
                                 }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">🔄 Reset Bounds</button>
                             </div>
+                        </div>
+
+                        <div style="margin-bottom: 20px; background: rgba(0,0,0,0.2); padding: 15px; border-radius: 8px; border: 1px solid #333;">
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 15px; border-bottom: 1px dashed rgba(255,255,255,0.1);">
+                                <span style="color: #00cc66; font-weight: bold; font-size: 13px;">🎯 Stealth Panic Zone</span>
+                                <div style="width: 220px;">
+                                    ${this.renderCustomDropdown('ii_panicZone', panicZones, iiPrefs.panicZone || 'top_right', (val) => {
+                                        // 🟢 FIX: Correctly saves to your settings file and pushes to the backend!
+                                        const newPrefs = { ...iiPrefs, panicZone: val };
+                                        this.savePref('instantInterview', newPrefs);
+                                        if(window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newPrefs);
+                                    })}
+                                </div>
+                            </div>
+
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                <span style="color: #00cc66; font-weight: bold; font-size: 13px;">⏱️ Zone Unhide Delay</span>
+                                <span style="color: #a0a0a0; font-size: 12px; font-family: monospace;">${iiPrefs.unhideDelay !== undefined ? iiPrefs.unhideDelay : 5}s</span>
+                            </div>
+                            <p style="font-size: 11px; color: #888; margin-top: 0; margin-bottom: 12px; line-height: 1.4;">
+                                Shoving your mouse into the configured screen zone instantly hides and locks the AI windows. Hold your mouse perfectly in the zone for this duration to unlock and unhide them.
+                            </p>
+                            <input type="range" min="1" max="10" step="1" 
+                                .value=${iiPrefs.unhideDelay !== undefined ? iiPrefs.unhideDelay : 5}
+                                @input=${(e) => {
+                                    // 🟢 FIX: Correctly saves to your settings file and pushes to the backend!
+                                    const newPrefs = { ...iiPrefs, unhideDelay: parseInt(e.target.value) };
+                                    this.savePref('instantInterview', newPrefs);
+                                    if(window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newPrefs);
+                                }}
+                                style="width: 100%; accent-color: #f14c4c; cursor: pointer;" 
+                            />
                         </div>
 
                         <div style="background: rgba(0, 204, 102, 0.05); padding: 20px; border-radius: 8px; border: 1px solid rgba(0, 204, 102, 0.3);">

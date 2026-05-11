@@ -17,6 +17,10 @@ let isSwapped = false;
 let isHidden = false; 
 let activeLoadout = {};
 
+let isHardStealthLocked = false;
+let cornerRadarInterval = null;
+let dwellTimer = null;
+
 // 🟢 Audio Hijack
 const injectAudioHijack = async (win) => {
     if (!win || win.isDestroyed()) return;
@@ -175,6 +179,130 @@ const startVaultScrapers = () => {
             if (cText && cText.trim() !== "") codeVault = cText;
         }
     }, 1500); // Runs incredibly fast in the background
+};
+
+// 🟢 NEW: The Panic Corner Radar (With 16-Zone Geometry & Zero-Lag CPU Fix)
+const startCornerRadar = () => {
+    if (cornerRadarInterval) clearInterval(cornerRadarInterval);
+    let isDwelling = false;
+    let waitForExit = false; 
+    let tickCounter = 0; // 🟢 FIX: Used to throttle disk reads
+    let cachedPrefs = storage.getPreferences().instantInterview || {};
+    
+    cornerRadarInterval = setInterval(() => {
+        if (!codeWin || !voiceWin || codeWin.isDestroyed() || voiceWin.isDestroyed()) return;
+        
+        // 🟢 FIX: Only read the hard drive once every 1 second (20 ticks) instead of every 50ms!
+        tickCounter++;
+        if (tickCounter % 20 === 0) {
+            cachedPrefs = storage.getPreferences().instantInterview || {};
+        }
+
+        const delaySec = cachedPrefs.unhideDelay !== undefined ? cachedPrefs.unhideDelay : 5;
+        const panicZone = cachedPrefs.panicZone || 'top_right';
+        const delayMs = delaySec * 1000;
+        
+        if (panicZone === 'none') return; 
+        
+        const point = screen.getCursorScreenPoint();
+        const display = screen.getDisplayNearestPoint(point);
+        if (!display) return;
+        
+        const { x: dx, y: dy, width: w, height: h } = display.bounds;
+        const relativeX = point.x - dx;
+        const relativeY = point.y - dy;
+        
+        // 🟢 16-Zone Calculation Engine
+        const getActiveZone = (x, y, w, h) => {
+            const edge = 15; 
+            const cornerSize = 15; 
+            const centerX = 40; 
+            const centerY = 40; 
+
+            let isTop = y <= edge;
+            let isBottom = y >= h - edge;
+            let isLeft = x <= edge;
+            let isRight = x >= w - edge;
+
+            if (!isTop && !isBottom && !isLeft && !isRight) return 'none';
+
+            const xPct = (x / w) * 100;
+            const yPct = (y / h) * 100;
+
+            const getSeg = (pct, centerSize, cSize) => {
+                if (pct <= cSize) return '1';
+                if (pct >= 100 - cSize) return '5';
+                const midStart = 50 - (centerSize / 2);
+                const midEnd = 50 + (centerSize / 2);
+                if (pct >= midStart && pct <= midEnd) return '3';
+                if (pct > cSize && pct < midStart) return '2';
+                return '4';
+            };
+
+            if (isTop) {
+                const s = getSeg(xPct, centerX, cornerSize);
+                return s === '1' ? 'top_left' : s === '2' ? 'top_mid_left' : s === '3' ? 'top_center' : s === '4' ? 'top_mid_right' : 'top_right';
+            } else if (isBottom) {
+                const s = getSeg(xPct, centerX, cornerSize);
+                return s === '1' ? 'bottom_left' : s === '2' ? 'bottom_mid_left' : s === '3' ? 'bottom_center' : s === '4' ? 'bottom_mid_right' : 'bottom_right';
+            } else if (isLeft) {
+                const s = getSeg(yPct, centerY, cornerSize);
+                return s === '1' ? 'top_left' : s === '2' ? 'left_mid_top' : s === '3' ? 'middle_left' : s === '4' ? 'left_mid_bottom' : 'bottom_left';
+            } else if (isRight) {
+                const s = getSeg(yPct, centerY, cornerSize);
+                return s === '1' ? 'top_right' : s === '2' ? 'right_mid_top' : s === '3' ? 'middle_right' : s === '4' ? 'right_mid_bottom' : 'bottom_right';
+            }
+            return 'none';
+        };
+
+        const currentZone = getActiveZone(relativeX, relativeY, w, h);
+        const isInPanicZone = currentZone === panicZone;
+        
+        if (isInPanicZone) {
+            if (waitForExit) return; 
+
+            if (!isHidden) {
+                isHidden = true;
+                isHardStealthLocked = true;
+                
+                codeWin.setOpacity(0);
+                codeWin.setIgnoreMouseEvents(true, { forward: true });
+                voiceWin.setOpacity(0);
+                voiceWin.setIgnoreMouseEvents(true, { forward: true });
+                
+                const mainWin = BrowserWindow.getAllWindows().find(win => win.webContents && win.webContents.getURL().includes('index.html'));
+                if (mainWin) mainWin.webContents.send('show-radial-toast', '🔒 PANIC HIDE ENGAGED');
+                
+            } else if (isHardStealthLocked && !isDwelling) {
+                isDwelling = true;
+                dwellTimer = setTimeout(() => {
+                    isHidden = false;
+                    isHardStealthLocked = false;
+                    isDwelling = false;
+                    waitForExit = true; 
+                    
+                    codeWin.setOpacity(1);
+                    codeWin.setIgnoreMouseEvents(false, { forward: true });
+                    voiceWin.setOpacity(1);
+                    voiceWin.setIgnoreMouseEvents(false, { forward: true });
+                    codeWin.showInactive();
+                    voiceWin.showInactive();
+                    
+                    const mainWin = BrowserWindow.getAllWindows().find(win => win.webContents && win.webContents.getURL().includes('index.html'));
+                    if (mainWin) mainWin.webContents.send('show-radial-toast', '🔓 STEALTH UNLOCKED');
+                }, delayMs);
+            }
+        } else {
+            waitForExit = false; 
+            if (isDwelling) {
+                isDwelling = false;
+                if (dwellTimer) {
+                    clearTimeout(dwellTimer);
+                    dwellTimer = null;
+                }
+            }
+        }
+    }, 50);
 };
 
 // 🟢 Native Paster Engine (Upgraded for Gemini & Grok)
@@ -341,6 +469,11 @@ global.executeInstantAction = async (action) => {
     switch(action) {
         case 'hide_unhide':
             try {
+                if (isHidden && isHardStealthLocked) {
+                    if (mainWin) mainWin.webContents.send('show-radial-toast', '🔒 CORNER LOCK ACTIVE');
+                    return;
+                }
+                
                 isHidden = !isHidden;
                 const opacity = isHidden ? 0 : 1;
                 codeWin.setOpacity(opacity); codeWin.setIgnoreMouseEvents(isHidden, { forward: true });
@@ -494,6 +627,10 @@ global.executeInstantAction = async (action) => {
         case 'abort':
             try {
                 if (scrapingInterval) clearInterval(scrapingInterval);
+                if (cornerRadarInterval) clearInterval(cornerRadarInterval); // 🟢 Clean up radar
+                if (dwellTimer) clearTimeout(dwellTimer); // 🟢 Clean up timer
+                isHardStealthLocked = false;
+
                 if (codeWin && !codeWin.isDestroyed()) codeWin.destroy();
                 if (voiceWin && !voiceWin.isDestroyed()) voiceWin.destroy();
                 
@@ -559,6 +696,7 @@ const launchInstantInterview = (isPreview = false) => {
 
     applyWindowBounds();
     startVaultScrapers();
+    startCornerRadar();
 };
 
 module.exports = { launchInstantInterview, applyWindowBounds };
