@@ -104,12 +104,6 @@ export class MainHub extends LitElement {
                         <div class="card-desc">Single-Brain execution. Triggers AI captures and navigation via invisible mouse edge-dwells.</div>
                     </div>
 
-                    <div class="mode-card card-interview ${isSetupIncomplete ? 'disabled' : ''}" @click=${() => !isSetupIncomplete && this.onNavigate('proctored_live_interview')}>
-                        <div class="icon-wrapper">🕵️</div>
-                        <div class="card-title">Proctored Live Interview</div>
-                        <div class="card-desc">Heavy 5-Brain execution. UI Overlays and 16-zone radial wrist-flicks to execute commands silently.</div>
-                    </div>
-
                     <!-- 🟢 NEW: Instant Interview Card -->
                     <div class="mode-card card-instant ${isSetupIncomplete ? 'disabled' : ''}" @click=${() => !isSetupIncomplete && this.onNavigate('instant_interview')}>
                         <div class="icon-wrapper">⚡</div>

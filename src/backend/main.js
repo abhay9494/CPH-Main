@@ -1570,101 +1570,33 @@ function setupGeneralIpcHandlers() {
         return true;
     });
 
-    // 🟢 CENTRALIZED WINDOW BOUNDS CALCULATOR (5-Pane Dynamic Grid)
+    // 🟢 STREAMLINED: Only handles the single OA window now. Instant Interview handles its own!
     global.applyAIBounds = function(forceShow) {
-        if (!codeWebWindowPrimary && !codeWebWindowSecondary) return false;
+        const activeCode = codeWebWindowPrimary;
+        if (!activeCode || activeCode.isDestroyed()) return false;
         
-        const isVisible = (codeWebWindowPrimary && codeWebWindowPrimary.isVisible() && codeWebWindowPrimary.getOpacity() !== 0) || 
-                          (codeWebWindowSecondary && codeWebWindowSecondary.isVisible() && codeWebWindowSecondary.getOpacity() !== 0);
+        const isVisible = activeCode.isVisible() && activeCode.getOpacity() !== 0;
         const targetVisible = forceShow !== undefined ? forceShow : !isVisible;
 
         if (targetVisible) {
             const primaryDisplay = screen.getPrimaryDisplay();
             const { width, height } = primaryDisplay.workAreaSize;
+            
+            const safeWidth = Math.max(800, Math.floor(width * 0.7));
+            const safeHeight = Math.max(600, Math.floor(height * 0.8));
+            const x = Math.floor((width - safeWidth) / 2);
+            const y = Math.floor((height - safeHeight) / 2);
 
-            if (global.currentSessionMode === 'proctored_oa') {
-                const safeWidth = Math.max(800, Math.floor(width * 0.7));
-                const safeHeight = Math.max(600, Math.floor(height * 0.8));
-                const x = Math.floor((width - safeWidth) / 2);
-                const y = Math.floor((height - safeHeight) / 2);
-
-                const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary ? codeWebWindowSecondary : codeWebWindowPrimary;
-                if (activeCode && !activeCode.isDestroyed()) {
-                    activeCode.setOpacity(1); activeCode.setIgnoreMouseEvents(false);
-                    activeCode.setAlwaysOnTop(true, 'floating', 1);
-                    activeCode.setBounds({ x, y, width: safeWidth, height: safeHeight });
-                    activeCode.showInactive();
-                }
-                [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary, companionWebWindow].forEach(w => {
-                    if (w && w !== activeCode && !w.isDestroyed()) w.hide();
-                });
-            } else {
-                const halfWidth = Math.floor(width / 2);
-                const halfHeight = Math.floor(height / 2);
-                
-                let codeX = global.isPanesSwapped ? halfWidth : 0;
-                let voiceX = global.isPanesSwapped ? 0 : halfWidth;
-
-                if (currentCodeWinner === null && codeWebWindowPrimary && codeWebWindowSecondary) {
-                    // 🟢 THE RACE: 2x2 Grid (50x50 each) + COMPANION DEAD CENTER
-                    if (!codeWebWindowPrimary.isDestroyed()) {
-                        codeWebWindowPrimary.showInactive(); codeWebWindowPrimary.setOpacity(1); codeWebWindowPrimary.setIgnoreMouseEvents(false);
-                        codeWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
-                        codeWebWindowPrimary.setBounds({ x: codeX, y: 0, width: halfWidth, height: halfHeight });
-                    }
-                    if (!codeWebWindowSecondary.isDestroyed()) {
-                        codeWebWindowSecondary.showInactive(); codeWebWindowSecondary.setOpacity(1); codeWebWindowSecondary.setIgnoreMouseEvents(false);
-                        codeWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
-                        codeWebWindowSecondary.setBounds({ x: codeX, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                    }
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                        voiceWebWindowPrimary.showInactive(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
-                        voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindowPrimary.setBounds({ x: voiceX, y: 0, width: halfWidth, height: halfHeight });
-                    }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                        voiceWebWindowSecondary.showInactive(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
-                        voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindowSecondary.setBounds({ x: voiceX, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                    }
-                    if (companionWebWindow && !companionWebWindow.isDestroyed()) {
-                        companionWebWindow.showInactive(); companionWebWindow.setOpacity(1); companionWebWindow.setIgnoreMouseEvents(false);
-                        companionWebWindow.setAlwaysOnTop(true, 'floating', 2); // Force above others
-                        companionWebWindow.setBounds({ x: Math.floor(width/4), y: Math.floor(height/4), width: Math.floor(width/2), height: Math.floor(height/2) });
-                    }
-                } else {
-                    // 🟢 THE WINNER: 2x2 Grid (50x50 each) 
-                    // Winner Code takes Top Code slot, Companion takes Bottom Code slot. Voices stay on Voice side.
-                    const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary ? codeWebWindowSecondary : codeWebWindowPrimary;
-                    
-                    if (activeCode && !activeCode.isDestroyed()) {
-                        activeCode.showInactive(); activeCode.setOpacity(1); activeCode.setIgnoreMouseEvents(false);
-                        activeCode.setAlwaysOnTop(true, 'floating', 1);
-                        activeCode.setBounds({ x: codeX, y: 0, width: halfWidth, height: halfHeight });
-                    }
-                    if (companionWebWindow && !companionWebWindow.isDestroyed()) {
-                        companionWebWindow.showInactive(); companionWebWindow.setOpacity(1); companionWebWindow.setIgnoreMouseEvents(false);
-                        companionWebWindow.setAlwaysOnTop(true, 'floating', 1);
-                        companionWebWindow.setBounds({ x: codeX, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                    }
-                    if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) {
-                        voiceWebWindowPrimary.showInactive(); voiceWebWindowPrimary.setOpacity(1); voiceWebWindowPrimary.setIgnoreMouseEvents(false);
-                        voiceWebWindowPrimary.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindowPrimary.setBounds({ x: voiceX, y: 0, width: halfWidth, height: halfHeight });
-                    }
-                    if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) {
-                        voiceWebWindowSecondary.showInactive(); voiceWebWindowSecondary.setOpacity(1); voiceWebWindowSecondary.setIgnoreMouseEvents(false);
-                        voiceWebWindowSecondary.setAlwaysOnTop(true, 'floating', 1);
-                        voiceWebWindowSecondary.setBounds({ x: voiceX, y: halfHeight, width: halfWidth, height: height - halfHeight });
-                    }
-                }
-            }
+            activeCode.setOpacity(1); 
+            activeCode.setIgnoreMouseEvents(false);
+            activeCode.setAlwaysOnTop(true, 'floating', 1);
+            activeCode.setBounds({ x, y, width: safeWidth, height: safeHeight });
+            activeCode.showInactive();
+            
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.moveTop();
             return true;
         } else {
-            [codeWebWindowPrimary, codeWebWindowSecondary, voiceWebWindowPrimary, voiceWebWindowSecondary, companionWebWindow].forEach(w => {
-                if (w && !w.isDestroyed()) w.hide();
-            });
+            activeCode.hide();
             return false;
         }
     };
@@ -2418,7 +2350,7 @@ function setupGeneralIpcHandlers() {
                 mainWindow.webContents.send('app-made-hidden');
                 
                 // Track what was visible before hiding
-                wasAiVisibleBeforeGhost = [voiceWebWindowPrimary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].some(w => w && w.isVisible() && w.getOpacity() !== 0);
+                wasAiVisibleBeforeGhost = [voiceWebWindowPrimary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].some(w => w && !w.isDestroyed() && w.isVisible() && w.getOpacity() !== 0);
 
                 mainWindow.setOpacity(0); mainWindow.setIgnoreMouseEvents(true, { forward: true });
                 

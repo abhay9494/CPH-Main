@@ -2,7 +2,7 @@ import { html, css, LitElement } from '../assets/lit-core-2.7.4.min.js';
 import { AppHeader } from './components/AppHeader.js';
 import { MainHub } from './views/MainHub.js';
 import { ProctoredOA } from './views/ProctoredOA.js';
-import { LiveInterview } from './views/LiveInterview.js';
+// import { LiveInterview } from './views/LiveInterview.js';
 import { Companion } from './views/Companion.js';
 import { SettingsView } from './views/SettingsView.js';
 import { HelpView } from './views/HelpView.js';
@@ -217,7 +217,7 @@ export class RootApp extends LitElement {
             case 'history': return 'CP Helper 20 - History';
             case 'help': return 'CP Helper 20 - Help';
             case 'proctored_oa': return 'CP Helper 20 - Online Assessment';
-            case 'proctored_live_interview': return 'CP Helper 20 - Proctored Live Interview';
+            // case 'proctored_live_interview': return 'CP Helper 20 - Proctored Live Interview';
             case 'instant_interview': return 'CP Helper 20 - Instant Interview (Lightweight)'; // 🟢
             case 'companion': return 'CP Helper 20 - Helping Other';
             default: return 'CP Helper 20';
@@ -246,7 +246,7 @@ export class RootApp extends LitElement {
             case 'history': return html`<history-view></history-view>`;
             case 'help': return html`<help-view></help-view>`;
             case 'proctored_oa': return html`<proctored-oa></proctored-oa>`;
-            case 'proctored_live_interview': return html`<live-interview></live-interview>`;
+            // case 'proctored_live_interview': return html`<live-interview></live-interview>`;
             case 'companion': return html`<companion-view></companion-view>`;
             
             default:

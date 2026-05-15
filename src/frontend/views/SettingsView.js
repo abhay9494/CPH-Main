@@ -36,13 +36,15 @@ export class SettingsView extends LitElement {
             background: transparent;
             border: none;
             color: var(--text-secondary);
-            padding: 10px 15px; /* 🐛 FIX: Squished from 12px to 10px */
+            padding: 10px 15px;
             text-align: left;
             font-size: 13px;
             transition: 0.2s;
             display: flex;
             align-items: center;
             gap: 10px;
+            width: 100%; /* 🟢 FIX: Forces the tab to span the entire sidebar width */
+            box-sizing: border-box;
         }
         .tab-btn:hover {
             background: var(--hover-background);
@@ -318,21 +320,16 @@ export class SettingsView extends LitElement {
         this.activeDropdown = null;
         
         this.tabs = [
-            { id: 'accounts', icon: '👥', label: 'Accounts' },
-            { id: 'profile', icon: '🧠', label: 'Context' },
-            { id: 'appearance', icon: '🎨', label: 'Appearance' },
-            { id: 'audio', icon: '🔊', label: 'Audio' },
-            { id: 'language', icon: '🌍', label: 'Language' },
-            { id: 'capture', icon: '📸', label: 'Capture' },
-            { id: 'shortcuts', icon: '⌨️', label: 'Shortcuts' },
-            { id: 'hotcorners', icon: '🖱️', label: 'Hot Corners' },
-            { id: 'typercorners', icon: '🎯', label: 'Typer Corners' },
-            { id: 'interviewcorners', icon: '🕵️', label: 'Interview HUD' },
-            { id: 'minimap', icon: '🧭', label: 'Minimap Settings' },
-            { id: 'search', icon: '🔍', label: 'Search' },
-            { id: 'zoom', icon: '📹', label: 'Zoom Web' },
+            { id: 'accounts', icon: '👥', label: 'AI Accounts' },
+            { id: 'profile', icon: '🧠', label: 'Context Vault' },
+            { id: 'oa_mode', icon: '🎯', label: 'Proctored OA Mode' },
             { id: 'instant', icon: '⚡', label: 'Instant Interview' },
-            { id: 'advanced', icon: '⚠️', label: 'Advanced' },  
+            { id: 'shortcuts', icon: '⌨️', label: 'Keyboard Shortcuts' },
+            { id: 'appearance', icon: '🎨', label: 'Appearance' },
+            { id: 'audio', icon: '🔊', label: 'Audio Devices' },
+            { id: 'search', icon: '🔍', label: 'Web Search' },
+            { id: 'zoom', icon: '📹', label: 'Stealth Zoom' },
+            { id: 'advanced', icon: '⚠️', label: 'Advanced' }
         ];
 
         this.shortcutLabels = {
@@ -736,70 +733,6 @@ export class SettingsView extends LitElement {
                                 </table>
                             </div>
                         `}
-
-                        <div style="background: rgba(161, 66, 244, 0.05); padding: 15px; border-radius: 6px; border: 1px solid rgba(161, 66, 244, 0.3); margin-top: 25px;">
-                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 5px; color: #a142f4;">🧠 Dual-Brain Loadouts (Live Interview)</h3>
-                            <p style="font-size: 11px; color: #ccc; margin-bottom: 15px;">Configure which AI engine and profile handles Audio (Fast) and which handles Vision/Code (Thinking).</p>
-                            
-                            <div style="display: flex; gap: 15px;">
-                                <!-- 🗣️ VOICE COLUMN -->
-                                <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🗣️ Voice Brain (Primary)</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
-                                        ${this.renderCustomDropdown('voiceEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine || 0, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                        ${this.renderCustomDropdown('voiceProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfileId || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].voiceProfileId = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                    </div>
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #f59e0b;">🏎️ Voice Backup (Race)</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                                        ${this.renderCustomDropdown('voiceEngine2', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.voiceEngine2 || 0, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].voiceEngine2 = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                        ${this.renderCustomDropdown('voiceProfile2', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.voiceProfile2Id || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].voiceProfile2Id = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                    </div>
-                                </div>
-
-                                <!-- 💻 CODE COLUMN -->
-                                <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Code Brain (Primary)</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px; margin-bottom: 15px;">
-                                        ${this.renderCustomDropdown('codeEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine || 1, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                        ${this.renderCustomDropdown('codeProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.codeProfileId || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].id = 'loadout_1'; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                    </div>
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #f59e0b;">🏎️ Code Backup (Race)</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                                        ${this.renderCustomDropdown('codeEngine2', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.codeEngine2 || 1, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].codeEngine2 = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                        ${this.renderCustomDropdown('codeProfile2', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.codeProfile2Id || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].codeProfile2Id = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                    </div>
-                                </div>
-                                <!-- 🤝 COMPANION COLUMN -->
-                                <div style="flex: 1; border: 1px dashed rgba(255,255,255,0.1); padding: 10px; border-radius: 4px;">
-                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🤝 Companion Brain</div>
-                                    <div style="display: flex; flex-direction: column; gap: 8px;">
-                                        ${this.renderCustomDropdown('compEngine', accountOptions, this.prefs.dualBrainLoadouts?.[0]?.companionEngine || 0, (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].companionEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                        ${this.renderCustomDropdown('compProfile', profiles.map(p => ({value: p.id, label: p.name})), this.prefs.dualBrainLoadouts?.[0]?.companionProfileId || '', (val) => {
-                                            let l = [...(this.prefs.dualBrainLoadouts || [])]; if(!l[0]) l[0] = {}; l[0].companionProfileId = val; this.savePref('dualBrainLoadouts', l); if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                                        })}
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
                     </div>
                 `;
 
@@ -822,32 +755,11 @@ export class SettingsView extends LitElement {
                               placeholder="Paste resume text, past projects, or specific metrics here..."></textarea>
                         </div>
                     </div> `;
-            case 'appearance':
-                const themeOpts = [
-                    {value: 'dark', label: 'Dark'},
-                    {value: 'light', label: 'Light'},
-                    {value: 'midnight', label: 'Midnight Blue'},
-                    {value: 'sepia', label: 'Sepia'},
-                    {value: 'nord', label: 'Nord'},
-                    {value: 'dracula', label: 'Dracula'},
-                    {value: 'abyss', label: 'Abyss'}
-                ];
-                const layoutOpts = [
-                    {value: 'normal', label: 'Normal'},
-                    {value: 'compact', label: 'Compact'}
-                ];
             
+            case 'appearance':
                 return html`
                     <div class="scrollable-tab">
-                        <h2>Appearance</h2>
-                        <div class="form-group">
-                            <label>Theme</label>
-                            ${this.renderCustomDropdown('theme', themeOpts, this.prefs.theme, (val) => this.savePref('theme', val))}
-                        </div>
-                        <div class="form-group">
-                            <label>Layout Mode</label>
-                            ${this.renderCustomDropdown('layoutMode', layoutOpts, this.prefs.layoutMode, (val) => this.savePref('layoutMode', val))}
-                        </div>
+                        <h2>Appearance & Display</h2>
                         <div class="form-group">
                             <label>Background Transparency (${Math.round(this.prefs.backgroundTransparency * 100)}%)</label>
                             <input type="range" min="0" max="1" step="0.05" .value=${this.prefs.backgroundTransparency} @input=${(e) => this.savePref('backgroundTransparency', parseFloat(e.target.value))}>
@@ -858,8 +770,7 @@ export class SettingsView extends LitElement {
                         </div>
             
                         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-top: 15px;">
-                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 15px; color: #fff;">Main Display Geometry</h3>
-                            
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 15px; color: #fff;">OA Main Display Geometry</h3>
                             <div class="slider-row" style="margin-bottom: 15px;">
                                 <label style="font-size: 12px;"><span>Window Width</span> <span style="color: #4285f4;">${this.prefs.mainWindowWidth || 900}px</span></label>
                                 <input type="range" min="400" max="1920" step="10" .value=${this.prefs.mainWindowWidth || 900} 
@@ -869,7 +780,6 @@ export class SettingsView extends LitElement {
                                         if (window.require) window.require('electron').ipcRenderer.send('live-resize-main-window', { width: val, height: this.prefs.mainWindowHeight || 500 });
                                     }}>
                             </div>
-                                
                             <div class="slider-row" style="margin: 0;">
                                 <label style="font-size: 12px;"><span>Window Height</span> <span style="color: #00cc66;">${this.prefs.mainWindowHeight || 500}px</span></label>
                                 <input type="range" min="300" max="1080" step="10" .value=${this.prefs.mainWindowHeight || 500} 
@@ -884,30 +794,18 @@ export class SettingsView extends LitElement {
                 `;
 
             case 'audio':
-                const audioOpts = [
-                    {value: 'speaker_only', label: 'Speaker Only (Interviewer)'},
-                    {value: 'mic_only', label: 'Microphone Only (Me)'},
-                    {value: 'both', label: 'Both Speaker & Microphone'}
-                ];
-                const hardwareOpts = [
-                    {value: 'headphones', label: '🎧 Headphones (Clean Audio)'},
-                    {value: 'speakers', label: '🔊 Laptop Speakers (Mixed/Echo Audio)'}
-                ];
                 return html`
                     <div class="scrollable-tab">
-                        <h2>Audio Capture & Environment</h2>
-                        
+                        <h2>Audio Devices</h2>
                         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <h3 style="margin: 0; font-size: 14px;">🎙️ Hardware Devices (Bluetooth Support)</h3>
-                                <button @click=${() => this.loadAudioDevices()} style="background: rgba(66, 133, 244, 0.1); color: #4285f4; border: 1px solid #4285f4; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold;">🔄 Refresh Devices</button>
+                                <button @click=${() => this.loadAudioDevices()} style="background: rgba(66, 133, 244, 0.1); color: #4285f4; border: 1px solid #4285f4; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer !important;">🔄 Refresh Devices</button>
                             </div>
-                            
                             <div class="form-group">
                                 <label>Microphone Source (Your Voice)</label>
                                 ${this.renderCustomDropdown('selectedMic', this.audioDevices.mics.length ? this.audioDevices.mics : [{value:'default', label:'Default'}], this.prefs.selectedMic || 'default', (val) => {
                                     this.savePref('selectedMic', val);
-                                    // 🟢 FIX: Hot-reload the AI brains so the new hardware ID is injected instantly!
                                     if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                 })}
                             </div>
@@ -915,26 +813,9 @@ export class SettingsView extends LitElement {
                                 <label>Audio Output Source (Interviewer's Voice)</label>
                                 ${this.renderCustomDropdown('selectedSpeaker', this.audioDevices.speakers.length ? this.audioDevices.speakers : [{value:'default', label:'Default'}], this.prefs.selectedSpeaker || 'default', (val) => {
                                     this.savePref('selectedSpeaker', val);
-                                    // 🟢 FIX: Hot-reload the AI brains so the new hardware ID is injected instantly!
                                     if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
                                 })}
                             </div>
-                        </div>
-
-                        <div class="form-group">
-                            <label>Hardware Environment</label>
-                            <p style="font-size: 12px; color: var(--text-muted); margin-top: -5px; line-height: 1.4;">
-                                Crucial for the AI to understand the transcript context. If using speakers, the AI will be primed to filter out your own echo.
-                            </p>
-                            ${this.renderCustomDropdown('hardwareSetup', hardwareOpts, this.prefs.hardwareSetup || 'headphones', (val) => this.savePref('hardwareSetup', val))}
-                        </div>
-                        <div class="form-group" style="margin-top: 15px;">
-                            <label>Capture Mode</label>
-                            ${this.renderCustomDropdown('audioMode', audioOpts, this.prefs.audioMode, (val) => {
-                                this.savePref('audioMode', val);
-                                // 🟢 FIX: Hot-reload the AI brains to apply the new capture constraints
-                                if (window.require) window.require('electron').ipcRenderer.invoke('switch-ai-profile');
-                            })}
                         </div>
                     </div>
                 `;
@@ -989,38 +870,6 @@ export class SettingsView extends LitElement {
                 `;
             
             case 'shortcuts':
-                const trackpadList = [
-                    { id: 'tap_3', label: '3 Finger Tap', keyStr: 'Ctrl + Alt + Num 0' },
-                    { id: 'swipe_up_3', label: '3 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 1' },
-                    { id: 'swipe_down_3', label: '3 Finger Swipe Down', keyStr: 'Ctrl + Alt + Num 2' },
-                    { id: 'swipe_left_3', label: '3 Finger Swipe Left', keyStr: 'Ctrl + Alt + Num 3' },
-                    { id: 'swipe_right_3', label: '3 Finger Swipe Right', keyStr: 'Ctrl + Alt + Num 4' },
-                    { id: 'tap_4', label: '4 Finger Tap', keyStr: 'Ctrl + Alt + Num 5' },
-                    { id: 'swipe_up_4', label: '4 Finger Swipe Up', keyStr: 'Ctrl + Alt + Num 6' },
-                    { id: 'swipe_down_4', label: '4 Finger Swipe Down', keyStr: 'Ctrl + Alt + Num 7' },
-                    { id: 'swipe_left_4', label: '4 Finger Swipe Left', keyStr: 'Ctrl + Alt + Num 8' },
-                    { id: 'swipe_right_4', label: '4 Finger Swipe Right', keyStr: 'Ctrl + Alt + Num 9' }
-                ];
-                
-                const trackpadActionsList = [
-                    {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🌟 Sync Optimized'},
-                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
-                    {value: 'hide_unhide', label: '👻 Toggle Hide / Unhide'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
-                    {value: 'change_profile', label: '👤 Switch Profile'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
-                    {value: 'language', label: '💻 Change Language'}, {value: 'mic', label: '🎙️ Toggle Mic'},
-                    {value: 'reset', label: '✨ Reset Session'}, {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}, {value: 'swap_panes', label: '🔀 Swap Brain Panes'},
-                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'}, {value: 'on_the_go', label: '🏃 On-The-Go Dictator'}
-                ];
-
-                const currentTrackpad = this.prefs.trackpadActions || {
-                    'tap_3': 'hide_unhide', 'swipe_up_3': 'scroll_up', 'swipe_down_3': 'scroll_down', 'swipe_left_3': 'prev_resp', 'swipe_right_3': 'next_resp',
-                    'tap_4': 'capture', 'swipe_up_4': 'send_ai', 'swipe_down_4': 'fix_error', 'swipe_left_4': 'on_the_go', 'swipe_right_4': 'fusion_dry_run'
-                };
-
                 return html`
                     <div class="scrollable-tab">
                         <h2>Keyboard Shortcuts</h2>
@@ -1034,44 +883,10 @@ export class SettingsView extends LitElement {
                                 </div>
                             `)}
                         </div>
-
-                        <!-- 🟢 NEW: Customizable Trackpad Gestures -->
-                        <div style="background: rgba(161, 66, 244, 0.05); padding: 20px; border-radius: 8px; border: 1px solid rgba(161, 66, 244, 0.3); margin-top: 30px;">
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
-                                <h3 style="margin-top: 0; font-size: 16px; margin-bottom: 0; color: #a142f4;">🖐️ Hardware Trackpad Gestures</h3>
-                                <button @click=${() => this.resetTrackpadKeysToDefault()} style="background: rgba(161, 66, 244, 0.2); color: #a142f4; border: 1px solid #a142f4; padding: 4px 10px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer !important; transition: 0.2s;">🔄 Reset Keys to Defaults</button>
-                            </div>
-                            <p style="font-size: 12px; color: #ccc; margin-bottom: 15px; line-height: 1.5;">
-                                Go to <strong>Windows Settings > Touchpad > Advanced gestures</strong> and map your physical trackpad gestures to the exact keys shown in green. Then, customize what action those keys trigger below!
-                            </p>
-                            
-                            <div style="display: flex; flex-direction: column; gap: 8px;">
-                                ${trackpadList.map(t => html`
-                                    <div style="display: flex; justify-content: space-between; align-items: center; background: rgba(0,0,0,0.3); padding: 8px 12px; border-radius: 6px; border: 1px solid var(--border-color);">
-                                        <div style="display: flex; flex-direction: column;">
-                                            <span style="font-weight: bold; font-size: 13px; color: var(--text-color);">${t.label}</span>
-                                            <div style="font-size: 11px; font-family: monospace; color: #00cc66; margin-top: 5px;">
-                                                Hardcoded to: 
-                                                <span style="background: rgba(0,204,102,0.1); border: 1px dashed #00cc66; color: #00cc66; font-size: 10px; padding: 2px 6px; border-radius: 4px; display: inline-block;">
-                                                    ${t.keyStr} (via Injector)
-                                                </span>
-                                            </div>
-                                        </div>
-                                        <div style="width: 200px;">
-                                            ${this.renderCustomDropdown(t.id, trackpadActionsList, currentTrackpad[t.id], (val) => {
-                                                const newActions = { ...currentTrackpad, [t.id]: val };
-                                                this.savePref('trackpadActions', newActions);
-                                                if (window.require) window.require('electron').ipcRenderer.send('reload-trackpad-gestures');
-                                            })}
-                                        </div>
-                                    </div>
-                                `)}
-                            </div>
-                        </div>
                     </div>
                 `;
-                
-            case 'hotcorners': {
+              
+            case 'oa_mode': {
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🌟 Sync Optimized'},
@@ -1079,385 +894,146 @@ export class SettingsView extends LitElement {
                     {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
                     {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
-                    {value: 'change_ai', label: '🤖 Change AI Model'}, {value: 'change_profile', label: '👤 Change Profile'},
-                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, {value: 'language', label: '💻 Change Language'},
-                    {value: 'refactor', label: '🛠️ Refactor Code'}, {value: 'mic', label: '🎙️ Toggle Mic'},
-                    {value: 'reset', label: '✨ Reset Session'}, {value: 'text_inc', label: 'A+ Text Size'},
-                    {value: 'text_dec', label: 'A- Text Size'}, {value: 'bg_inc', label: '⬛ Opacity +'}, {value: 'bg_dec', label: '⬜ Opacity -'},
-                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
-                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
-                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'},
-                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'}, 
-                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
+                    {value: 'change_profile', label: '👤 Switch Profile'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
+                    {value: 'language', label: '💻 Change Language'}, {value: 'reset', label: '✨ Reset Session'},
+                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'}, {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
+                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}, {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'}
                 ];
-                
-                this.editingPage = this.editingPage || 1; // Default to Page 1
+
+                const typerActionsList = [
+                    {value: 'none', label: 'None (Disabled)'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
+                    {value: 'trim_top', label: '✂️ Unselect Top Line'}, {value: 'expand_top', label: '➕ Expand Top Line'},
+                    {value: 'trim_bottom', label: '✂️ Unselect Bottom Line'}, {value: 'expand_bottom', label: '➕ Expand Bottom Line'},
+                    {value: 'reset_typer', label: '🔄 Reset Selection'}, {value: 'abort_typer', label: '🛑 Abort & Go Back'},
+                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide'},
+                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'}
+                ];
+
+                this.editingPage = this.editingPage || 1;
                 const b = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
-                
-                // Read from Page 1 or Page 2 based on toggle
                 const activeMapName = this.editingPage === 1 ? 'hotCorners' : 'hotCornersPage2';
                 const currentCorners = this.prefs[activeMapName] || {};
-                
-                // 🟢 CLUTTER FILTER: Find all used actions
-                const usedActions = Object.values(currentCorners);
-
-                let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
-                let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
-
-                const gridCols = `${b.cornerSize}fr ${midX}fr ${b.centerX}fr ${midX}fr ${b.cornerSize}fr`;
-                const gridRows = `${b.cornerSize}fr ${midY}fr ${b.centerY}fr ${midY}fr ${b.cornerSize}fr`;
-
-                return html`
-                    <div class="scrollable-tab">
-                        <h2 style="margin-bottom: 5px;">Interactive Monitor Map</h2>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
-                            Click any zone on the screen to assign an action. Drag the sliders in the center to physically adjust your hitboxes in real-time.
-                        </p>
-
-                        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
-                            <div style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
-                                <button @click=${() => { this.editingPage = 1; this.requestUpdate(); }} style="background: ${this.editingPage === 1 ? '#4285f4' : 'transparent'}; color: ${this.editingPage === 1 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: default !important; transition: 0.2s;">📄 Page 1 (Primary)</button>
-                                <button @click=${() => { this.editingPage = 2; this.requestUpdate(); }} style="background: ${this.editingPage === 2 ? '#a142f4' : 'transparent'}; color: ${this.editingPage === 2 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: default !important; transition: 0.2s;">📄 Page 2 (Shift)</button>
-                            </div>
-                        </div>
-                        
-                        <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
-                            
-                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', activeMapName)}
-                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', activeMapName)}
-                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', activeMapName)}
-                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', activeMapName)}
-                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', activeMapName)}
-
-                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', activeMapName)}
-                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', activeMapName)}
-
-                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', activeMapName)}
-                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', activeMapName)}
-
-                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', activeMapName)}
-                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', activeMapName)}
-
-                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', activeMapName)}
-                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', activeMapName)}
-                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', activeMapName)}
-                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
-                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', activeMapName)}
-
-                            <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
-                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
-                                    <div class="slider-row">
-                                        <label><span>Corner %</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
-                                        <input type="range" min="5" max="30" step="1" .value=${b.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...b, cornerSize: parseInt(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
-                                        <input type="range" min="0" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${b.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerX: parseInt(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>L/R Height</span> <span style="color: #00cc66;">${b.centerY}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerY: parseInt(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row" style="grid-column: span 2;">
-                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label>
-                                        <input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...b, hideTime: parseFloat(e.target.value)})}>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    ${this.editingZone && (this.editingMap === 'hotCorners' || this.editingMap === 'hotCornersPage2') ? html`
-                        <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
-                        <div class="zone-editor-modal">
-                            <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Action</h3>
-                            <p style="font-size: 12px; color: var(--text-muted); margin: 0;">Select what happens when you hover over the <strong>${this.editingZone.replace(/_/g, ' ').toUpperCase()}</strong> zone.</p>
-                            
-                            <div class="zone-action-grid">
-                                ${cornerActions.filter(act => act.value === 'none' || act.value === currentCorners[this.editingZone] || !usedActions.includes(act.value)).map(act => html`
-                                    <button class="action-select-btn ${currentCorners[this.editingZone] === act.value ? 'selected' : ''}"
-                                        @click=${() => {
-                                            const newCorners = { ...currentCorners, [this.editingZone]: act.value };
-                                            // 🟢 FIX: Save to the active map dynamically!
-                                            this.savePref(this.editingMap, newCorners);
-                                            this.editingZone = null;
-                                        }}>
-                                        ${act.label}
-                                    </button>
-                                `)}
-                            </div>
-                        </div>
-                    ` : ''}
-                `;
-            }
-
-            case 'typercorners': {
-                const typerActionsList = [
-                    {value: 'none', label: 'None (Disabled)'},
-                    {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
-                    {value: 'trim_top', label: '✂️ Unselect Top Line (Hold)'},
-                    {value: 'expand_top', label: '➕ Expand Top Line (Hold)'},
-                    {value: 'trim_bottom', label: '✂️ Unselect Bottom Line (Hold)'},
-                    {value: 'expand_bottom', label: '➕ Expand Bottom Line (Hold)'},
-                    {value: 'reset_typer', label: '🔄 Reset Selection'},
-                    {value: 'abort_typer', label: '🛑 Abort & Go Back'},
-                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
-                    {value: 'hide_unhide', label: '👻 Hide / Unhide'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'},
-                    {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
-                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'},
-                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'},
-                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
-                ];
-                
-                const tb = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
-                let tMidX = Math.max(0, (100 - (2 * tb.cornerSize) - tb.centerX) / 2);
-                let tMidY = Math.max(0, (100 - (2 * tb.cornerSize) - tb.centerY) / 2);
-                const tGridCols = `${tb.cornerSize}fr ${tMidX}fr ${tb.centerX}fr ${tMidX}fr ${tb.cornerSize}fr`;
-                const tGridRows = `${tb.cornerSize}fr ${tMidY}fr ${tb.centerY}fr ${tMidY}fr ${tb.cornerSize}fr`;
                 const currentTyperCorners = this.prefs.typerHotCorners || {};
 
-                return html`
-                    <div class="scrollable-tab">
-                        <h2 style="margin-bottom: 5px;">Typer Ghost Mode Map</h2>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
-                            When you switch to the Auto-Typer, the AI swaps to this brain. Holding the scissors will continuously trim lines.
-                        </p>
-                        <div class="monitor-matrix" style="grid-template-columns: ${tGridCols}; grid-template-rows: ${tGridRows};">
-                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'typerHotCorners')}
-                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'typerHotCorners')}
-                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'typerHotCorners')}
-                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'typerHotCorners')}
-                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'typerHotCorners')}
-                            
-                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'typerHotCorners')}
-                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'typerHotCorners')}
-                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', 'typerHotCorners')}
-                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', 'typerHotCorners')}
-                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'typerHotCorners')}
-                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'typerHotCorners')}
-                            
-                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'typerHotCorners')}
-                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'typerHotCorners')}
-                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'typerHotCorners')}
-                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'typerHotCorners')}
-                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'typerHotCorners')}
-                            
-                            <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
-                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">TYPER SETTINGS</h3>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
-                                    <div class="slider-row">
-                                        <label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label>
-                                        <input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => this.savePref('typerDelay', parseInt(e.target.value))}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Select Speed</span> <span style="color: #00cc66;">${this.prefs.typerSelectionSpeed ?? 0.5}s</span></label>
-                                        <input type="range" min="0.1" max="2.0" step="0.1" .value=${this.prefs.typerSelectionSpeed ?? 0.5} @input=${(e) => this.savePref('typerSelectionSpeed', parseFloat(e.target.value))}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60}</span></label>
-                                        <input type="range" min="10" max="180" step="10" .value=${this.prefs.wpmSpeed || 60} @input=${(e) => this.savePref('wpmSpeed', parseInt(e.target.value))}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Mistakes</span> <span style="color: #f14c4c;">${this.prefs.typerMistakes ?? 2}%</span></label>
-                                        <input type="range" min="0" max="15" step="1" .value=${this.prefs.typerMistakes ?? 2} @input=${(e) => this.savePref('typerMistakes', parseInt(e.target.value))}>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    ${this.editingZone && this.editingMap === 'typerHotCorners' ? html`
-                        <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
-                        <div class="zone-editor-modal">
-                            <h3 style="margin-top: 0; margin-bottom: 5px; color: #fff;">Assign Typer Action</h3>
-                            <div class="zone-action-grid">
-                                ${typerActionsList.filter(act => act.value === 'none' || act.value === currentTyperCorners[this.editingZone] || !Object.values(currentTyperCorners).includes(act.value)).map(act => html`
-                                    <button class="action-select-btn ${currentTyperCorners[this.editingZone] === act.value ? 'selected' : ''}" 
-                                            @click=${() => {
-                                                const newCorners = { ...currentTyperCorners, [this.editingZone]: act.value };
-                                                this.savePref('typerHotCorners', newCorners);
-                                                this.editingZone = null;
-                                            }}>
-                                        ${act.label}
-                                    </button>
-                                `)}
-                            </div>
-                        </div>
-                    ` : ''}
-                `;
-            }
-
-            case 'interviewcorners': {
-                const interviewActions = [
-                    {value: 'none', label: 'None (Disabled)'}, 
-                    {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'}, 
-                    {value: 'fix_error', label: '🌟 Sync Optimized'},
-                    {value: 'regenerate', label: '🔄 Regenerate Response'}, 
-                    {value: 'abort_oa', label: '🚪 Abort Interview & Exit'},
-                    {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, 
-                    {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, 
-                    {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'prev_resp', label: '◀ Previous Response'}, 
-                    {value: 'next_resp', label: '▶ Next Response'},
-                    {value: 'change_ai', label: '🤖 Change AI Model'}, 
-                    {value: 'change_profile', label: '👤 Switch Profile'},
-                    {value: 'fast_think', label: '🧠 Toggle Fast/Think'}, 
-                    {value: 'language', label: '💻 Change Language'},
-                    {value: 'reset', label: '✨ Reset Session'}, 
-                    {value: 'text_inc', label: 'A+ Text Size'}, 
-                    {value: 'text_dec', label: 'A- Text Size'}, 
-                    {value: 'bg_inc', label: '⬛ Opacity +'}, 
-                    {value: 'bg_dec', label: '⬜ Opacity -'},
-                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'},
-                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'},
-                    {value: 'swap_panes', label: '🔀 Swap Brain Panes (Edge Swap)'},
-                    {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'},
-                    {value: 'on_the_go', label: '🏃 On-The-Go Dictator'},
-                ];
-                this.editingPage = this.editingPage || 1;
-                const activeMapName = this.editingPage === 1 ? 'interviewCorners' : 'interviewCornersPage2';
-                const currentCorners = this.prefs[activeMapName] || {};
-                
-                // 🟢 FIX: Dynamic Layout & Sliders (Exact match to Hot Corners)
-                const b = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
                 let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
                 let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
                 const gridCols = `${b.cornerSize}fr ${midX}fr ${b.centerX}fr ${midX}fr ${b.cornerSize}fr`;
                 const gridRows = `${b.cornerSize}fr ${midY}fr ${b.centerY}fr ${midY}fr ${b.cornerSize}fr`;
 
+                const loadouts = this.prefs.dualBrainLoadouts || [];
+                const activeLoadout = loadouts[0] || {};
+
                 return html`
                     <div class="scrollable-tab">
+                        <h2>Proctored OA Environment</h2>
                         
-                        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 15px; margin-bottom: 20px;">
-                            <!-- 🚨 Emergency Stealth Dropdown -->
-                            <div style="background: rgba(241, 76, 76, 0.1); border: 1px solid #f14c4c; padding: 15px; border-radius: 8px;">
-                                <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #f14c4c;">🚨 Emergency Stealth</h3>
-                                <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Instantly hide the app without using your keyboard. Unhide uses the delay slider below.</p>
-                                ${this.renderCustomDropdown('interviewStealthEdge', [
-                                    {value: 'none', label: 'None (Disabled)'},
-                                    {value: 'top_left', label: 'Top-Left Corner'}, {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
-                                    {value: 'top_center', label: 'Top-Center Edge'}, {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
-                                    {value: 'top_right', label: 'Top-Right Corner'}, {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
-                                    {value: 'right_mid_top', label: 'Right-Mid-Top Edge'}, {value: 'middle_left', label: 'Middle-Left Edge'},
-                                    {value: 'middle_right', label: 'Middle-Right Edge'}, {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
-                                    {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'}, {value: 'bottom_left', label: 'Bottom-Left Corner'},
-                                    {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'}, {value: 'bottom_center', label: 'Bottom-Center Edge'},
-                                    {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'}, {value: 'bottom_right', label: 'Bottom-Right Corner'}
-                                ], this.prefs.interviewStealthEdge || 'none', (val) => this.savePref('interviewStealthEdge', val))}
-                            </div>
-
-                            <!-- 🔀 Edge Pane Swap Dropdown -->
-                            <div style="background: rgba(66, 133, 244, 0.1); border: 1px solid #4285f4; padding: 15px; border-radius: 8px;">
-                                <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #4285f4;">🔀 Edge Pane Swap</h3>
-                                <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Instantly flip the Code and Voice Brain windows left-to-right on your screen.</p>
-                                ${this.renderCustomDropdown('interviewSwapEdge', [
-                                    {value: 'none', label: 'None (Disabled)'},
-                                    {value: 'top_left', label: 'Top-Left Corner'}, {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
-                                    {value: 'top_center', label: 'Top-Center Edge'}, {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
-                                    {value: 'top_right', label: 'Top-Right Corner'}, {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
-                                    {value: 'right_mid_top', label: 'Right-Mid-Top Edge'}, {value: 'middle_left', label: 'Middle-Left Edge'},
-                                    {value: 'middle_right', label: 'Middle-Right Edge'}, {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
-                                    {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'}, {value: 'bottom_left', label: 'Bottom-Left Corner'},
-                                    {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'}, {value: 'bottom_center', label: 'Bottom-Center Edge'},
-                                    {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'}, {value: 'bottom_right', label: 'Bottom-Right Corner'}
-                                ], this.prefs.interviewSwapEdge || 'none', (val) => this.savePref('interviewSwapEdge', val))}
-                            </div>
-
-                            <!-- 👁️ Toggle AI Windows Dropdown -->
-                            <div style="background: rgba(0, 204, 102, 0.1); border: 1px solid #00cc66; padding: 15px; border-radius: 8px;">
-                                <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #00cc66;">👁️ Toggle AI Windows</h3>
-                                <p style="font-size: 11px; color: #ccc; margin-bottom: 10px;">Instantly show or hide ONLY the background AI hardware windows.</p>
-                                ${this.renderCustomDropdown('interviewHideAiEdge', [
-                                    {value: 'none', label: 'None (Disabled)'},
-                                    {value: 'top_left', label: 'Top-Left Corner'}, {value: 'top_mid_left', label: 'Top-Mid-Left Edge'},
-                                    {value: 'top_center', label: 'Top-Center Edge'}, {value: 'top_mid_right', label: 'Top-Mid-Right Edge'},
-                                    {value: 'top_right', label: 'Top-Right Corner'}, {value: 'left_mid_top', label: 'Left-Mid-Top Edge'},
-                                    {value: 'right_mid_top', label: 'Right-Mid-Top Edge'}, {value: 'middle_left', label: 'Middle-Left Edge'},
-                                    {value: 'middle_right', label: 'Middle-Right Edge'}, {value: 'left_mid_bottom', label: 'Left-Mid-Bottom Edge'},
-                                    {value: 'right_mid_bottom', label: 'Right-Mid-Bottom Edge'}, {value: 'bottom_left', label: 'Bottom-Left Corner'},
-                                    {value: 'bottom_mid_left', label: 'Bottom-Mid-Left Edge'}, {value: 'bottom_center', label: 'Bottom-Center Edge'},
-                                    {value: 'bottom_mid_right', label: 'Bottom-Mid-Right Edge'}, {value: 'bottom_right', label: 'Bottom-Right Corner'}
-                                ], this.prefs.interviewHideAiEdge || 'none', (val) => this.savePref('interviewHideAiEdge', val))}
-                            </div>
-                        </div>
-
-                        <h2 style="margin-bottom: 5px;">Live Interview Radial Map</h2>
-                        <p style="font-size: 11px; color: var(--text-muted); margin-top: 0; margin-bottom: 12px;">
-                            Map the 16 zones for your Wrist-Flick Radial HUD. The physical grid represents the 360-degree circle.
-                        </p>
-                        <div style="display: flex; justify-content: center; margin-bottom: 15px;">
-                            <div style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
-                                <button @click=${() => { this.editingPage = 1; this.requestUpdate(); }} style="background: ${this.editingPage === 1 ? '#4285f4' : 'transparent'}; color: ${this.editingPage === 1 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; transition: 0.2s;">📄 Page 1 (Primary)</button>
-                                <button @click=${() => { this.editingPage = 2; this.requestUpdate(); }} style="background: ${this.editingPage === 2 ? '#a142f4' : 'transparent'}; color: ${this.editingPage === 2 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 6px 16px; border-radius: 4px; font-size: 12px; font-weight: bold; transition: 0.2s;">📄 Page 2 (Shift)</button>
-                            </div>
-                        </div>
-                        <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows}; height: 260px;">
-                            ${this.renderMatrixCell('top_left', 1, 1, 'Top-L', activeMapName)}
-                            ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', activeMapName)}
-                            ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', activeMapName)}
-                            ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', activeMapName)}
-                            ${this.renderMatrixCell('top_right', 1, 5, 'Top-R', activeMapName)}
-
-                            ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', activeMapName)}
-                            ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', activeMapName)}
-                            ${this.renderMatrixCell('middle_left', 3, 1, 'Left Center', activeMapName)}
-                            ${this.renderMatrixCell('middle_right', 3, 5, 'Right Center', activeMapName)}
-                            ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', activeMapName)}
-                            ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', activeMapName)}
-
-                            ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L', activeMapName)}
-                            ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', activeMapName)}
-                            ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', activeMapName)}
-                            ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
-                            ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R', activeMapName)}
-                            
-                            <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
-                                <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
-                                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
-                                    <div class="slider-row">
-                                        <label><span>Corner %</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label>
-                                        <input type="range" min="5" max="30" step="1" .value=${b.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...b, cornerSize: parseInt(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label>
-                                        <input type="range" min="0" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${b.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerX: parseInt(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row">
-                                        <label><span>L/R Height</span> <span style="color: #00cc66;">${b.centerY}%</span></label>
-                                        <input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerY: parseInt(e.target.value)})}>
-                                    </div>
-                                    <div class="slider-row" style="grid-column: span 2;">
-                                        <label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label>
-                                        <input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...b, hideTime: parseFloat(e.target.value)})}>
+                        <div style="background: rgba(255, 255, 255, 0.05); padding: 15px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px;">
+                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #fff;">🧠 OA AI Accounts</h3>
+                            <p style="font-size: 11px; color: #ccc; margin-bottom: 15px;">Select which AI engine and profile will solve the questions in OA Mode.</p>
+                            <div style="display: flex; gap: 15px;">
+                                <div style="flex: 1; border: 1px dashed #4285f4; padding: 10px; border-radius: 4px; background: rgba(66, 133, 244, 0.05);">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #4285f4;">💻 Primary Code AI</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('oa_codeEngine', [{value: '0', label: 'ChatGPT'}, {value: '1', label: 'Gemini'}, {value: '2', label: 'Grok'}], activeLoadout.codeEngine || 1, (val) => { 
+                                            let l = [...loadouts]; if(!l[0]) l[0] = {}; l[0].codeEngine = parseInt(val); this.savePref('dualBrainLoadouts', l); 
+                                        })}
+                                        ${this.renderCustomDropdown('oa_codeProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), activeLoadout.codeProfileId || '', (val) => { 
+                                            let l = [...loadouts]; if(!l[0]) l[0] = {}; l[0].codeProfileId = val; this.savePref('dualBrainLoadouts', l); 
+                                        })}
                                     </div>
                                 </div>
                             </div>
                         </div>
+
+                        <div style="margin-bottom: 20px;">
+                            <h3 style="margin-top: 0; margin-bottom: 5px;">Main OA Hot Corners</h3>
+                            <div style="display: flex; justify-content: center; margin-bottom: 10px;">
+                                <div style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
+                                    <button @click=${() => { this.editingPage = 1; this.requestUpdate(); }} style="background: ${this.editingPage === 1 ? '#4285f4' : 'transparent'}; color: ${this.editingPage === 1 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;">📄 Page 1 (Primary)</button>
+                                    <button @click=${() => { this.editingPage = 2; this.requestUpdate(); }} style="background: ${this.editingPage === 2 ? '#a142f4' : 'transparent'}; color: ${this.editingPage === 2 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;">📄 Page 2 (Shift)</button>
+                                </div>
+                            </div>
+                            
+                            <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
+                                ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', activeMapName)}
+                                ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', activeMapName)}
+                                ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', activeMapName)}
+                                ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', activeMapName)}
+                                ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', activeMapName)}
+
+                                ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', activeMapName)}
+                                ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', activeMapName)}
+
+                                ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', activeMapName)}
+                                ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', activeMapName)}
+
+                                ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', activeMapName)}
+                                ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', activeMapName)}
+
+                                ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', activeMapName)}
+                                ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', activeMapName)}
+                                ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', activeMapName)}
+                                ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
+                                ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', activeMapName)}
+                                
+                                <div class="matrix-center" style="padding: 6px 12px; border-color: #4285f4; background: rgba(66, 133, 244, 0.1);">
+                                    <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
+                                        <div class="slider-row"><label><span>Corner %</span> <span style="color: #4285f4;">${b.cornerSize}%</span></label><input type="range" min="5" max="30" step="1" .value=${b.cornerSize} @input=${(e) => this.savePref('hotCornerBounds', {...b, cornerSize: parseInt(e.target.value)})}></div>
+                                        <div class="slider-row"><label><span>Dwell Delay</span> <span style="color: #f59e0b;">${b.dwellTime || 3}s</span></label><input type="range" min="0" max="5" step="0.5" .value=${b.dwellTime || 3} @input=${(e) => this.savePref('hotCornerBounds', {...b, dwellTime: parseFloat(e.target.value)})}></div>
+                                        <div class="slider-row"><label><span>Top/Bot Width</span> <span style="color: #00cc66;">${b.centerX}%</span></label><input type="range" min="10" max="70" step="5" .value=${b.centerX} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerX: parseInt(e.target.value)})}></div>
+                                        <div class="slider-row"><label><span>L/R Height</span> <span style="color: #00cc66;">${b.centerY}%</span></label><input type="range" min="10" max="70" step="5" .value=${b.centerY} @input=${(e) => this.savePref('hotCornerBounds', {...b, centerY: parseInt(e.target.value)})}></div>
+                                        <div class="slider-row" style="grid-column: span 2;"><label><span>Unhide Delay</span> <span style="color: #ff4444;">${(b.hideTime || 0) === 0 ? 'Instant' : (b.hideTime || 0) + 's'}</span></label><input type="range" min="0" max="5" step="0.5" .value=${b.hideTime || 0} @input=${(e) => this.savePref('hotCornerBounds', {...b, hideTime: parseFloat(e.target.value)})}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h3 style="margin-top: 0; margin-bottom: 5px;">Ghost Typer Corners</h3>
+                            <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
+                                ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'typerHotCorners')}
+                                ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'typerHotCorners')}
+                                ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'typerHotCorners')}
+                                ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'typerHotCorners')}
+                                ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'typerHotCorners')}
+                                
+                                ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'typerHotCorners')}
+                                ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'typerHotCorners')}
+                                
+                                ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', 'typerHotCorners')}
+                                ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', 'typerHotCorners')}
+                                
+                                ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'typerHotCorners')}
+                                ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'typerHotCorners')}
+                                
+                                ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'typerHotCorners')}
+                                ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'typerHotCorners')}
+                                ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'typerHotCorners')}
+                                ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'typerHotCorners')}
+                                ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'typerHotCorners')}
+                                
+                                <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
+                                    <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">TYPER SETTINGS</h3>
+                                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 4px 15px; width: 100%;">
+                                        <div class="slider-row"><label><span>Start Delay</span> <span style="color: #a142f4;">${this.prefs.typerDelay ?? 5}s</span></label><input type="range" min="0" max="10" step="1" .value=${this.prefs.typerDelay ?? 5} @input=${(e) => this.savePref('typerDelay', parseInt(e.target.value))}></div>
+                                        <div class="slider-row"><label><span>Select Speed</span> <span style="color: #00cc66;">${this.prefs.typerSelectionSpeed ?? 0.5}s</span></label><input type="range" min="0.1" max="2.0" step="0.1" .value=${this.prefs.typerSelectionSpeed ?? 0.5} @input=${(e) => this.savePref('typerSelectionSpeed', parseFloat(e.target.value))}></div>
+                                        <div class="slider-row"><label><span>Typer Speed</span> <span style="color: #a142f4;">${this.prefs.wpmSpeed || 60}</span></label><input type="range" min="10" max="180" step="10" .value=${this.prefs.wpmSpeed || 60} @input=${(e) => this.savePref('wpmSpeed', parseInt(e.target.value))}></div>
+                                        <div class="slider-row"><label><span>Mistakes</span> <span style="color: #f14c4c;">${this.prefs.typerMistakes ?? 2}%</span></label><input type="range" min="0" max="15" step="1" .value=${this.prefs.typerMistakes ?? 2} @input=${(e) => this.savePref('typerMistakes', parseInt(e.target.value))}></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
                     </div>
-                    ${this.editingZone && (this.editingMap === 'interviewCorners' || this.editingMap === 'interviewCornersPage2') ? html`
+                    ${this.editingZone ? html`
                         <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
                         <div class="zone-editor-modal">
                             <h3 style="margin-top: 0; margin-bottom: 15px; color: #fff;">Assign Action</h3>
                             <div class="zone-action-grid">
-                                ${interviewActions.map(act => html`
-                                    <button class="action-select-btn ${currentCorners[this.editingZone] === act.value ? 'selected' : ''}" 
-                                        @click=${() => { this.savePref(this.editingMap, { ...currentCorners, [this.editingZone]: act.value }); this.editingZone = null; }}>
+                                ${(this.editingMap === 'typerHotCorners' ? typerActionsList : cornerActions).map(act => html`
+                                    <button class="action-select-btn ${(this.prefs[this.editingMap] || {})[this.editingZone] === act.value ? 'selected' : ''}" 
+                                        @click=${() => { this.savePref(this.editingMap, { ...(this.prefs[this.editingMap] || {}), [this.editingZone]: act.value }); this.editingZone = null; }}>
                                         ${act.label}
                                     </button>
                                 `)}
@@ -1466,63 +1042,6 @@ export class SettingsView extends LitElement {
                     ` : ''}
                 `;
             }
-
-            case 'minimap':
-                const rs = this.prefs.radialSettings || { size: 400, offsetX: 0, offsetY: 0, holdDelay: 2000 };
-                return html`
-                    <div class="scrollable-tab">
-                        <h2 style="margin-bottom: 5px;">Radial Minimap Calibration</h2>
-                        <p style="font-size: 12px; color: var(--text-muted); margin-top: 0; margin-bottom: 25px;">
-                            Adjust the physical size and screen location of the Ghost Minimap. Changes are applied instantly.
-                        </p>
-
-                        <div style="background: rgba(255,255,255,0.05); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); display: flex; flex-direction: column; gap: 25px;">
-
-                            <div class="slider-row" style="margin: 0;">
-                                <label style="font-size: 13px;"><span>Ctrl Hold Delay (Activation Time)</span> <span style="color: #a142f4;">${(rs.holdDelay ?? 2000) / 1000}s</span></label>
-                                <input type="range" min="100" max="4000" step="100" .value=${rs.holdDelay ?? 2000} 
-                                    @input=${(e) => {
-                                        const newRs = { ...rs, holdDelay: parseInt(e.target.value) };
-                                        this.savePref('radialSettings', newRs);
-                                    }}>
-                                <p style="font-size: 10px; color: #888; margin-top: 5px;">How long you must hold the Ctrl key before the Minimap turns Green. (Min: 0.1s)</p>
-                            </div>
-                        
-                            <hr style="border: 0; border-top: 1px solid rgba(255,255,255,0.1); width: 100%; margin: 0;">
-
-                            <div class="slider-row" style="margin: 0;">
-                                <label style="font-size: 13px;"><span>Physical Size</span> <span style="color: #4285f4;">${rs.size}px</span></label>
-                                <input type="range" min="150" max="800" step="10" .value=${rs.size} 
-                                    @input=${(e) => {
-                                        const newRs = { ...rs, size: parseInt(e.target.value) };
-                                        this.savePref('radialSettings', newRs);
-                                        if (window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
-                                    }}>
-                            </div>
-
-                            <div class="slider-row" style="margin: 0;">
-                                <label style="font-size: 13px;"><span>X-Axis Offset (Left/Right)</span> <span style="color: #00cc66;">${rs.offsetX}px</span></label>
-                                <input type="range" min="-1500" max="1500" step="10" .value=${rs.offsetX} 
-                                    @input=${(e) => {
-                                        const newRs = { ...rs, offsetX: parseInt(e.target.value) };
-                                        this.savePref('radialSettings', newRs);
-                                        if (window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
-                                    }}>
-                            </div>
-
-                            <div class="slider-row" style="margin: 0;">
-                                <label style="font-size: 13px;"><span>Y-Axis Offset (Up/Down)</span> <span style="color: #f59e0b;">${rs.offsetY}px</span></label>
-                                <input type="range" min="-1500" max="500" step="10" .value=${rs.offsetY} 
-                                    @input=${(e) => {
-                                        const newRs = { ...rs, offsetY: parseInt(e.target.value) };
-                                        this.savePref('radialSettings', newRs);
-                                        if (window.require) window.require('electron').ipcRenderer.send('rebuild-radial-hud');
-                                    }}>
-                                <p style="font-size: 10px; color: #888; margin-top: 5px;">Negative values push the minimap UP the screen.</p>
-                            </div>
-                        </div>
-                    </div>
-                `;
 
             case 'search':
                 return html`

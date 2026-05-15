@@ -64,6 +64,11 @@ export class ProctoredOA extends LitElement {
         this.typerEndLine = 0;
         this.typingCurrentLineIndex = 0;
         this.typingState = 'idle';
+
+        // 🟢 NEW: Precision Animation Timers
+        this.dwellStartTime = 0;
+        this.dwellAnimationFrame = null;
+        this.isActionFired = false;
     }
 
     async connectedCallback() {
@@ -78,13 +83,64 @@ export class ProctoredOA extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             
+            // 🟢 FIX: Real Dwell Timer Engine
             this.hoverHandler = (_, zone) => {
+                if (this.hoverZone === zone) return; // Prevent stuttering
+
                 this.hoverZone = zone;
-                // Basic visualization simulation (Since backend handles real timer)
-                this.hoverProgress = zone !== 'none' ? 100 : 0; 
-                this.requestUpdate();
+                this.hoverProgress = 0;
+                this.isActionFired = false;
+                
+                if (this.dwellAnimationFrame) {
+                    cancelAnimationFrame(this.dwellAnimationFrame);
+                    this.dwellAnimationFrame = null;
+                }
+
+                if (zone !== 'none') {
+                    this.dwellStartTime = performance.now();
+                    const dwellDuration = (this.prefs.hotCornerBounds?.dwellTime || 3) * 1000;
+
+                    const animateDwell = (now) => {
+                        if (this.hoverZone !== zone || this.isActionFired) return;
+
+                        const elapsed = now - this.dwellStartTime;
+                        this.hoverProgress = Math.min(100, (elapsed / dwellDuration) * 100);
+                        this.requestUpdate();
+
+                        if (this.hoverProgress >= 100) {
+                            this.isActionFired = true;
+                            
+                            // Find the action mapped to this zone
+                            const map = this.viewMode === 'typer' ? (this.prefs.typerHotCorners || {}) 
+                                      : (this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {}));
+                            const action = map[zone];
+                            
+                            if (action && action !== 'none') {
+                                this.executeActionByName(action);
+                                
+                                // 🟢 UX BOOST: Continuous Actions (Loop the timer!)
+                                const continuousActions = ['scroll_up', 'scroll_down', 'trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'];
+                                if (continuousActions.includes(action)) {
+                                    this.isActionFired = false;
+                                    this.dwellStartTime = performance.now() - (dwellDuration * 0.85); // 85% pre-filled for rapid repeat
+                                    this.dwellAnimationFrame = requestAnimationFrame(animateDwell);
+                                }
+                            }
+                        } else {
+                            this.dwellAnimationFrame = requestAnimationFrame(animateDwell);
+                        }
+                    };
+                    this.dwellAnimationFrame = requestAnimationFrame(animateDwell);
+                } else {
+                    this.requestUpdate();
+                }
             };
-            
+
+            // 🟢 NEW: Allow Trackpad Gestures to trigger OA functions!
+            this.directActionHandler = (_, action) => {
+                this.executeActionByName(action);
+            };
+
             this.codeMsgHandler = (_, text) => {
                 this.isSolving = false;
                 if (this.localChatHistory.length > 0) {
@@ -118,6 +174,7 @@ export class ProctoredOA extends LitElement {
             };
 
             ipcRenderer.on('hot-corner-hover', this.hoverHandler);
+            ipcRenderer.on('execute-direct-action', this.directActionHandler);
             ipcRenderer.on('code-new-message', this.codeMsgHandler);
             ipcRenderer.on('code-update-message', this.codeMsgHandler);
             ipcRenderer.on('typing-status', this.typingStatusHandler);
@@ -142,11 +199,186 @@ export class ProctoredOA extends LitElement {
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeListener('hot-corner-hover', this.hoverHandler);
+            ipcRenderer.removeListener('execute-direct-action', this.directActionHandler);
             ipcRenderer.removeListener('code-new-message', this.codeMsgHandler);
             ipcRenderer.removeListener('code-update-message', this.codeMsgHandler);
             ipcRenderer.removeListener('typing-status', this.typingStatusHandler);
             ipcRenderer.removeListener('typing-progress', this.typingProgressHandler);
         }
+    }
+
+    async savePref(key, value) {
+        this.prefs = { ...this.prefs, [key]: value };
+        if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+            await window.cheatingDaddy.storage.updatePreference(key, value);
+            window.dispatchEvent(new CustomEvent('sync-preference', { detail: { key, value } }));
+        }
+        this.requestUpdate();
+    }
+
+    // 🟢 FIX: The Missing Execution Bridge
+    async executeActionByName(action) {
+        if (!window.require) return;
+        const { ipcRenderer } = window.require('electron');
+        
+        if (action === 'reset' && !this.resetArmed) {
+            this.resetArmed = true;
+            this.showToast('⚠️ CONFIRM RESET', '#f14c4c');
+            this.requestUpdate();
+            setTimeout(() => { this.resetArmed = false; this.requestUpdate(); }, 3000);
+            return;
+        }
+
+        this.showToast(`⚡ ${this.getHotCornerLabel(action)}`);
+        
+        switch (action) {
+            case 'capture':
+                const count = await ipcRenderer.invoke('capture-screenshot');
+                this.showToast(`📸 Captured (${count})`);
+                break;
+            case 'send_ai':
+                this.isSolving = true;
+                this.showToast('🚀 Processing...');
+                const lang = this.prefs.programmingLanguage || 'C++';
+                await ipcRenderer.invoke('send-oa-automation', lang);
+                break;
+            case 'fix_error':
+                this.isSolving = true;
+                this.showToast('🌟 Fixing Error...');
+                await ipcRenderer.invoke('send-oa-fix-error');
+                break;
+            case 'refactor':
+                this.isSolving = true;
+                this.showToast('🛠️ Refactoring...');
+                await ipcRenderer.invoke('send-oa-refactor');
+                break;
+            case 'regenerate':
+                this.isSolving = true;
+                this.showToast('🔄 Regenerating...');
+                await ipcRenderer.invoke('send-oa-regenerate');
+                break;
+            case 'scroll_up':
+                const areaUp = this.shadowRoot.querySelector('.chat-area');
+                if (areaUp) areaUp.scrollBy({ top: -300, behavior: 'smooth' });
+                break;
+            case 'scroll_down':
+                const areaDn = this.shadowRoot.querySelector('.chat-area');
+                if (areaDn) areaDn.scrollBy({ top: 300, behavior: 'smooth' });
+                break;
+            case 'hide_unhide':
+                await ipcRenderer.invoke('trigger-ghost-hide');
+                break;
+            case 'abort_oa':
+                this.showToast('🚪 Exiting OA Mode...');
+                
+                // 1. Wipe local UI memory
+                this.codeChatHistory = []; 
+                this.voiceChatHistory = [];
+                this.codeChatIndex = 0; 
+                this.voiceChatIndex = 0;
+                
+                // 2. Wipe Backend AI Memory
+                if (window.require) window.require('electron').ipcRenderer.invoke('new-chat');
+                
+                // 3. Delegate to RootApp.js to safely guarantee the mouse-wall drops!
+                window.dispatchEvent(new CustomEvent('return-to-main'));
+                break;
+            case 'toggle_page2':
+                this.activePage = this.activePage === 1 ? 2 : 1;
+                this.showToast(`📄 Page ${this.activePage}`);
+                break;
+            case 'auto_type':
+                if (this.typingState === 'idle') {
+                    if (this.viewMode === 'typer') {
+                        const codeToType = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
+                        const speed = this.prefs.wpmSpeed || 60;
+                        const mistake = this.prefs.typerMistakes ?? 2;
+                        this.typingState = 'typing';
+                        this.typingCurrentLineIndex = 0;
+                        ipcRenderer.send('start-auto-type', codeToType, speed, mistake);
+                        this.showToast('▶️ Auto-Typing Started');
+                    } else {
+                        let content = this.localChatHistory[this.localChatIndex] || '';
+                        let codeMatches = content.match(/```[a-zA-Z]*\n([\s\S]*?)```/);
+                        if (codeMatches && codeMatches[1]) {
+                            const rawCode = codeMatches[1];
+                            this.dispatchEvent(new CustomEvent('trigger-typer', { detail: rawCode }));
+                            this.showToast('🎯 Ghost Typer Armed');
+                        } else {
+                            this.showToast('⚠️ No Code Found', '#f14c4c');
+                        }
+                    }
+                } else if (this.typingState === 'typing') {
+                    ipcRenderer.send('stop-auto-type');
+                    this.typingState = 'idle';
+                    this.showToast('🛑 Auto-Type Stopped', '#f14c4c');
+                }
+                break;
+            case 'abort_typer':
+                if (this.viewMode === 'typer') {
+                    if (this.typingState === 'typing') ipcRenderer.send('stop-auto-type');
+                    this.typingState = 'idle';
+                    this.viewMode = 'chat';
+                    this.showToast('🛑 Typer Aborted');
+                }
+                break;
+            case 'trim_top':
+                if (this.typerStartLine < this.typerEndLine) this.typerStartLine++;
+                break;
+            case 'trim_bottom':
+                if (this.typerEndLine > this.typerStartLine) this.typerEndLine--;
+                break;
+            case 'expand_top':
+                if (this.typerStartLine > 0) this.typerStartLine--;
+                break;
+            case 'expand_bottom':
+                if (this.typerEndLine < this.typerCodeLines.length - 1) this.typerEndLine++;
+                break;
+            case 'reset_typer':
+                this.typerStartLine = 0;
+                this.typerEndLine = this.typerCodeLines.length - 1;
+                this.showToast('✨ Selection Reset');
+                break;
+            case 'reset':
+                await ipcRenderer.invoke('clear-screenshots');
+                this.localChatHistory = [];
+                this.localChatIndex = -1;
+                this.showToast('✨ Session Cleared');
+                this.resetArmed = false;
+                break;
+            case 'text_inc':
+                const curInc = this.prefs.fontSize || 13;
+                this.savePref('fontSize', curInc + 1);
+                break;
+            case 'text_dec':
+                const curDec = this.prefs.fontSize || 13;
+                this.savePref('fontSize', Math.max(10, curDec - 1));
+                break;
+            case 'bg_inc':
+                const curBgInc = this.prefs.backgroundTransparency || 0.8;
+                this.savePref('backgroundTransparency', Math.min(1, curBgInc + 0.1));
+                break;
+            case 'bg_dec':
+                const curBgDec = this.prefs.backgroundTransparency || 0.8;
+                this.savePref('backgroundTransparency', Math.max(0, curBgDec - 0.1));
+                break;
+            case 'toggle_ai_vis':
+                await ipcRenderer.invoke('toggle-window-visibility');
+                break;
+            case 'prev_resp':
+                if (this.localChatIndex > 0) {
+                    this.localChatIndex--;
+                    this.requestUpdate();
+                }
+                break;
+            case 'next_resp':
+                if (this.localChatIndex < this.localChatHistory.length - 1) {
+                    this.localChatIndex++;
+                    this.requestUpdate();
+                }
+                break;
+        }
+        this.requestUpdate();
     }
 
     scrollToBottom() {
@@ -159,7 +391,10 @@ export class ProctoredOA extends LitElement {
         this.toastColor = color;
         this.requestUpdate();
         if (this.toastTimeout) clearTimeout(this.toastTimeout);
-        this.toastTimeout = setTimeout(() => { this.toastMessage = ''; this.requestUpdate(); }, 2000);
+        this.toastTimeout = setTimeout(() => {
+            this.toastMessage = '';
+            this.requestUpdate();
+        }, 2000);
     }
 
     getHotCornerLabel(action) {
@@ -172,19 +407,18 @@ export class ProctoredOA extends LitElement {
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
             'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
-            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
+            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot',
             'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2'
         };
         return labels[action] || action || '—';
     }
 
     handleLineClick(index) {
-        if (this.typingState !== 'idle') return; 
+        if (this.typingState !== 'idle') return;
         const distToStart = Math.abs(index - this.typerStartLine);
         const distToEnd = Math.abs(index - this.typerEndLine);
         if (distToStart <= distToEnd) this.typerStartLine = index;
         else this.typerEndLine = index;
-        
         if (this.typerStartLine > this.typerEndLine) {
             const temp = this.typerStartLine;
             this.typerStartLine = this.typerEndLine;
@@ -203,10 +437,8 @@ export class ProctoredOA extends LitElement {
                     const isHighlighted = idx >= this.typerStartLine && idx <= this.typerEndLine;
                     const isCurrent = (this.typingState === 'typing') && isHighlighted && (idx === this.typerStartLine + this.typingCurrentLineIndex);
                     let bg = 'transparent', b = 'transparent', tc = 'var(--text-color)', nc = '#666';
-
-                    if (isCurrent) { bg = 'rgba(0, 204, 102, 0.25)'; b = '#00cc66'; tc = '#fff'; nc = '#00cc66'; } 
+                    if (isCurrent) { bg = 'rgba(0, 204, 102, 0.25)'; b = '#00cc66'; tc = '#fff'; nc = '#00cc66'; }
                     else if (isHighlighted) { bg = 'rgba(161, 66, 244, 0.2)'; b = 'rgba(161, 66, 244, 0.3)'; tc = 'var(--text-color)'; nc = '#a142f4'; }
-
                     return html`
                         <div class="typer-line" style="background: ${bg}; border: 1px solid ${b}; color: ${tc};" @click=${() => this.handleLineClick(idx)}>
                             <div style="width: 40px; text-align: right; padding-right: 12px; font-weight: bold; color: ${nc};">${idx + 1}</div>
@@ -220,8 +452,8 @@ export class ProctoredOA extends LitElement {
 
     renderMatrix() {
         let map = this.viewMode === 'typer' ? (this.prefs.typerHotCorners || {}) 
-                : (this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {}));
-
+                  : (this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {}));
+                  
         const renderZone = (id) => {
             const isHover = this.hoverZone === id;
             const action = map[id];
@@ -229,7 +461,7 @@ export class ProctoredOA extends LitElement {
             
             let label = this.getHotCornerLabel(action);
             if (action === 'reset' && this.resetArmed) label = '⚠️ CONFIRM RESET';
-
+            
             return html`
                 <div class="matrix-cell ${isHover ? 'hovered' : ''}" style="${action === 'reset' && this.resetArmed ? 'border-color: #f14c4c; color: #f14c4c; background: rgba(241,76,76,0.15);' : ''}">
                     ${isHover ? html`<div class="progress-fill" style="width: ${this.hoverProgress}%"></div>` : ''}
