@@ -22,6 +22,7 @@ let cornerRadarInterval = null;
 let dwellTimer = null;
 
 // 🟢 Audio Hijack
+// 🟢 Audio Hijack (Upgraded for ChatGPT Anti-Silence & Popups)
 const injectAudioHijack = async (win) => {
     if (!win || win.isDestroyed()) return;
     
@@ -54,9 +55,9 @@ const injectAudioHijack = async (win) => {
                                 try {
                                     let sysStream;
                                     try {
-                                        sysStream = await originalGetUserMedia({ 
-                                            audio: { mandatory: { chromeMediaSource: 'desktop' } }, 
-                                            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } 
+                                        sysStream = await originalGetUserMedia({
+                                            audio: { mandatory: { chromeMediaSource: 'desktop' } },
+                                            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } }
                                         });
                                     } catch (err1) {
                                         if (originalGetDisplayMedia) sysStream = await originalGetDisplayMedia({ audio: true, video: true });
@@ -71,13 +72,12 @@ const injectAudioHijack = async (win) => {
                                     }
                                 } catch(e) { }
                             }
-
+                            
                             if (mode === 'mic_only' || mode === 'both') {
                                 try {
                                     const audioConstraints = micId && micId !== 'default' 
                                         ? { deviceId: { exact: micId }, echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
                                         : { echoCancellation: false, noiseSuppression: false, autoGainControl: false };
-
                                     const micStream = await originalGetUserMedia({ audio: audioConstraints });
                                     const micTrack = micStream.getAudioTracks()[0];
                                     if (micTrack) {
@@ -86,8 +86,36 @@ const injectAudioHijack = async (win) => {
                                     }
                                 } catch(e) { }
                             }
+
+                            // 🟢 FIX: ChatGPT Anti-Silence Oscillator (Prevents Advanced Voice from hanging up!)
+                            const osc = ctx.createOscillator();
+                            osc.frequency.value = 20000; // 20kHz (Inaudible to humans, but proves the mic is alive to ChatGPT)
+                            const gain = ctx.createGain();
+                            gain.gain.value = 0.01;
+                            osc.connect(gain);
+                            gain.connect(dest);
+                            osc.start();
+                            
+                            // Send a tiny subsonic heartbeat every 15 seconds
+                            setInterval(() => {
+                                try {
+                                    if(ctx.state === 'suspended') ctx.resume();
+                                    const burst = ctx.createOscillator();
+                                    burst.frequency.value = 100;
+                                    const burstGain = ctx.createGain();
+                                    burstGain.gain.setValueAtTime(0.01, ctx.currentTime);
+                                    burstGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
+                                    burst.connect(burstGain);
+                                    burstGain.connect(dest);
+                                    burst.start();
+                                    burst.stop(ctx.currentTime + 0.2);
+                                } catch(e) {}
+                            }, 15000);
+
                             return dest.stream;
-                        } catch (err) { return originalGetUserMedia(constraints); }
+                        } catch (err) {
+                            return originalGetUserMedia(constraints);
+                        }
                     }
                     return originalGetUserMedia(constraints);
                 };
@@ -95,6 +123,24 @@ const injectAudioHijack = async (win) => {
             true;
         `;
         await win.webContents.executeJavaScript(hijackScript);
+
+        // 🟢 FIX: ChatGPT Popup Assassin (Clicks "Keep Talking" if it pops up)
+        const assassinScript = `
+            if (!window.location.hostname.includes('grok')) {
+                setInterval(() => {
+                    try {
+                        const btns = Array.from(document.querySelectorAll('button, div[role="button"]'));
+                        const badBtns = btns.filter(b => {
+                            const txt = (b.innerText || '').toLowerCase();
+                            return txt.includes('keep talking') || txt.includes('continue') || txt === 'x' || txt === 'close' || txt.includes('stay logged in');
+                        });
+                        badBtns.forEach(b => b.click());
+                    } catch(e) {}
+                }, 3000);
+            }
+        `;
+        win.webContents.executeJavaScript(assassinScript).catch(()=>{});
+
     } catch (e) {}
 };
 
@@ -509,7 +555,7 @@ global.executeInstantAction = async (action) => {
             
         case 'send_pro':
             try {
-                await fireNativePayload(codeWin, PROMPTS.INTERVIEW_OPTIMIZED || "Provide the optimal solution.", [], 'Pro', true);
+                await fireNativePayload(codeWin, PROMPTS.INTERVIEW_OPTIMIZED || "Provide the optimal solution.", [], 'Fast', true);
             } catch(e) { console.error("Send Pro Failed:", e); }
             break;
         
@@ -547,7 +593,7 @@ global.executeInstantAction = async (action) => {
                 // 5. Build prompt and fire!
                 const v2cPrompt = `SYSTEM DIRECTIVE: Analyze this scenario. Here is the recent verbal conversation between me and the interviewer:\n\nInterviewer:"${finalTranscript}"\n\nProvide the optimal solution(if he is asking for an optimal solution) or give me the response what should i say.`;
                 
-                await fireNativePayload(codeWin, v2cPrompt, [], 'Pro', true);
+                await fireNativePayload(codeWin, v2cPrompt, [], 'Fast', true);
                 if (mainWin) mainWin.webContents.send('show-radial-toast', '⬅️ TRANSCRIPT SYNCED');
             } catch(e) { console.error("Sync V to C Failed:", e); }
             break;
@@ -591,7 +637,7 @@ global.executeInstantAction = async (action) => {
             try {
                 if (!codeVault) return;
                 const otgPrompt = (PROMPTS.ON_THE_GO_DICTATOR || "Break this code down for me to type out:") + '\n\n### THE CODE TO DICTATE:\n' + codeVault;
-                await fireNativePayload(codeWin, otgPrompt, [], 'Pro', true);
+                await fireNativePayload(codeWin, otgPrompt, [], 'Fast', true);
             } catch(e) { console.error("OTG Failed:", e); }
             break;
 
@@ -604,7 +650,7 @@ global.executeInstantAction = async (action) => {
                 } catch(e) {}
                 
                 const dryRunPrompt = (PROMPTS.FUSION_DRY_RUN || "Do a dry run of this:") + '\n\n### RECENT TRANSCRIPT CONTEXT:\n' + transcriptVault;
-                await fireNativePayload(codeWin, dryRunPrompt, images, 'Pro', true);
+                await fireNativePayload(codeWin, dryRunPrompt, images, 'Fast', true);
             } catch(e) { console.error("Dry Run Failed:", e); }
             break;
             

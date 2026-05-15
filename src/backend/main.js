@@ -270,6 +270,12 @@ const PROMPTS = {
 global.PROMPTS = PROMPTS;
 
 const { app, BrowserWindow, shell, ipcMain, session, desktopCapturer, clipboard, nativeImage, dialog, screen, globalShortcut } = require('electron');
+const path = require('path');
+const defaultUserDataPath = app.getPath('userData');
+if (!app.isPackaged) {
+    app.setPath('userData', `${defaultUserDataPath}-Dev`);
+}
+
 app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 require('events').EventEmitter.defaultMaxListeners = 25; // 🟢 FIX BUG 1: Stop MaxListeners Warning
 app.on('certificate-error', (event, webContents, url, error, certificate, callback) => { event.preventDefault(); callback(true); }); // 🟢 FIX BUG 1: Suppress SSL Drops
@@ -278,7 +284,6 @@ dialog.showErrorBox = function(title, content) { console.log(`[SILENT ERROR] ${t
 process.on('uncaughtException', (error) => { console.error('[CRASH PREVENTED]:', error); });
 process.on('unhandledRejection', (reason, promise) => { console.error('[CRASH PREVENTED]:', reason); });
 
-app.commandLine.appendSwitch('use-fake-ui-for-media-stream');
 app.commandLine.appendSwitch('autoplay-policy', 'no-user-gesture-required');
 app.commandLine.appendSwitch('disable-features', 'Autofill,AutofillServerCommunication,PasswordGeneration,PasswordManager');
 // 🟢 FIX: Stops the -8 Critical Error by running AI webviews entirely in RAM
@@ -288,7 +293,6 @@ const { createWindow, updateGlobalShortcuts } = require('./windowManager');
 const { launchInstantInterview } = require('./ipc/instant_interview_ctrl');
 const storage = require('./storage'); 
 const fs = require('fs');
-const path = require('path');
 const os = require('os');
 const { spawn } = require('child_process');
 const net = require('net');
@@ -2024,8 +2028,8 @@ function setupGeneralIpcHandlers() {
                 let voicePromptInit2 = PROMPTS.VOICE_INITIAL_CONTEXT;
                 let compPromptInit = PROMPTS.COMPANION_INITIAL_CONTEXT;
                 
-                if (AI_CONFIGS[c1Idx].name === 'Gemini') codePromptPrimary = '@Pro ' + codePromptPrimary;
-                if (AI_CONFIGS[c2Idx].name === 'Gemini') codePromptSecondary = '@Pro ' + codePromptSecondary;
+                if (AI_CONFIGS[c1Idx].name === 'Gemini') codePromptPrimary = '@Fast ' + codePromptPrimary;
+                if (AI_CONFIGS[c2Idx].name === 'Gemini') codePromptSecondary = '@Fast ' + codePromptSecondary;
                 
                 if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePromptInit1 = '@Fast ' + voicePromptInit1;
                 if (AI_CONFIGS[v2Idx].name === 'Gemini') voicePromptInit2 = '@Fast ' + voicePromptInit2;
@@ -2109,7 +2113,7 @@ function setupGeneralIpcHandlers() {
             let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
             let codePrompt = PROMPTS.ON_THE_GO_DICTATOR + '\n\n### THE CODE TO DICTATE:\n' + currentCodeText;
             
-            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Pro ' + codePrompt;
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
 
             // Beam payload to the SURVIVING Code Brain
             const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
@@ -2134,7 +2138,7 @@ function setupGeneralIpcHandlers() {
             let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
             let codePrompt = PROMPTS.FUSION_DRY_RUN + '\n\n### RECENT TRANSCRIPT CONTEXT:\n' + transcriptContext;
             
-            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Pro ' + codePrompt;
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = '@Fast ' + codePrompt;
 
             // 3. Beam context + image to the SURVIVING Code Brain
             const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
