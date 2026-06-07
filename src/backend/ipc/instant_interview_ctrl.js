@@ -23,12 +23,14 @@ let dwellTimer = null;
 
 // 🟢 Audio Hijack
 // 🟢 Audio Hijack (Upgraded for ChatGPT Anti-Silence & Popups)
+// 🟢 Audio Hijack (Upgraded for ChatGPT Advanced Voice & Popups)
 const injectAudioHijack = async (win) => {
     if (!win || win.isDestroyed()) return;
     
     const prefs = storage.getPreferences();
     const mode = prefs.audioMode || 'speaker_only';
     const micId = prefs.selectedMic || 'default';
+    const isChatGPT = win.webContents.getURL().includes('chatgpt.com');
     
     try {
         const sources = await desktopCapturer.getSources({ types: ['screen'] });
@@ -41,12 +43,67 @@ const injectAudioHijack = async (win) => {
                 const mode = '${mode}';
                 const micId = '${micId}';
                 const sourceId = '${sourceId}';
+                const isChatGPT = ${isChatGPT};
                 const originalGetUserMedia = navigator.mediaDevices.getUserMedia.bind(navigator.mediaDevices);
                 const originalGetDisplayMedia = navigator.mediaDevices.getDisplayMedia ? navigator.mediaDevices.getDisplayMedia.bind(navigator.mediaDevices) : null;
                 
                 navigator.mediaDevices.getUserMedia = async (constraints) => {
                     if (constraints && constraints.audio) {
                         try {
+                            // 🟢 FIX: ChatGPT Advanced Voice Bypass
+                            // ChatGPT requires a genuine MediaStream object to bind to its React state.
+                            // We construct a composite stream directly from the raw OS hardware, bypassing AudioContext fabrication.
+                            if (isChatGPT) {
+                                let compositeTracks = [];
+                                
+                                // 1. Grab Speaker Audio (System Audio)
+                                if (mode === 'speaker_only' || mode === 'both') {
+                                    try {
+                                        let sysStream = await originalGetUserMedia({ 
+                                            audio: { mandatory: { chromeMediaSource: 'desktop' } }, 
+                                            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } 
+                                        });
+                                        if (sysStream) {
+                                            const sysAudioTrack = sysStream.getAudioTracks()[0];
+                                            if (sysAudioTrack) compositeTracks.push(sysAudioTrack);
+                                            sysStream.getVideoTracks().forEach(t => t.stop());
+                                        }
+                                    } catch (err) {
+                                        if (originalGetDisplayMedia) {
+                                            const sysStream = await originalGetDisplayMedia({ audio: true, video: true });
+                                            if (sysStream) {
+                                                const sysAudioTrack = sysStream.getAudioTracks()[0];
+                                                if (sysAudioTrack) compositeTracks.push(sysAudioTrack);
+                                            }
+                                        }
+                                    }
+                                }
+
+                                // 2. Grab Microphone Audio
+                                if (mode === 'mic_only' || mode === 'both') {
+                                    try {
+                                        const audioConstraints = micId && micId !== 'default' 
+                                            ? { deviceId: { exact: micId } } 
+                                            : true;
+                                        const micStream = await originalGetUserMedia({ audio: audioConstraints });
+                                        if (micStream) {
+                                            const micTrack = micStream.getAudioTracks()[0];
+                                            if (micTrack) compositeTracks.push(micTrack);
+                                        }
+                                    } catch(e) { }
+                                }
+                                
+                                // 3. Return the composite hardware stream to ChatGPT
+                                if (compositeTracks.length > 0) {
+                                    return new MediaStream(compositeTracks);
+                                } else {
+                                    return originalGetUserMedia(constraints);
+                                }
+                            }
+
+                            // -------------------------------------------------------------
+                            // 🟢 STANDARD BEHAVIOR (For Gemini & Others)
+                            // -------------------------------------------------------------
                             const ctx = new (window.AudioContext || window.webkitAudioContext)();
                             if (ctx.state === 'suspended') await ctx.resume();
                             const dest = ctx.createMediaStreamDestination();
@@ -55,9 +112,9 @@ const injectAudioHijack = async (win) => {
                                 try {
                                     let sysStream;
                                     try {
-                                        sysStream = await originalGetUserMedia({
-                                            audio: { mandatory: { chromeMediaSource: 'desktop' } },
-                                            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } }
+                                        sysStream = await originalGetUserMedia({ 
+                                            audio: { mandatory: { chromeMediaSource: 'desktop' } }, 
+                                            video: { mandatory: { chromeMediaSource: 'desktop', chromeMediaSourceId: sourceId } } 
                                         });
                                     } catch (err1) {
                                         if (originalGetDisplayMedia) sysStream = await originalGetDisplayMedia({ audio: true, video: true });
@@ -87,31 +144,6 @@ const injectAudioHijack = async (win) => {
                                 } catch(e) { }
                             }
 
-                            // 🟢 FIX: ChatGPT Anti-Silence Oscillator (Prevents Advanced Voice from hanging up!)
-                            const osc = ctx.createOscillator();
-                            osc.frequency.value = 20000; // 20kHz (Inaudible to humans, but proves the mic is alive to ChatGPT)
-                            const gain = ctx.createGain();
-                            gain.gain.value = 0.01;
-                            osc.connect(gain);
-                            gain.connect(dest);
-                            osc.start();
-                            
-                            // Send a tiny subsonic heartbeat every 15 seconds
-                            setInterval(() => {
-                                try {
-                                    if(ctx.state === 'suspended') ctx.resume();
-                                    const burst = ctx.createOscillator();
-                                    burst.frequency.value = 100;
-                                    const burstGain = ctx.createGain();
-                                    burstGain.gain.setValueAtTime(0.01, ctx.currentTime);
-                                    burstGain.gain.exponentialRampToValueAtTime(0.0001, ctx.currentTime + 0.2);
-                                    burst.connect(burstGain);
-                                    burstGain.connect(dest);
-                                    burst.start();
-                                    burst.stop(ctx.currentTime + 0.2);
-                                } catch(e) {}
-                            }, 15000);
-
                             return dest.stream;
                         } catch (err) {
                             return originalGetUserMedia(constraints);
@@ -124,7 +156,7 @@ const injectAudioHijack = async (win) => {
         `;
         await win.webContents.executeJavaScript(hijackScript);
 
-        // 🟢 FIX: ChatGPT Popup Assassin (Clicks "Keep Talking" if it pops up)
+        // 🟢 ChatGPT Popup Assassin (Unchanged)
         const assassinScript = `
             if (!window.location.hostname.includes('grok')) {
                 setInterval(() => {
