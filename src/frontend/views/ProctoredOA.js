@@ -173,12 +173,35 @@ export class ProctoredOA extends LitElement {
                 this.requestUpdate();
             };
 
+            this.screenshotHandler = (_, imgData) => {
+                let current = this.localChatHistory[this.localChatIndex] || "📸 **Images in Queue:**\n\n";
+                
+                // If the screen currently shows an AI response, create a fresh block for the new images
+                if (current.includes('🤖 AI:')) {
+                    current = "📸 **Images in Queue:**\n\n";
+                    this.localChatHistory.push(current);
+                    this.localChatIndex = this.localChatHistory.length - 1;
+                } else if (this.localChatHistory.length === 0) {
+                    this.localChatHistory.push(current);
+                    this.localChatIndex = 0;
+                }
+
+                // Append image without double newlines so ChatFeed.js groups them into the 5-column grid!
+                const a = [...this.localChatHistory];
+                a[this.localChatIndex] = current + ` ![Screenshot](${imgData})`;
+                this.localChatHistory = a;
+                
+                this.requestUpdate();
+                setTimeout(() => this.scrollToBottom(), 100);
+            };
+
             ipcRenderer.on('hot-corner-hover', this.hoverHandler);
             ipcRenderer.on('execute-direct-action', this.directActionHandler);
             ipcRenderer.on('code-new-message', this.codeMsgHandler);
             ipcRenderer.on('code-update-message', this.codeMsgHandler);
             ipcRenderer.on('typing-status', this.typingStatusHandler);
             ipcRenderer.on('typing-progress', this.typingProgressHandler);
+            ipcRenderer.on('screenshot-captured', this.screenshotHandler);
         }
 
         // Listen for Typer trigger from ChatFeed
@@ -204,6 +227,7 @@ export class ProctoredOA extends LitElement {
             ipcRenderer.removeListener('code-update-message', this.codeMsgHandler);
             ipcRenderer.removeListener('typing-status', this.typingStatusHandler);
             ipcRenderer.removeListener('typing-progress', this.typingProgressHandler);
+            ipcRenderer.removeListener('screenshot-captured', this.screenshotHandler);
         }
     }
 
@@ -363,7 +387,7 @@ export class ProctoredOA extends LitElement {
                 this.savePref('backgroundTransparency', Math.max(0, curBgDec - 0.1));
                 break;
             case 'toggle_ai_vis':
-                await ipcRenderer.invoke('toggle-window-visibility');
+                await ipcRenderer.invoke('toggle-ai-visibility');
                 break;
             case 'prev_resp':
                 if (this.localChatIndex > 0) {

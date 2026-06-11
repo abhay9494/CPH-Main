@@ -77,47 +77,39 @@ function setupOAController(appState, PROMPTS) {
     ipcMain.handle('send-screenshots-to-ai', async (event, customPrompt) => {
         if (accumulatedScreenshots.length === 0) return false;
         const codePrompt = customPrompt || PROMPTS.OA_AUTOMATION('C++');
-        const voicePrompt = PROMPTS.VOICE_CONTEXT;
+        
         await sendPayloadToWindow(appState.codeWebWindow, codePrompt, accumulatedScreenshots);
-        setTimeout(async () => {
-            await sendPayloadToWindow(appState.voiceWebWindow, voicePrompt, accumulatedScreenshots);
-            accumulatedScreenshots = [];
-        }, 1500);
+        accumulatedScreenshots = [];
         return true;
     });
 
     ipcMain.handle('send-oa-automation', async (event, language) => {
         if (accumulatedScreenshots.length === 0) return false;
         const codePrompt = PROMPTS.OA_AUTOMATION(language);
-        const voicePrompt = PROMPTS.VOICE_CONTEXT;
+        
         await sendPayloadToWindow(appState.codeWebWindow, codePrompt, accumulatedScreenshots);
-        setTimeout(async () => {
-            await sendPayloadToWindow(appState.voiceWebWindow, voicePrompt, accumulatedScreenshots);
-            accumulatedScreenshots = [];
-        }, 1500);
+        accumulatedScreenshots = [];
         return true;
     });
 
     ipcMain.handle('send-oa-refactor', async () => {
         await sendPayloadToWindow(appState.codeWebWindow, PROMPTS.REFACTOR, []);
-        setTimeout(async () => { await sendPayloadToWindow(appState.voiceWebWindow, PROMPTS.VOICE_CONTEXT, []); }, 1500);
         return true;
     });
 
     ipcMain.handle('send-oa-fix-error', async () => {
         if (accumulatedScreenshots.length === 0) return false;
+        
         await sendPayloadToWindow(appState.codeWebWindow, PROMPTS.FIX_ERROR, accumulatedScreenshots);
-        setTimeout(async () => {
-            await sendPayloadToWindow(appState.voiceWebWindow, PROMPTS.VOICE_CONTEXT, accumulatedScreenshots);
-            accumulatedScreenshots = [];
-        }, 1500);
+        accumulatedScreenshots = [];
         return true;
     });
 
     ipcMain.handle('send-oa-regenerate', async () => {
         const script = `(() => { try { const btn = Array.from(document.querySelectorAll('button')).find(b => (b.textContent||'').toLowerCase().includes('regenerate') || (b.getAttribute('aria-label')||'').toLowerCase().includes('regenerate')); if(btn) { btn.click(); return true; } return false; } catch(e) { return false; } })();`;
-        if (appState.codeWebWindow && !appState.codeWebWindow.isDestroyed()) appState.codeWebWindow.webContents.executeJavaScript(script).catch(()=>{});
-        if (appState.voiceWebWindow && !appState.voiceWebWindow.isDestroyed()) appState.voiceWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+        if (appState.codeWebWindow && !appState.codeWebWindow.isDestroyed()) {
+            appState.codeWebWindow.webContents.executeJavaScript(script).catch(()=>{});
+        }
         return true;
     });
 
