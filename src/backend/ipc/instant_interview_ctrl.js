@@ -219,7 +219,6 @@ const applyWindowBounds = () => {
         height: Math.floor(sh * (vConf.h / 100))
     });
 
-    // 🟢 Apply Ghost Toggle if they overlap
     updateStackedVisibility();
 };
 
@@ -325,7 +324,7 @@ const startCornerRadar = () => {
                 isDwelling = true;
                 dwellTimer = setTimeout(() => {
                     isHidden = false; isHardStealthLocked = false; isDwelling = false; waitForExit = true; 
-                    updateStackedVisibility(); // Restore active window based on stacking bounds
+                    updateStackedVisibility(); 
                     if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(false, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
                     const mainWin = getMainWin();
                     if (mainWin) mainWin.webContents.send('show-radial-toast', '🔓 STEALTH UNLOCKED');
@@ -430,17 +429,14 @@ global.executeInstantAction = async (action) => {
                 const prefs = storage.getPreferences();
                 const ii = prefs.instantInterview || {};
                 
-                // 🟢 NEW: Check if windows are stacked
                 const isStacked = Math.abs((ii.codeX || 0) - (ii.voiceX || 0)) < 5 && 
                                   Math.abs((ii.codeY || 0) - (ii.voiceY || 0)) < 5;
                 
                 if (isStacked) {
-                    // Ghost Toggle (Opacity flip)
                     isCodeActivePane = !isCodeActivePane;
                     updateStackedVisibility();
                     if (mainWin) mainWin.webContents.send('show-radial-toast', isCodeActivePane ? '💻 CODE ACTIVE' : '🗣️ VOICE ACTIVE');
                 } else {
-                    // Traditional coordinate swap
                     isSwapped = !isSwapped;
                     applyWindowBounds();
                     if (!isHidden) { codeWin.showInactive(); voiceWin.showInactive(); }
@@ -601,6 +597,16 @@ const launchInstantInterview = (isPreview = false) => {
     });
     widgetWin.setContentProtection(true);
     if (process.platform === 'win32') widgetWin.setAlwaysOnTop(true, 'screen-saver', 15);
+    
+    // 🟢 FIX 1: Make the 900x400 transparent box completely click-through by default
+    widgetWin.setIgnoreMouseEvents(true, { forward: true });
+
+    // 🟢 FIX 2: Block Ctrl+R / F5 so the Widget doesn't reload and accidentally render the Main Hub
+    widgetWin.webContents.on('before-input-event', (event, input) => {
+        if (input.key === 'F11' || input.key === 'F5') event.preventDefault();
+        if ((input.control || input.meta) && (input.key.toLowerCase() === 'r')) event.preventDefault();
+    });
+
     widgetWin.loadFile(path.join(__dirname, '../../index.html'));
     widgetWin.webContents.once('did-finish-load', () => {
         widgetWin.webContents.executeJavaScript(`
@@ -672,6 +678,59 @@ ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) =
         if (codeWin && !codeWin.isDestroyed()) { codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true }); }
         if (voiceWin && !voiceWin.isDestroyed()) { voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true }); }
     }
+});
+
+// 🟢 NEW: The D-Pad Nudge Engine Listener
+ipcMain.removeAllListeners('nudge-instant-window');
+ipcMain.on('nudge-instant-window', (event, target, dimension, direction) => {
+    const prefs = storage.getPreferences();
+    const ii = prefs.instantInterview || {};
+
+    const isStacked = Math.abs((ii.codeX || 0) - (ii.voiceX || 0)) < 5 && 
+                      Math.abs((ii.codeY || 0) - (ii.voiceY || 0)) < 5;
+
+    // Determine which windows to move based on the target selector
+    const updateCode = target === 'code' || (target === 'both' && isStacked) || (target === 'active' && isCodeActivePane) || (target === 'active' && !isStacked);
+    const updateVoice = target === 'voice' || (target === 'both' && isStacked) || (target === 'active' && !isCodeActivePane) || (target === 'active' && !isStacked);
+
+    const posStep = 2;  // Move by 2%
+    const sizeStep = 4; // Grow/Shrink by 4%
+
+    if (updateCode) {
+        if (dimension === 'x') ii.codeX = Math.min(90, Math.max(0, (ii.codeX || 1) + (direction * posStep)));
+        if (dimension === 'y') ii.codeY = Math.min(90, Math.max(0, (ii.codeY || 7) + (direction * posStep)));
+        
+        if (dimension === 'w') {
+            ii.codeW = Math.min(100, Math.max(10, (ii.codeW || 48) + (direction * sizeStep)));
+            // Center-anchoring logic: nudge X left by half the growth to stay centered
+            ii.codeX = Math.max(0, (ii.codeX || 1) - (direction * (sizeStep / 2)));
+        }
+        if (dimension === 'h') {
+            ii.codeH = Math.min(100, Math.max(10, (ii.codeH || 85) + (direction * sizeStep)));
+            // Center-anchoring logic: nudge Y up by half the growth to stay centered
+            ii.codeY = Math.max(0, (ii.codeY || 7) - (direction * (sizeStep / 2)));
+        }
+    }
+
+    if (updateVoice) {
+        if (dimension === 'x') ii.voiceX = Math.min(90, Math.max(0, (ii.voiceX || 51) + (direction * posStep)));
+        if (dimension === 'y') ii.voiceY = Math.min(90, Math.max(0, (ii.voiceY || 7) + (direction * posStep)));
+        
+        if (dimension === 'w') {
+            ii.voiceW = Math.min(100, Math.max(10, (ii.voiceW || 48) + (direction * sizeStep)));
+            ii.voiceX = Math.max(0, (ii.voiceX || 51) - (direction * (sizeStep / 2)));
+        }
+        if (dimension === 'h') {
+            ii.voiceH = Math.min(100, Math.max(10, (ii.voiceH || 85) + (direction * sizeStep)));
+            ii.voiceY = Math.max(0, (ii.voiceY || 7) - (direction * (sizeStep / 2)));
+        }
+    }
+
+    // Save to disk immediately so panic-quits remember the safe coordinates
+    storage.updatePreference('instantInterview', ii);
+    
+    // Apply mathematically 
+    applyWindowBounds();
 });
 
 module.exports = { launchInstantInterview, applyWindowBounds };
