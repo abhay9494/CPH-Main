@@ -7,7 +7,7 @@ import { Companion } from './views/Companion.js';
 import { SettingsView } from './views/SettingsView.js';
 import { HelpView } from './views/HelpView.js';
 import { HistoryView } from './views/HistoryView.js';
-import { InstantWidget } from './views/InstantWidget.js'; // 🟢 FIX: The missing import!
+import { InstantWidget } from './views/InstantWidget.js';
 
 export class RootApp extends LitElement {
     static styles = css`
