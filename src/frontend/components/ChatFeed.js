@@ -81,7 +81,7 @@ export class ChatFeed extends LitElement {
         }
         .markdown-body img { 
             width: 100%; height: auto; border-radius: 6px; border: 1px solid var(--border-color, #444); 
-            cursor: pointer !important; margin: 0; transition: 0.2s ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
+            cursor: default !important; margin: 0; transition: 0.2s ease-in-out; box-shadow: 0 2px 6px rgba(0,0,0,0.3); 
             object-fit: cover; aspect-ratio: 16/9; 
         }
 

@@ -12,7 +12,7 @@ export class Companion extends LitElement {
         .bottom-controls { display: flex; flex-direction: column; gap: 8px; padding: 12px; background: rgba(0,0,0,0.25); border-top: 1px dashed var(--border-color); flex-shrink: 0; border-radius: 8px; }
         .control-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; }
 
-        .action-btn { background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; white-space: nowrap; cursor: pointer !important; }
+        .action-btn { background: var(--bg-secondary); color: var(--text-color); border: 1px solid var(--border-color, #444); padding: 6px 12px; border-radius: 4px; font-size: 12px; font-weight: 600; display: flex; align-items: center; justify-content: center; gap: 6px; transition: 0.2s; white-space: nowrap; cursor: default !important; }
         .action-btn:hover { background: var(--hover-background); color: #fff; }
         .action-btn.success { background: rgba(0, 204, 102, 0.15); color: #00cc66; border-color: rgba(0, 204, 102, 0.4); }
         .action-btn.success:hover { background: rgba(0, 204, 102, 0.3); }

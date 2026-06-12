@@ -7,6 +7,7 @@ import { Companion } from './views/Companion.js';
 import { SettingsView } from './views/SettingsView.js';
 import { HelpView } from './views/HelpView.js';
 import { HistoryView } from './views/HistoryView.js';
+import { InstantWidget } from './views/InstantWidget.js';
 
 export class RootApp extends LitElement {
     static styles = css`
@@ -72,6 +73,13 @@ export class RootApp extends LitElement {
                 const r = await window.cheatingDaddy.storage.getPreferences();
                 this.checkSetupState(r?.data || r || {});
             }, 3000);
+        }
+
+        if (window.require) {
+            window.require('electron').ipcRenderer.on('force-route', (_, route) => {
+                this.currentView = route;
+                this.requestUpdate();
+            });
         }
 
         // Global Sync Listener
@@ -241,6 +249,9 @@ export class RootApp extends LitElement {
                         </p>
                     </div>
                 `;
+            
+            case 'instant_widget': 
+                return html`<instant-widget></instant-widget>`;
 
             case 'settings': return html`<settings-view></settings-view>`;
             case 'history': return html`<history-view></history-view>`;
@@ -255,6 +266,11 @@ export class RootApp extends LitElement {
     }
 
     render() {
+        // 🟢 FIX: Return ONLY the widget if this is the widget window! No headers, no vertical sliders.
+        if (this.currentView === 'instant_widget') {
+            return html`<instant-widget></instant-widget>`;
+        }
+
         return html`
             <div class="window-container">
                 <div class="vertical-slider-wrapper slider-left">

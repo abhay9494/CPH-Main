@@ -240,7 +240,7 @@ export class SettingsView extends LitElement {
             align-items: center;
             justify-content: center;
             transition: all 0.2s;
-            cursor: pointer !important;
+            cursor: default !important;
             overflow: hidden;
         }
         .matrix-cell:hover {
@@ -800,7 +800,7 @@ export class SettingsView extends LitElement {
                         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color); margin-bottom: 20px;">
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
                                 <h3 style="margin: 0; font-size: 14px;">🎙️ Hardware Devices (Bluetooth Support)</h3>
-                                <button @click=${() => this.loadAudioDevices()} style="background: rgba(66, 133, 244, 0.1); color: #4285f4; border: 1px solid #4285f4; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: pointer !important;">🔄 Refresh Devices</button>
+                                <button @click=${() => this.loadAudioDevices()} style="background: rgba(66, 133, 244, 0.1); color: #4285f4; border: 1px solid #4285f4; padding: 4px 8px; border-radius: 4px; font-size: 11px; font-weight: bold; cursor: default !important;">🔄 Refresh Devices</button>
                             </div>
                             <div class="form-group">
                                 <label>Microphone Source (Your Voice)</label>
@@ -1067,7 +1067,7 @@ export class SettingsView extends LitElement {
                         <div style="background: rgba(45, 140, 255, 0.1); border: 1px solid #2D8CFF; padding: 20px; border-radius: 8px; text-align: center;">
                             <button @click=${() => {
                                 if (window.require) window.require('electron').ipcRenderer.invoke('toggle-zoom-window');
-                            }} style="background: #2D8CFF; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: pointer !important; transition: 0.2s;">
+                            }} style="background: #2D8CFF; color: white; border: none; padding: 12px 24px; border-radius: 6px; font-weight: bold; font-size: 14px; cursor: default !important; transition: 0.2s;">
                                 📹 Launch / Show Zoom
                             </button>
                         </div>
@@ -1233,12 +1233,12 @@ export class SettingsView extends LitElement {
                             <div style="display: flex; gap: 10px; margin-top: 15px; width: 100%; justify-content: center;">
                                 <button @click=${() => {
                                     if(window.require) window.require('electron').ipcRenderer.send('preview-instant-windows');
-                                }} style="background: rgba(0, 204, 102, 0.2); color: #00cc66; border: 1px solid #00cc66; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">👀 Test Live Windows</button>
+                                }} style="background: rgba(0, 204, 102, 0.2); color: #00cc66; border: 1px solid #00cc66; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: default; transition: 0.2s;">👀 Test Live Windows</button>
                                 <button @click=${() => {
                                     const resetP = {...iiPrefs, codeW: 48, codeH: 85, codeX: 1, codeY: 7, voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7};
                                     this.savePref('instantInterview', resetP);
                                     if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', resetP);
-                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">🔄 Reset Bounds</button>
+                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: default; transition: 0.2s;">🔄 Reset Bounds</button>
                             </div>
                         </div>
 
@@ -1271,7 +1271,7 @@ export class SettingsView extends LitElement {
                                     this.savePref('instantInterview', newPrefs);
                                     if(window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newPrefs);
                                 }}
-                                style="width: 100%; accent-color: #f14c4c; cursor: pointer;" 
+                                style="width: 100%; accent-color: #f14c4c; cursor: default;" 
                             />
                         </div>
 
