@@ -23,7 +23,8 @@ let isHardStealthLocked = false;
 let cornerRadarInterval = null;
 let dwellTimer = null;
 
-// 🟢 FIX: Helper function to accurately find the Main Hub, ignoring the Widget!
+let isCodeActivePane = true;
+
 const getMainWin = () => {
     return BrowserWindow.getAllWindows().find(w => 
         w !== codeWin && w !== voiceWin && w !== widgetWin && 
@@ -31,7 +32,32 @@ const getMainWin = () => {
     );
 };
 
-// 🟢 Audio Hijack
+const updateStackedVisibility = () => {
+    if (!codeWin || !voiceWin || codeWin.isDestroyed() || voiceWin.isDestroyed()) return;
+    if (isHidden) return;
+
+    const prefs = storage.getPreferences();
+    const ii = prefs.instantInterview || {};
+    
+    const isStacked = Math.abs((ii.codeX || 0) - (ii.voiceX || 0)) < 5 && 
+                      Math.abs((ii.codeY || 0) - (ii.voiceY || 0)) < 5;
+
+    if (isStacked) {
+        if (isCodeActivePane) {
+            codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true }); codeWin.moveTop();
+            voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true });
+        } else {
+            voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true }); voiceWin.moveTop();
+            codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true });
+        }
+    } else {
+        codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true });
+        voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true });
+    }
+    
+    if (widgetWin && !widgetWin.isDestroyed()) widgetWin.moveTop();
+};
+
 const injectAudioHijack = async (win) => {
     if (!win || win.isDestroyed()) return;
     
@@ -192,6 +218,9 @@ const applyWindowBounds = () => {
         width: Math.floor(sw * (vConf.w / 100)),
         height: Math.floor(sh * (vConf.h / 100))
     });
+
+    // 🟢 Apply Ghost Toggle if they overlap
+    updateStackedVisibility();
 };
 
 const startVaultScrapers = () => {
@@ -296,10 +325,8 @@ const startCornerRadar = () => {
                 isDwelling = true;
                 dwellTimer = setTimeout(() => {
                     isHidden = false; isHardStealthLocked = false; isDwelling = false; waitForExit = true; 
-                    codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true });
-                    voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true });
-                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(false, { forward: true }); }
-                    codeWin.showInactive(); voiceWin.showInactive(); if(widgetWin) widgetWin.showInactive();
+                    updateStackedVisibility(); // Restore active window based on stacking bounds
+                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(false, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
                     const mainWin = getMainWin();
                     if (mainWin) mainWin.webContents.send('show-radial-toast', '🔓 STEALTH UNLOCKED');
                 }, delayMs);
@@ -386,20 +413,39 @@ global.executeInstantAction = async (action) => {
             try {
                 if (isHidden && isHardStealthLocked) { if (mainWin) mainWin.webContents.send('show-radial-toast', '🔒 CORNER LOCK ACTIVE'); return; }
                 isHidden = !isHidden;
-                const opacity = isHidden ? 0 : 1;
-                codeWin.setOpacity(opacity); codeWin.setIgnoreMouseEvents(isHidden, { forward: true });
-                voiceWin.setOpacity(opacity); voiceWin.setIgnoreMouseEvents(isHidden, { forward: true });
-                if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(opacity); widgetWin.setIgnoreMouseEvents(isHidden, { forward: true }); }
-                if (!isHidden) { codeWin.showInactive(); voiceWin.showInactive(); if(widgetWin) widgetWin.showInactive(); }
+                
+                if (isHidden) {
+                    codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true });
+                    voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true });
+                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(0); widgetWin.setIgnoreMouseEvents(true, { forward: true }); }
+                } else {
+                    updateStackedVisibility();
+                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(false, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
+                }
             } catch(e) {}
             break;
             
         case 'swap_windows':
             try {
-                isSwapped = !isSwapped;
-                applyWindowBounds();
-                if (!isHidden) { codeWin.showInactive(); voiceWin.showInactive(); }
-                if (mainWin) mainWin.webContents.send('show-radial-toast', '🔀 SWAPPED');
+                const prefs = storage.getPreferences();
+                const ii = prefs.instantInterview || {};
+                
+                // 🟢 NEW: Check if windows are stacked
+                const isStacked = Math.abs((ii.codeX || 0) - (ii.voiceX || 0)) < 5 && 
+                                  Math.abs((ii.codeY || 0) - (ii.voiceY || 0)) < 5;
+                
+                if (isStacked) {
+                    // Ghost Toggle (Opacity flip)
+                    isCodeActivePane = !isCodeActivePane;
+                    updateStackedVisibility();
+                    if (mainWin) mainWin.webContents.send('show-radial-toast', isCodeActivePane ? '💻 CODE ACTIVE' : '🗣️ VOICE ACTIVE');
+                } else {
+                    // Traditional coordinate swap
+                    isSwapped = !isSwapped;
+                    applyWindowBounds();
+                    if (!isHidden) { codeWin.showInactive(); voiceWin.showInactive(); }
+                    if (mainWin) mainWin.webContents.send('show-radial-toast', '🔀 SWAPPED PANES');
+                }
             } catch(e) {}
             break;
 
@@ -480,7 +526,6 @@ global.executeInstantAction = async (action) => {
                 if (dwellTimer) clearTimeout(dwellTimer);
                 isHardStealthLocked = false;
 
-                // Grab mainWin reference before destroying windows
                 const mainWindowToRestore = getMainWin();
 
                 if (codeWin && !codeWin.isDestroyed()) codeWin.destroy();
@@ -545,13 +590,12 @@ const launchInstantInterview = (isPreview = false) => {
         injectAudioHijack(voiceWin); 
     });
 
-    // 🟢 Spawn the Tiny Compact Pill Widget (680 x 250 to allow upward dropdowns)
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width: sw, height: sh } = primaryDisplay.workAreaSize;
     if (widgetWin && !widgetWin.isDestroyed()) widgetWin.destroy();
     
     widgetWin = new BrowserWindow({
-        width: 680, height: 250, x: Math.floor((sw - 680) / 2), y: sh - 260,
+        width: 900, height: 400, x: Math.floor((sw - 900) / 2), y: sh - 400,
         frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true, resizable: false,
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
@@ -559,7 +603,10 @@ const launchInstantInterview = (isPreview = false) => {
     if (process.platform === 'win32') widgetWin.setAlwaysOnTop(true, 'screen-saver', 15);
     widgetWin.loadFile(path.join(__dirname, '../../index.html'));
     widgetWin.webContents.once('did-finish-load', () => {
-        widgetWin.webContents.send('force-route', 'instant_widget');
+        widgetWin.webContents.executeJavaScript(`
+            const app = document.querySelector('root-app');
+            if (app) { app.currentView = 'instant_widget'; app.requestUpdate(); }
+        `).catch(()=>{});
     });
 
     codeWin.on('focus', () => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.moveTop(); });
@@ -575,7 +622,6 @@ ipcMain.on('abort-instant-interview', () => {
     if (global.executeInstantAction) global.executeInstantAction('abort');
 });
 
-// 🟢 NEW: Independent Pane Sync Handler
 ipcMain.removeAllListeners('apply-instant-settings');
 ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) => {
     const prefs = storage.getPreferences();
@@ -584,7 +630,7 @@ ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) =
     const sharedOpts = { show: true, alwaysOnTop: true, skipTaskbar: true, frame: false, autoHideMenuBar: true, resizable: false };
 
     if (targetPane === 'code') {
-        if (iiPrefs.codeEngine === engineIdx && iiPrefs.codeProfileId === profileId) return; // No change
+        if (iiPrefs.codeEngine === engineIdx && iiPrefs.codeProfileId === profileId) return;
 
         iiPrefs.codeEngine = engineIdx;
         iiPrefs.codeProfileId = profileId;
@@ -601,7 +647,7 @@ ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) =
         codeWin.on('focus', () => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.moveTop(); });
         
     } else if (targetPane === 'voice') {
-        if (iiPrefs.voiceEngine === engineIdx && iiPrefs.voiceProfileId === profileId) return; // No change
+        if (iiPrefs.voiceEngine === engineIdx && iiPrefs.voiceProfileId === profileId) return;
 
         iiPrefs.voiceEngine = engineIdx;
         iiPrefs.voiceProfileId = profileId;

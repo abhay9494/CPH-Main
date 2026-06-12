@@ -7,7 +7,7 @@ import { Companion } from './views/Companion.js';
 import { SettingsView } from './views/SettingsView.js';
 import { HelpView } from './views/HelpView.js';
 import { HistoryView } from './views/HistoryView.js';
-import { InstantWidget } from './views/InstantWidget.js';
+import { InstantWidget } from './views/InstantWidget.js'; // 🟢 FIX: The missing import!
 
 export class RootApp extends LitElement {
     static styles = css`
@@ -57,13 +57,21 @@ export class RootApp extends LitElement {
         
         window.addEventListener('return-to-main', () => this.handleHubNavigation('main'));
 
+        // 🟢 FIX: The missing IPC Listener that catches the signal from the Widget Window
+        if (window.require) {
+            window.require('electron').ipcRenderer.on('force-route', (_, route) => {
+                this.currentView = route;
+                this.requestUpdate();
+            });
+        }
+
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
             const raw = await window.cheatingDaddy.storage.getPreferences();
             const prefs = raw?.data || raw || {};
             
             this.bgTransparency = prefs.backgroundTransparency ?? 0.8;
             this.fontSize = prefs.fontSize ?? 12;
-            this.theme = prefs.theme || 'dark'; // 🟢 Load saved theme
+            this.theme = prefs.theme || 'dark';
             
             this.applyBackgroundAppearance(prefs.backgroundColor ?? '#1e1e1e', this.bgTransparency, this.theme);
             document.documentElement.style.setProperty('--response-font-size', `${this.fontSize}px`);
@@ -75,14 +83,6 @@ export class RootApp extends LitElement {
             }, 3000);
         }
 
-        if (window.require) {
-            window.require('electron').ipcRenderer.on('force-route', (_, route) => {
-                this.currentView = route;
-                this.requestUpdate();
-            });
-        }
-
-        // Global Sync Listener
         window.addEventListener('sync-preference', (e) => {
             if (e.detail.key === 'backgroundTransparency') {
                 this.bgTransparency = e.detail.value;
@@ -121,24 +121,19 @@ export class RootApp extends LitElement {
 
     applyBackgroundAppearance(backgroundColor, alpha, theme = 'dark') {
         const root = document.documentElement;
-        
-        // 🟢 FIX: Always keep the background consistent (dark transparent)
         const baseRgb = this.hexToRgb(backgroundColor || '#1e1e1e');
-        
         let textColor, textSecondary, textMuted;
         
-        // 🟢 THEME INJECTOR: Flip ONLY the text colors based on the toggle!
         if (theme === 'light') {
-            textColor = '#000000'; // Pure Black text for white IDEs
+            textColor = '#000000'; 
             textSecondary = '#222222';
             textMuted = '#444444';
         } else {
-            textColor = '#ffffff'; // Pure White text for dark IDEs
+            textColor = '#ffffff'; 
             textSecondary = '#cccccc';
             textMuted = '#888888';
         }
 
-        // Backgrounds remain locked to your preferences so the UI doesn't visually jump
         const secondary = this.lightenColor(baseRgb, 7);
         const tertiary = this.lightenColor(baseRgb, 15);
         const hover = this.lightenColor(baseRgb, 20);
@@ -154,7 +149,6 @@ export class RootApp extends LitElement {
         root.style.setProperty('--input-background', `rgba(${tertiary.r}, ${tertiary.g}, ${tertiary.b}, ${alpha})`);
         root.style.setProperty('--border-color', `rgba(60, 60, 60, ${alpha})`);
         
-        // Push the dynamic text colors!
         root.style.setProperty('--text-color', textColor);
         root.style.setProperty('--text-secondary', textSecondary);
         root.style.setProperty('--text-muted', textMuted);
@@ -181,12 +175,11 @@ export class RootApp extends LitElement {
             return;
         }
 
-        // Action Modes
         this.sessionMode = destination;
         ipcRenderer.send('set-session-mode', destination);
         
         if (destination === 'proctored_oa') {
-            await ipcRenderer.invoke('set-ai-provider', 1); // Set to Code Brain default
+            await ipcRenderer.invoke('set-ai-provider', 1);
             const raw = await window.cheatingDaddy.storage.getPreferences();
             const bounds = (raw?.data || raw || {}).hotCornerBounds || { cornerSize: 15, centerX: 40, centerY: 40 };
             ipcRenderer.send('start-hot-corners', bounds);
@@ -200,12 +193,11 @@ export class RootApp extends LitElement {
             ipcRenderer.send('toggle-radial-permanent', true);
             setTimeout(() => ipcRenderer.send('set-ignore-mouse-events', true), 200); 
         }
-        // 🟢 NEW: Instant Interview Routing
         else if (destination === 'instant_interview') {
-            ipcRenderer.send('stop-hot-corners'); // No mouse dwells
-            ipcRenderer.send('toggle-radial-permanent', false); // No radial menu
-            ipcRenderer.send('set-ignore-mouse-events', true); // Drop the click wall
-            ipcRenderer.send('launch-instant-interview'); // 🟢 FIRE TO BACKEND CONTROLLER!
+            ipcRenderer.send('stop-hot-corners');
+            ipcRenderer.send('toggle-radial-permanent', false);
+            ipcRenderer.send('set-ignore-mouse-events', true);
+            ipcRenderer.send('launch-instant-interview');
         }
         else if (destination === 'companion') {
             ipcRenderer.send('stop-hot-corners');
@@ -214,7 +206,7 @@ export class RootApp extends LitElement {
         }
 
         this.currentView = destination;
-        ipcRenderer.send('view-changed', 'assistant'); // Tells backend we entered an active state
+        ipcRenderer.send('view-changed', 'assistant');
         this.requestUpdate();
     }
 
@@ -225,8 +217,7 @@ export class RootApp extends LitElement {
             case 'history': return 'CP Helper 20 - History';
             case 'help': return 'CP Helper 20 - Help';
             case 'proctored_oa': return 'CP Helper 20 - Online Assessment';
-            // case 'proctored_live_interview': return 'CP Helper 20 - Proctored Live Interview';
-            case 'instant_interview': return 'CP Helper 20 - Instant Interview (Lightweight)'; // 🟢
+            case 'instant_interview': return 'CP Helper 20 - Instant Interview (Lightweight)';
             case 'companion': return 'CP Helper 20 - Helping Other';
             default: return 'CP Helper 20';
         }
@@ -237,7 +228,6 @@ export class RootApp extends LitElement {
             case 'main':
                 return html`<main-hub .missingAccount=${this.missingAccount} .missingContext=${this.missingContext} .onNavigate=${(dest) => this.handleHubNavigation(dest)}></main-hub>`;
             
-            // 🟢 NEW: Instant Interview Loading Screen (Since there is no actual UI)
             case 'instant_interview': 
                 return html`
                     <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; text-align: center; color: var(--text-secondary);">
@@ -249,15 +239,11 @@ export class RootApp extends LitElement {
                         </p>
                     </div>
                 `;
-            
-            case 'instant_widget': 
-                return html`<instant-widget></instant-widget>`;
 
             case 'settings': return html`<settings-view></settings-view>`;
             case 'history': return html`<history-view></history-view>`;
             case 'help': return html`<help-view></help-view>`;
             case 'proctored_oa': return html`<proctored-oa></proctored-oa>`;
-            // case 'proctored_live_interview': return html`<live-interview></live-interview>`;
             case 'companion': return html`<companion-view></companion-view>`;
             
             default:
