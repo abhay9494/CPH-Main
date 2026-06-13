@@ -102,6 +102,7 @@ export class SettingsView extends LitElement {
             font-size: 14px;
             outline: none;
             font-family: inherit;
+            -webkit-app-region: no-drag;
         }
         input[type="range"] {
             width: 100%;
@@ -120,6 +121,7 @@ export class SettingsView extends LitElement {
         .custom-dropdown {
             position: relative;
             width: 100%;
+            -webkit-app-region: no-drag;
         }
         .dropdown-trigger {
             background: var(--bg-tertiary); color: var(--text-color);
@@ -698,7 +700,7 @@ export class SettingsView extends LitElement {
                                 
                                 ${this.renderCustomDropdown('newProfileAI', accountOptions, this.newProfileAI, (val) => this.newProfileAI = val, '120px')}
 
-                                <button @click=${this.handleLoginAndSave} style="background: #4285f4; color: white; border: none; padding: 10px 15px; border-radius: 4px; font-weight: bold;">
+                                <button @click=${this.handleLoginAndSave} style="-webkit-app-region: no-drag; background: #4285f4; color: white; border: none; padding: 10px 15px; border-radius: 4px; font-weight: bold; cursor: pointer !important;">
                                     Login & Save
                                 </button>
                             </div>
