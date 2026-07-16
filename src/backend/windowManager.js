@@ -107,7 +107,7 @@ function updateGlobalShortcuts(keybinds, mainWindow) {
     });
 
     register('toggleVisibility', keybinds.toggleVisibility, () => {
-        if (global.isOAModeActive || global.isLiveInterviewMode) return;
+        if (global.currentSessionMode === 'proctored_oa') return;
         if (global.toggleStealthMode) global.toggleStealthMode();
     });
 

@@ -455,7 +455,6 @@ function launchOABrain() {
     const prefs = storage.getPreferences();
     const loadouts = prefs.dualBrainLoadouts || [];
     
-    // Fallback to defaults if they haven't saved an OA Loadout
     activeLoadout = loadouts[0] || { codeEngine: 1, codeProfileId: '2' };
     const cIdx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
     const codeProvider = AI_CONFIGS[cIdx];
@@ -471,21 +470,213 @@ function launchOABrain() {
     
     codeWebWindowPrimary.setContentProtection(true);
     codeWebWindowPrimary.webContents.setAudioMuted(true);
-    // 🟢 FIX: Elevated level to 'screen-saver' so it breaks through the overlay
     if (process.platform === 'win32') codeWebWindowPrimary.setAlwaysOnTop(true, 'screen-saver', 10);
     codeWebWindowPrimary.loadURL(codeProvider.url);
     
     codeWebWindowPrimary.webContents.on('dom-ready', async () => {
         codeWebWindowPrimary.webContents.insertCSS('* { cursor: default !important; }');
-        // Instantly kill mic access so it never accidentally listens during OA mode
         await codeWebWindowPrimary.webContents.executeJavaScript(`navigator.mediaDevices.getUserMedia = () => Promise.reject(new Error("Mic blocked")); true;`).catch(() => {});
     });
 
     codeWebWindowPrimary.on('close', (event) => { if (!isAppQuitting) { event.preventDefault(); codeWebWindowPrimary.hide(); } });
-    // 🟢 FIX: Bring the AI window to the top instead of pushing mainWindow over it
     codeWebWindowPrimary.on('focus', () => { if (!codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.moveTop(); });
 
     startOAScraper();
+
+    // 🟢 FIX: Instantly pop the AI Window open when OA Mode starts!
+    setTimeout(() => { if (global.applyAIBounds) global.applyAIBounds(true); }, 500);
+
+    // 🟢 FIX: Spawn the Fullscreen Ghost HUD for corner labels
+    global.currentOAPage = 1;
+    spawnCornerHUD(global.currentOAPage);
+}
+
+// 🟢 NEW: The Live Fullscreen Ghost HUD for OA Edge Triggers
+function spawnCornerHUD(page = 1) {
+    const prefs = storage.getPreferences();
+    const corners = page === 2 ? (prefs.hotCornersPage2 || {}) : (prefs.hotCorners || {});
+    
+    const aiNames = ['ChatGPT', 'Gemini', 'Grok'];
+    const loadouts = prefs.dualBrainLoadouts || [];
+    const activeLoadout = loadouts[0] || {};
+    const currentAiIdx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+    const activeAiName = aiNames[currentAiIdx] || 'AI';
+    const modeName = global.isThinkModeActive ? 'Think' : 'Fast';
+
+    const getLabel = (action) => {
+        if (!action || action === 'none') return '';
+        const labels = {
+            'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
+            'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
+            'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': `🤖 ${activeAiName}`,
+            'change_profile': '👤 Profile', 'fast_think': `🧠 ${modeName}`, 'refactor': '🛠️ Refactor',
+            'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
+            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
+            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
+            'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
+            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
+            'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1/2',
+            'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
+            'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 Dictator'
+        };
+        return labels[action] || action;
+    };
+
+    const zoneLabels = {
+        top_left: getLabel(corners.top_left), top_mid_left: getLabel(corners.top_mid_left), top_center: getLabel(corners.top_center), top_mid_right: getLabel(corners.top_mid_right), top_right: getLabel(corners.top_right),
+        left_mid_top: getLabel(corners.left_mid_top), right_mid_top: getLabel(corners.right_mid_top),
+        middle_left: getLabel(corners.middle_left), middle_right: getLabel(corners.middle_right),
+        left_mid_bottom: getLabel(corners.left_mid_bottom), right_mid_bottom: getLabel(corners.right_mid_bottom),
+        bottom_left: getLabel(corners.bottom_left), bottom_mid_left: getLabel(corners.bottom_mid_left), bottom_center: getLabel(corners.bottom_center), bottom_mid_right: getLabel(corners.bottom_mid_right), bottom_right: getLabel(corners.bottom_right)
+    };
+
+    // 🟢 FIX 3: Do NOT destroy the window. Just send it the updated labels!
+    if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+        global.cornerHudWindow.webContents.send('update-labels', zoneLabels);
+        return;
+    }
+
+    const primaryDisplay = screen.getPrimaryDisplay();
+    const { width, height, x, y } = primaryDisplay.bounds;
+
+    // 🟢 FIX 2: nodeIntegration is required to listen for dynamic progress updates
+    global.cornerHudWindow = new BrowserWindow({
+        width, height, x, y,
+        frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
+        hasShadow: false, focusable: false,
+        webPreferences: { nodeIntegration: true, contextIsolation: false }
+    });
+    
+    global.cornerHudWindow.setIgnoreMouseEvents(true, { forward: true });
+    global.cornerHudWindow.setContentProtection(true);
+    if (process.platform === 'win32') global.cornerHudWindow.setAlwaysOnTop(true, 'screen-saver', 15);
+
+    // 🟢 FIX 1: Add solid semi-transparent boxes to fix blurry text, and include all 16 zones.
+    const htmlContent = `
+    <html><head><style>
+        body { margin: 0; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; pointer-events: none; }
+        
+        .corner { 
+            position: absolute; 
+            background: rgba(20,20,20,0.85); 
+            border-radius: 6px; 
+            border: 1px solid rgba(255,255,255,0.1);
+            overflow: hidden;
+            display: flex; align-items: center; justify-content: center;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+            transition: border-color 0.2s;
+        }
+        .fill {
+            position: absolute; top: 0; left: 0; bottom: 0; width: 0%;
+            background: rgba(245, 158, 11, 0.4);
+            z-index: 1; 
+        }
+        .text {
+            position: relative; z-index: 2;
+            padding: 8px 12px;
+            color: rgba(255,255,255,0.5); 
+            font-size: 11px; font-weight: 800; text-transform: uppercase; 
+            white-space: nowrap; transition: color 0.2s;
+        }
+        .corner.empty { display: none; }
+        
+        /* Exact Positioning with 10px margins */
+        #top_left { top: 10px; left: 10px; }
+        #top_mid_left { top: 10px; left: 25%; transform: translateX(-50%); }
+        #top_center { top: 10px; left: 50%; transform: translateX(-50%); }
+        #top_mid_right { top: 10px; left: 75%; transform: translateX(-50%); }
+        #top_right { top: 10px; right: 10px; }
+
+        #left_mid_top { top: 25%; left: 10px; transform: translateY(-50%); }
+        #right_mid_top { top: 25%; right: 10px; transform: translateY(-50%); }
+
+        #middle_left { top: 50%; left: 10px; transform: translateY(-50%); }
+        #middle_right { top: 50%; right: 10px; transform: translateY(-50%); }
+
+        #left_mid_bottom { top: 75%; left: 10px; transform: translateY(-50%); }
+        #right_mid_bottom { top: 75%; right: 10px; transform: translateY(-50%); }
+
+        #bottom_left { bottom: 10px; left: 10px; }
+        #bottom_mid_left { bottom: 10px; left: 25%; transform: translateX(-50%); }
+        #bottom_center { bottom: 10px; left: 50%; transform: translateX(-50%); }
+        #bottom_mid_right { bottom: 10px; left: 75%; transform: translateX(-50%); }
+        #bottom_right { bottom: 10px; right: 10px; }
+    </style></head><body>
+        <script>
+            const { ipcRenderer } = require('electron');
+            const zones = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
+            
+            zones.forEach(z => {
+                document.body.innerHTML += \`<div class="corner empty" id="\${z}"><div class="fill" id="fill-\${z}"></div><span class="text" id="text-\${z}"></span></div>\`;
+            });
+
+            ipcRenderer.on('update-labels', (e, labels) => {
+                zones.forEach(z => {
+                    const el = document.getElementById(z);
+                    const textEl = document.getElementById('text-'+z);
+                    if (labels[z] && labels[z] !== 'none' && labels[z] !== '—' && labels[z] !== '') {
+                        textEl.innerText = labels[z];
+                        textEl.dataset.original = labels[z]; // 🟢 Save original text for reset toggle
+                        el.classList.remove('empty');
+                    } else {
+                        el.classList.add('empty');
+                    }
+                });
+            });
+
+            ipcRenderer.on('update-progress', (e, {zone, progress}) => {
+                zones.forEach(z => {
+                    const fillEl = document.getElementById('fill-'+z);
+                    const el = document.getElementById(z);
+                    const textEl = document.getElementById('text-'+z);
+                    
+                    if (z === zone) {
+                        fillEl.style.width = progress + '%';
+                        if(progress > 0) {
+                            textEl.style.color = '#fff';
+                            el.style.borderColor = '#f59e0b';
+                        } else {
+                            if (textEl.dataset.armed !== 'true') {
+                                textEl.style.color = 'rgba(255,255,255,0.5)';
+                                el.style.borderColor = 'rgba(255,255,255,0.1)';
+                            }
+                        }
+                    } else {
+                        fillEl.style.width = '0%';
+                        if (textEl.dataset.armed !== 'true') {
+                            textEl.style.color = 'rgba(255,255,255,0.5)';
+                            el.style.borderColor = 'rgba(255,255,255,0.1)';
+                        }
+                    }
+                });
+            });
+
+            // 🟢 FIX: Listen for Reset Armed State to change the text dynamically
+            ipcRenderer.on('set-reset-armed', (e, { zone, armed }) => {
+                const textEl = document.getElementById('text-'+zone);
+                const el = document.getElementById(zone); // 🐛 FIX: Was 'z', crashed the entire script!
+                if (textEl && el) {
+                    if (armed) {
+                        textEl.dataset.armed = 'true';
+                        textEl.innerText = '⚠️ CONFIRM RESET';
+                        textEl.style.color = '#f14c4c';
+                        el.style.borderColor = '#f14c4c';
+                    } else {
+                        textEl.dataset.armed = 'false';
+                        textEl.innerText = textEl.dataset.original || '';
+                        textEl.style.color = 'rgba(255,255,255,0.5)';
+                        el.style.borderColor = 'rgba(255,255,255,0.1)';
+                    }
+                }
+            });
+        </script>
+    </body></html>
+    `;
+    global.cornerHudWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
+    
+    global.cornerHudWindow.webContents.once('did-finish-load', () => {
+        global.cornerHudWindow.webContents.send('update-labels', zoneLabels);
+    });
 }
 
 function startOAScraper() {
@@ -523,7 +714,7 @@ function startOAScraper() {
 }
 
 // 🟢 NEW: Synchronized Typing Simulator to ensure @Pro and @Fast chips register perfectly
-async function sendPayloadToWindow(win, customText, images = [], providerName = 'ChatGPT') {
+async function sendPayloadToWindow(win, customText, images = [], providerName = 'ChatGPT', autoSubmit = true) {
     if (!win || win.isDestroyed()) return;
     
     // 🟢 Broadened selector with priority for Grok's specific textarea
@@ -534,9 +725,9 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
     let textToPaste = customText || '';
 
     // Strip the macro tags out of the text string
-    if (textToPaste.startsWith('@Pro ') || textToPaste.startsWith('@Fast ')) {
-        modeTag = textToPaste.startsWith('@Pro ') ? 'Pro' : 'Fast';
-        textToPaste = textToPaste.substring(modeTag === 'Pro' ? 5 : 6); 
+    if (textToPaste.startsWith('@Pro ') || textToPaste.startsWith('@Flash ')) {
+        modeTag = textToPaste.startsWith('@Pro ') ? 'Pro' : 'Flash';
+        textToPaste = textToPaste.substring(modeTag === 'Pro' ? 5 : 7); 
     }
 
     const modifier = process.platform === 'darwin' ? 'meta' : 'control';
@@ -647,56 +838,59 @@ async function sendPayloadToWindow(win, customText, images = [], providerName = 
     }
 
     // 🟢 4. SUBMIT
-    const isGrok = providerName === 'Grok' || win.webContents.getURL().includes('grok.com');
+    if (autoSubmit) {
+        const isGrok = providerName === 'Grok' || win.webContents.getURL().includes('grok.com');
 
-    if (isGrok) {
-        await new Promise(r => setTimeout(r, 200));
-        
-        // Safely attempt to click the send button first
-        const sent = await win.webContents.executeJavaScript(`(() => {
-            try {
-                const btn = document.querySelector('button[aria-label="Send message"], button[aria-label*="Send"]');
-                if (btn && !btn.disabled) { btn.click(); return true; }
-                return false;
-            } catch(e) { return false; }
-        })()`);
-        
-        // If button click failed, fallback to safe Enter key (ONLY if textarea is focused)
-        if (!sent) {
-            await focusAndMoveToEnd();
-            const isFocused = await win.webContents.executeJavaScript(`document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.getAttribute('contenteditable') === 'true')`);
-            if (isFocused) {
-                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
-                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
-            } else {
-                console.log("[SILENT GUARD] Grok textarea lost focus! Aborting Enter key to prevent stray UI clicks.");
+        if (isGrok) {
+            await new Promise(r => setTimeout(r, 200));
+            
+            // Safely attempt to click the send button first
+            const sent = await win.webContents.executeJavaScript(`(() => {
+                try {
+                    const btn = document.querySelector('button[aria-label="Send message"], button[aria-label*="Send"]');
+                    if (btn && !btn.disabled) { btn.click(); return true; }
+                    return false;
+                } catch(e) { return false; }
+            })()`);
+            
+            // If button click failed, fallback to safe Enter key (ONLY if textarea is focused)
+            if (!sent) {
+                await focusAndMoveToEnd();
+                const isFocused = await win.webContents.executeJavaScript(`document.activeElement && (document.activeElement.tagName === 'TEXTAREA' || document.activeElement.getAttribute('contenteditable') === 'true')`);
+                if (isFocused) {
+                    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+                    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+                } else {
+                    console.log("[SILENT GUARD] Grok textarea lost focus! Aborting Enter key to prevent stray UI clicks.");
+                }
             }
-        }
-    } else {
-        const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Enter" i]';
-        
-        let isReady = false, attempts = 0;
-        while (!isReady && attempts < 10) {
-            isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
-            if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
-        }
-        
-        await new Promise(r => setTimeout(r, 200));
-        await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) btn.click(); return true; } catch(e) { return false; } })()`);
-        
-        setTimeout(() => { 
-            if (!win.isDestroyed()) { 
-                win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
-                win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+        } else {
+            const sendBtnSelector = 'button[aria-label*="Send" i], button[aria-label*="Submit" i], button[data-testid="send-button"], button[aria-label*="Enter" i]';
+            
+            let isReady = false, attempts = 0;
+            while (!isReady && attempts < 10) {
+                isReady = await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); return !!(btn && !btn.disabled && btn.getAttribute('aria-disabled') !== 'true'); } catch(e) { return false; } })()`);
+                if (!isReady) { await new Promise(r => setTimeout(r, 500)); attempts++; }
             }
             
-            if (win === voiceWebWindowPrimary) {
-                setTimeout(async () => {
-                    await ensureVoiceAndMic(win, providerName);
-                }, 3500);
-            }
-        }, 200);
+            await new Promise(r => setTimeout(r, 200));
+            await win.webContents.executeJavaScript(`(() => { try { const btn = document.querySelector('${sendBtnSelector}'); if(btn) btn.click(); return true; } catch(e) { return false; } })()`);
+            
+            setTimeout(() => { 
+                if (!win.isDestroyed()) { 
+                    win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); 
+                    win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+                }
+                
+                if (win === voiceWebWindowPrimary && typeof ensureVoiceAndMic === 'function') {
+                    setTimeout(async () => {
+                        await ensureVoiceAndMic(win, providerName);
+                    }, 3500);
+                }
+            }, 200);
+        }
     }
+    return true;
 }
 
 app.whenReady().then(async () => {
@@ -801,6 +995,10 @@ app.whenReady().then(async () => {
                         global.executeInstantAction(targetAction);
                     }
                 } 
+                else if (global.currentSessionMode === 'proctored_oa') {
+                    // 🟢 FIX: Block ALL Trackpad gestures in Proctored OA Mode!
+                    return;
+                }
                 else {
                     if (global.isGhostHidden && i !== 0) {
                         console.log("[DEAD DROP] Blocked by Stealth Lock!");
@@ -1037,6 +1235,8 @@ function setupGeneralIpcHandlers() {
             global.isGhostHidden = false;
             global.isClickThroughState = false;
 
+            accumulatedScreenshots = [];
+
             if (mainWindow && !mainWindow.isDestroyed()) {
                 mainWindow.setOpacity(1);
                 mainWindow.setIgnoreMouseEvents(false);
@@ -1051,6 +1251,7 @@ function setupGeneralIpcHandlers() {
             });
 
             if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) global.radialHudWindow.hide();
+            if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.destroy(); // 🟢 NEW
         }
     });
 
@@ -1322,7 +1523,17 @@ function setupGeneralIpcHandlers() {
             fs.writeFileSync(filePath, base64Data, 'base64');
             accumulatedScreenshots.push(screenImage);
             
-            // 🟢 FIX: Instantly broadcast the captured image directly to the Frontend UI!
+            // 🟢 FIX: Instantly attach the image to the active code windows WITHOUT submitting!
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+            let c2Idx = activeLoadout.codeEngine2 !== undefined ? activeLoadout.codeEngine2 : 1;
+            
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
+                sendPayloadToWindow(codeWebWindowPrimary, "", [screenImage], AI_CONFIGS[c1Idx].name, false).catch(()=>{});
+            }
+            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
+                sendPayloadToWindow(codeWebWindowSecondary, "", [screenImage], AI_CONFIGS[c2Idx].name, false).catch(()=>{});
+            }
+
             BrowserWindow.getAllWindows().forEach(w => {
                 if (!w.isDestroyed()) w.webContents.send('screenshot-captured', screenImage);
             });
@@ -1372,12 +1583,12 @@ function setupGeneralIpcHandlers() {
 
                 currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
 
-                // 🟢 Send Optimized prompt to BOTH Code Brains simultaneously
+                // 🟢 FIX: Send [] because the image was already pasted during 'capture'
                 if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
-                    sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
+                    sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, [], AI_CONFIGS[c1Idx].name).catch(()=>{});
                 }
                 if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
-                    sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
+                    sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, [], AI_CONFIGS[c2Idx].name).catch(()=>{});
                 }
 
                 setTimeout(async () => {
@@ -1403,8 +1614,9 @@ function setupGeneralIpcHandlers() {
 
                 currentCodeWinner = (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) ? null : 'primary';
 
-                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, imagesForThisQuestion, AI_CONFIGS[c1Idx].name).catch(()=>{});
-                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, imagesForThisQuestion, AI_CONFIGS[c2Idx].name).catch(()=>{});
+                // 🟢 FIX: Send [] because the image was already pasted during 'capture'
+                if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) sendPayloadToWindow(codeWebWindowPrimary, codePromptPrimary, [], AI_CONFIGS[c1Idx].name).catch(()=>{});
+                if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) sendPayloadToWindow(codeWebWindowSecondary, codePromptSecondary, [], AI_CONFIGS[c2Idx].name).catch(()=>{});
 
                 setTimeout(async () => { 
                     if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt1, [], AI_CONFIGS[v1Idx].name).catch(()=>{});
@@ -1662,11 +1874,14 @@ function setupGeneralIpcHandlers() {
             let codePrompt = PROMPTS.REFACTOR;
             let voicePrompt = PROMPTS.VOICE_CONTEXT;
             
-            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
-            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+            let v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
 
-            await sendPayloadToWindow(codeWebWindow, codePrompt, []);
-            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, []); }, 1500);
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
+            if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) await sendPayloadToWindow(codeWebWindowPrimary, codePrompt, [], AI_CONFIGS[c1Idx].name);
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) setTimeout(async () => { await sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt, [], AI_CONFIGS[v1Idx].name); }, 1500);
             return true;
         } catch(e) { return false; }
     });
@@ -1677,11 +1892,15 @@ function setupGeneralIpcHandlers() {
             let codePrompt = PROMPTS.FIX_ERROR;
             let voicePrompt = PROMPTS.VOICE_CONTEXT;
             
-            if (AI_CONFIGS[activeLoadout.codeEngine].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
-            if (AI_CONFIGS[activeLoadout.voiceEngine].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+            let c1Idx = activeLoadout.codeEngine !== undefined ? activeLoadout.codeEngine : 1;
+            let v1Idx = activeLoadout.voiceEngine !== undefined ? activeLoadout.voiceEngine : 0;
 
-            await sendPayloadToWindow(codeWebWindow, codePrompt, accumulatedScreenshots);
-            setTimeout(async () => { await sendPayloadToWindow(voiceWebWindow, voicePrompt, accumulatedScreenshots); accumulatedScreenshots = []; }, 1500);
+            if (AI_CONFIGS[c1Idx].name === 'Gemini') codePrompt = getModePrefix() + codePrompt;
+            if (AI_CONFIGS[v1Idx].name === 'Gemini') voicePrompt = getModePrefix() + voicePrompt;
+
+            // 🟢 FIX: Send [] because the image was already pasted during 'capture'
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) await sendPayloadToWindow(codeWebWindowPrimary, codePrompt, [], AI_CONFIGS[c1Idx].name);
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) setTimeout(async () => { await sendPayloadToWindow(voiceWebWindowPrimary, voicePrompt, [], AI_CONFIGS[v1Idx].name); accumulatedScreenshots = []; }, 1500);
             return true;
         } catch(e) { return false; }
     });
@@ -1745,6 +1964,7 @@ function setupGeneralIpcHandlers() {
 
             if (global.isGhostHidden) {
                 mainWindow.webContents.send('app-made-hidden');
+                mainWindow.webContents.send('ghost-state-changed', true); // 🟢 FIX: Sync stealth state to UI
                 
                 // Track what was visible before hiding
                 wasAiVisibleBeforeGhost = [voiceWebWindowPrimary, codeWebWindowPrimary, codeWebWindowSecondary, companionWebWindow].some(w => w && !w.isDestroyed() && w.isVisible() && w.getOpacity() !== 0);
@@ -1756,8 +1976,10 @@ function setupGeneralIpcHandlers() {
                 });
                 
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) { global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true }); }
+                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.setOpacity(0); // 🟢 NEW
             } else {
                 mainWindow.webContents.send('app-made-visible');
+                mainWindow.webContents.send('ghost-state-changed', false); // 🟢 FIX: Sync stealth state to UI
                 mainWindow.setOpacity(1); mainWindow.setIgnoreMouseEvents(global.isClickThroughState, { forward: true });
                 
                 if (wasAiVisibleBeforeGhost) {
@@ -1783,6 +2005,8 @@ function setupGeneralIpcHandlers() {
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_live_interview') {
                     setTimeout(() => { if (!global.radialHudWindow.isDestroyed()) { global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9); global.radialHudWindow.moveTop(); } }, 50);
                 }
+                                
+                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_oa') global.cornerHudWindow.setOpacity(1); // 🟢 NEW
             }
         }
     };
@@ -1798,7 +2022,8 @@ function setupGeneralIpcHandlers() {
     ipcMain.on('set-ignore-mouse-events', (event, ignore) => {
         global.isClickThroughState = ignore;
         const win = BrowserWindow.fromWebContents(event.sender);
-        if (win) { win.setIgnoreMouseEvents(ignore, { forward: true }); win.webContents.send('ghost-state-changed', ignore); }
+        // 🟢 FIX: Removed the bugged ghost-state-changed broadcast from here!
+        if (win) { win.setIgnoreMouseEvents(ignore, { forward: true }); } 
     });
 
     let autoTyperProcess = null;
@@ -1921,4 +2146,69 @@ function setupGeneralIpcHandlers() {
     });
     ipcMain.on('close-companion-chat', () => { if (companionChatWindow && !companionChatWindow.isDestroyed()) { companionChatWindow.close(); companionChatWindow = null; } });
     ipcMain.handle('hide-companion-chat', () => { if (companionChatWindow && !companionChatWindow.isDestroyed()) companionChatWindow.hide(); });
+
+    // 🟢 NEW: Allow frontend to command HUD refreshes
+    ipcMain.on('refresh-oa-hud', (e, page) => {
+        if (page) global.currentOAPage = page;
+        if (global.currentSessionMode === 'proctored_oa') spawnCornerHUD(global.currentOAPage);
+    });
+
+    // 🟢 NEW: Bulletproof backend code extraction for the Ghost Typer
+    ipcMain.handle('fetch-latest-code', async () => {
+        if (!codeWebWindowPrimary || codeWebWindowPrimary.isDestroyed()) return null;
+        const script = `
+            (() => {
+                try {
+                    const sel = window.location.hostname.includes('chatgpt') ? 'div[data-message-author-role="assistant"]' : window.location.hostname.includes('grok') ? '.prose' : 'model-response';
+                    const msgs = Array.from(document.querySelectorAll(sel));
+                    if (msgs.length === 0) return null;
+                    const lastMsgNode = msgs[msgs.length - 1];
+                    
+                    // 1. Try to extract pure code blocks from <pre><code> (Best for ChatGPT/Gemini)
+                    const codeBlocks = lastMsgNode.querySelectorAll('pre code');
+                    if (codeBlocks.length > 0) {
+                        return codeBlocks[codeBlocks.length - 1].innerText;
+                    }
+                    
+                    // 2. Fallback to extracting between text markers
+                    const text = lastMsgNode.innerText || "";
+                    if (text.includes('[CODE_START]') && text.includes('[CODE_END]')) {
+                        let extracted = text.split('[CODE_START]')[1].split('[CODE_END]')[0].trim();
+                        extracted = extracted.replace(/\\s*\`\`\`[a-zA-Z]*\\n/g, '').replace(/\\s*\`\`\`/g, '');
+                        return extracted.trim();
+                    }
+                    if (text.includes('\`\`\`')) {
+                        let extracted = text.split('\`\`\`')[1].trim();
+                        if (extracted.startsWith('cpp') || extracted.startsWith('python') || extracted.startsWith('java')) {
+                            extracted = extracted.substring(extracted.indexOf('\\n')).trim();
+                        }
+                        return extracted;
+                    }
+                    return text.trim(); 
+                } catch(e) { return null; }
+            })();
+        `;
+        return await codeWebWindowPrimary.webContents.executeJavaScript(script).catch(() => null);
+    });
+
+    // 🟢 NEW: Route frontend hover progress to the Ghost HUD
+    ipcMain.on('sync-hud-progress', (e, data) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('update-progress', data);
+        }
+    });
+
+    // 🟢 Route frontend hover progress to the Ghost HUD
+    ipcMain.on('sync-hud-progress', (e, data) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('update-progress', data);
+        }
+    });
+
+    // 🟢 Route reset arming to the Ghost HUD
+    ipcMain.on('set-reset-armed', (e, data) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('set-reset-armed', data);
+        }
+    });
 }

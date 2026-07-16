@@ -252,9 +252,12 @@ export class RootApp extends LitElement {
     }
 
     render() {
-        // 🟢 FIX: Return ONLY the widget if this is the widget window! No headers, no vertical sliders.
+        // 🟢 FIX: Return ONLY the raw component for Widget and OA mode! No backgrounds, no headers.
         if (this.currentView === 'instant_widget') {
             return html`<instant-widget></instant-widget>`;
+        }
+        if (this.currentView === 'proctored_oa') {
+            return html`<proctored-oa></proctored-oa>`;
         }
 
         return html`
