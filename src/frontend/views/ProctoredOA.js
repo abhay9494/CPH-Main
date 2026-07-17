@@ -18,8 +18,9 @@ export class ProctoredOA extends LitElement {
             color: #e5e5e5; background: rgba(20, 20, 20, 0.95); 
             border: 1px solid #444; border-radius: 8px; 
             box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-            pointer-events: auto; /* Allows clicking to select lines */
+            pointer-events: none; /* Allows clicking to select lines */
         }
+        .typer-code-container::-webkit-scrollbar { display: none; }
         .typer-line { display: flex; border-radius: 4px; padding: 2px 4px; margin-bottom: 2px; transition: 0.2s; }
         
         /* 🟢 Floating HUD Toast */
@@ -67,6 +68,10 @@ export class ProctoredOA extends LitElement {
         this.typerEndLine = 0;
         this.typingCurrentLineIndex = 0;
         this.typingState = 'idle';
+        this.typingCurrentCharIndex = 0;
+        this.typingPauseIndex = 0;
+        this.fullCodeString = '';
+
         this.isGhostHidden = false;
         this.isThinkModeActive = false;
 
@@ -111,16 +116,18 @@ export class ProctoredOA extends LitElement {
                               : (this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {}));
                     const action = map[zone];
 
-                    // 🛑 STEALTH LOCK: Completely reject all other corners if hidden
-                    if (this.isGhostHidden && action !== 'hide_unhide') return;
+                    // 🛑 STEALTH LOCK: Allow hide_unhide AND auto_type to work in the background!
+                    if (this.isGhostHidden && action !== 'hide_unhide' && action !== 'auto_type') return;
 
                     this.dwellStartTime = performance.now();
                     
                     let targetDuration = (this.prefs.hotCornerBounds?.dwellTime || 3) * 1000;
                     if (action === 'hide_unhide') {
-                        // 🟢 FIX: If visible (Hiding), it is an Instant Emergency Hide (0). 
-                        // If hidden (Unhiding), it strictly follows the 'Unhide Delay' slider (hideTime).
+                        // 🟢 FIX: Hide is always Instant (0s). Unhide follows "Unhide Delay" (hideTime).
                         targetDuration = !this.isGhostHidden ? 0 : ((this.prefs.hotCornerBounds?.hideTime || 0) * 1000);
+                    } else if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
+                        // 🟢 FIX: Use 'Select Speed' slider for the purple line selection corners!
+                        targetDuration = (this.prefs.typerSelectionSpeed !== undefined ? this.prefs.typerSelectionSpeed : 0.5) * 1000;
                     }
 
                     if (targetDuration === 0) {
@@ -151,7 +158,8 @@ export class ProctoredOA extends LitElement {
                                 const continuousActions = ['scroll_up', 'scroll_down', 'trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'];
                                 if (continuousActions.includes(action)) {
                                     this.isActionFired = false;
-                                    this.dwellStartTime = performance.now() - (targetDuration * 0.85); 
+                                    // 🟢 FIX: Set back to exactly performance.now() to make it wait the full slider time every loop
+                                    this.dwellStartTime = performance.now(); 
                                     this.dwellAnimationFrame = requestAnimationFrame(animateDwell);
                                 }
                             }
@@ -172,21 +180,28 @@ export class ProctoredOA extends LitElement {
 
             this.typingStatusHandler = (_, status) => {
                 if (!status) {
-                    if (this.typingState === 'typing' && this.typingCurrentLineIndex >= (this.typerEndLine - this.typerStartLine)) {
+                    // If it is 'typing', it means the script naturally finished (wasn't manually paused)
+                    if (this.typingState === 'typing') { 
+                        this.typingState = 'idle';
                         this.viewMode = 'hidden';
                         ipcRenderer.send('set-ignore-mouse-events', true);
                         this.showToast('✅ Typing Complete');
                         this.typerStartLine = 0;
-                        this.typingCurrentLineIndex = 0;
+                        this.typingCurrentCharIndex = 0;
+                        this.typingPauseIndex = 0;
+                        
+                        // 🟢 Restore AI window ONLY if we didn't start the session fully stealthed
+                        if (!this.isGhostHidden) {
+                            ipcRenderer.invoke('toggle-ai-visibility', true);
+                        }
+                        ipcRenderer.send('refresh-oa-hud', this.activePage);
                     }
-                    this.typingState = 'idle';
                     this.requestUpdate();
                 }
             };
 
-            this.typingProgressHandler = (_, lineIdx) => {
-                this.typingCurrentLineIndex = lineIdx;
-                this.requestUpdate();
+            this.typingProgressCharHandler = (_, charIdx) => {
+                this.typingCurrentCharIndex = this.typingPauseIndex + charIdx;
             };
 
             this.screenshotHandler = () => { this.showToast('📸 Captured', '#4285f4'); };
@@ -208,6 +223,13 @@ export class ProctoredOA extends LitElement {
             this.typerEndLine = this.typerCodeLines.length - 1;
             this.typingCurrentLineIndex = 0;
             this.viewMode = 'typer';
+            
+            // 🟢 FIX: Instantly hide the AI Window and switch to Typer HUD Corners!
+            if (window.require) {
+                window.require('electron').ipcRenderer.invoke('toggle-ai-visibility', false);
+                window.require('electron').ipcRenderer.send('refresh-oa-hud', 'typer');
+            }
+            
             this.requestUpdate();
         });
     }
@@ -220,7 +242,7 @@ export class ProctoredOA extends LitElement {
             ipcRenderer.removeListener('execute-direct-action', this.directActionHandler);
             ipcRenderer.removeListener('code-new-message', this.codeMsgHandler);
             ipcRenderer.removeListener('typing-status', this.typingStatusHandler);
-            ipcRenderer.removeListener('typing-progress', this.typingProgressHandler);
+            ipcRenderer.removeListener('typing-progress-char', this.typingProgressCharHandler);
             ipcRenderer.removeListener('screenshot-captured', this.screenshotHandler);
             ipcRenderer.removeListener('ghost-state-changed', this.ghostStateHandler);
             ipcRenderer.removeListener('sync-ai-mode', this.syncModeHandler);
@@ -294,44 +316,79 @@ export class ProctoredOA extends LitElement {
             case 'auto_type':
                 if (this.typingState === 'idle') {
                     if (this.viewMode === 'typer') {
-                        const codeToType = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
+                        this.fullCodeString = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
                         const speed = this.prefs.wpmSpeed || 60;
-                        const mistake = this.prefs.typerMistakes ?? 2;
+                        const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
+                        const startDelay = this.prefs.typerDelay !== undefined ? this.prefs.typerDelay : 5; 
                         
                         this.typingState = 'typing';
-                        this.typingCurrentLineIndex = 0;
-                        ipcRenderer.send('start-auto-type', codeToType, speed, mistake);
-                        this.showToast('▶️ Auto-Typing Started');
+                        this.typingCurrentCharIndex = 0;
+                        this.typingPauseIndex = 0;
                         
-                        // Hide UI to see code type out
-                        this.viewMode = 'hidden';
+                        ipcRenderer.send('start-auto-type', this.fullCodeString, speed, mistake, startDelay);
+                        this.showToast(`▶️ Auto-Typing in ${startDelay}s...`);
+                        
                         ipcRenderer.send('set-ignore-mouse-events', true);
+                        
+                        // 🟢 FIX: Keep viewMode as 'typer' so corners stay active!
+                        // Force Stealth Mode to hide names and overlay instantly
+                        if (!this.isGhostHidden) {
+                            ipcRenderer.invoke('trigger-ghost-hide');
+                        }
+
                     } else {
                         this.showToast('🔍 Extracting Code...', '#f59e0b');
                         const rawCode = await ipcRenderer.invoke('fetch-latest-code');
                         if (rawCode && rawCode.trim()) {
-                            this.dispatchEvent(new CustomEvent('trigger-typer', { detail: rawCode }));
+                            // Arm the UI array natively
+                            this.typerCodeLines = rawCode.split('\n');
+                            if (this.typerCodeLines[this.typerCodeLines.length - 1].trim() === '') this.typerCodeLines.pop();
+                            this.typerStartLine = 0;
+                            this.typerEndLine = this.typerCodeLines.length - 1;
+                            this.typingCurrentCharIndex = 0;
+                            this.typingPauseIndex = 0;
+                            this.typingState = 'idle';
+                            this.viewMode = 'typer';
+                            
                             this.showToast('🎯 Ghost Typer Armed', '#a142f4');
-                            ipcRenderer.send('set-ignore-mouse-events', false); // Drop wall to click UI
+                            
+                            ipcRenderer.send('set-ignore-mouse-events', true); 
+                            ipcRenderer.invoke('toggle-ai-visibility', false);
+                            ipcRenderer.send('refresh-oa-hud', 'typer');
                         } else {
                             this.showToast('⚠️ No Code Found on AI Screen', '#f14c4c');
                         }
                     }
                 } else if (this.typingState === 'typing') {
+                    // 🟢 PAUSE MODE
+                    this.typingState = 'paused'; // Set state BEFORE stopping so statusHandler doesn't clear it
                     ipcRenderer.send('stop-auto-type');
-                    this.typingState = 'idle';
-                    this.viewMode = 'hidden';
-                    ipcRenderer.send('set-ignore-mouse-events', true);
-                    this.showToast('🛑 Auto-Type Stopped', '#f14c4c');
+                    this.typingPauseIndex = this.typingCurrentCharIndex;
+                    this.showToast('⏸️ Auto-Type Paused', '#f59e0b');
+                } else if (this.typingState === 'paused') {
+                    // 🟢 RESUME MODE
+                    const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
+                    const speed = this.prefs.wpmSpeed || 60;
+                    const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
+                    const startDelay = 1; // Quick 1s safety delay to click IDE
+                    
+                    this.typingState = 'typing';
+                    ipcRenderer.send('start-auto-type', remainingCode, speed, mistake, startDelay);
+                    this.showToast(`▶️ Resuming...`);
                 }
                 break;
             case 'abort_typer':
                 if (this.viewMode === 'typer') {
-                    if (this.typingState === 'typing') ipcRenderer.send('stop-auto-type');
+                    if (this.typingState !== 'idle') ipcRenderer.send('stop-auto-type');
                     this.typingState = 'idle';
                     this.viewMode = 'hidden';
                     ipcRenderer.send('set-ignore-mouse-events', true);
                     this.showToast('🛑 Typer Aborted');
+                    
+                    if (!this.isGhostHidden) {
+                        ipcRenderer.invoke('toggle-ai-visibility', true);
+                    }
+                    ipcRenderer.send('refresh-oa-hud', this.activePage);
                 }
                 break;
             case 'change_ai':
@@ -349,17 +406,33 @@ export class ProctoredOA extends LitElement {
                 setTimeout(() => ipcRenderer.send('refresh-oa-hud', this.activePage), 200);
                 this.showToast(this.isThinkModeActive ? '⚡ Fast Mode' : '🧠 Think Mode');
                 break;
+            case 'scroll_up':
+                if (this.viewMode === 'typer') {
+                    const container = this.shadowRoot.querySelector('.typer-code-container');
+                    if (container) container.scrollBy({ top: -100, behavior: 'smooth' });
+                }
+                break;
+            case 'scroll_down':
+                if (this.viewMode === 'typer') {
+                    const container = this.shadowRoot.querySelector('.typer-code-container');
+                    if (container) container.scrollBy({ top: 100, behavior: 'smooth' });
+                }
+                break;
             case 'trim_top':
                 if (this.typerStartLine < this.typerEndLine) this.typerStartLine++;
+                if (this.viewMode === 'typer') { const lines = this.shadowRoot.querySelectorAll('.typer-line'); if(lines[this.typerStartLine]) lines[this.typerStartLine].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
                 break;
             case 'trim_bottom':
                 if (this.typerEndLine > this.typerStartLine) this.typerEndLine--;
+                if (this.viewMode === 'typer') { const lines = this.shadowRoot.querySelectorAll('.typer-line'); if(lines[this.typerEndLine]) lines[this.typerEndLine].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
                 break;
             case 'expand_top':
                 if (this.typerStartLine > 0) this.typerStartLine--;
+                if (this.viewMode === 'typer') { const lines = this.shadowRoot.querySelectorAll('.typer-line'); if(lines[this.typerStartLine]) lines[this.typerStartLine].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
                 break;
             case 'expand_bottom':
                 if (this.typerEndLine < this.typerCodeLines.length - 1) this.typerEndLine++;
+                if (this.viewMode === 'typer') { const lines = this.shadowRoot.querySelectorAll('.typer-line'); if(lines[this.typerEndLine]) lines[this.typerEndLine].scrollIntoView({ behavior: 'smooth', block: 'center' }); }
                 break;
             case 'reset_typer':
                 this.typerStartLine = 0;
@@ -381,6 +454,7 @@ export class ProctoredOA extends LitElement {
     }
 
     showToast(msg, color = '#00cc66') {
+        if (this.isGhostHidden) return; // 🟢 Absolute UI silence while hidden!
         this.toastMessage = msg;
         this.toastColor = color;
         this.requestUpdate();
@@ -431,7 +505,7 @@ export class ProctoredOA extends LitElement {
     render() {
         return html`
             <div class="main-wrapper">
-                ${this.viewMode === 'typer' ? this.renderTyper() : ''}
+                ${this.viewMode === 'typer' && this.typingState === 'idle' ? this.renderTyper() : ''}
                 
                 ${this.toastMessage ? html`
                     <div class="toast-container" style="color: ${this.toastColor}; border-color: ${this.toastColor}; animation: fadeIn 0.2s;">

@@ -494,7 +494,12 @@ function launchOABrain() {
 // 🟢 NEW: The Live Fullscreen Ghost HUD for OA Edge Triggers
 function spawnCornerHUD(page = 1) {
     const prefs = storage.getPreferences();
-    const corners = page === 2 ? (prefs.hotCornersPage2 || {}) : (prefs.hotCorners || {});
+    
+    // 🟢 FIX: Load Typer Corners if in Typer Mode
+    let corners = {};
+    if (page === 'typer') corners = prefs.typerHotCorners || {};
+    else if (page === 2) corners = prefs.hotCornersPage2 || {};
+    else corners = prefs.hotCorners || {};
     
     const aiNames = ['ChatGPT', 'Gemini', 'Grok'];
     const loadouts = prefs.dualBrainLoadouts || [];
@@ -1171,13 +1176,17 @@ function setupGeneralIpcHandlers() {
 
     // 🟢 STREAMLINED: Only handles the single OA window now. Instant Interview handles its own!
     global.applyAIBounds = function(forceShow) {
-        const activeCode = codeWebWindowPrimary;
-        if (!activeCode || activeCode.isDestroyed()) return false;
+        const activeCode = currentCodeWinner === 'secondary' && codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed() ? codeWebWindowSecondary : codeWebWindowPrimary;
         
-        const isVisible = activeCode.isVisible() && activeCode.getOpacity() !== 0;
+        let isVisible = false;
+        if (activeCode && !activeCode.isDestroyed()) {
+            isVisible = activeCode.isVisible() && activeCode.getOpacity() !== 0;
+        }
+        
         const targetVisible = forceShow !== undefined ? forceShow : !isVisible;
 
         if (targetVisible) {
+            if (!activeCode || activeCode.isDestroyed()) return false;
             const primaryDisplay = screen.getPrimaryDisplay();
             const { width, height } = primaryDisplay.workAreaSize;
             
@@ -1188,16 +1197,23 @@ function setupGeneralIpcHandlers() {
 
             activeCode.setOpacity(1); 
             activeCode.setIgnoreMouseEvents(false);
-            // 🟢 FIX: Keep z-index elevated above the overlay
             activeCode.setAlwaysOnTop(true, 'screen-saver', 10);
             activeCode.setBounds({ x, y, width: safeWidth, height: safeHeight });
             activeCode.showInactive();
-            
-            // 🟢 FIX: Move AI window to top instead of bringing the overlay on top
             activeCode.moveTop();
             return true;
         } else {
-            activeCode.hide();
+            // 🟢 FIX: Forcefully drop Opacity and Hide ALL code windows
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) {
+                codeWebWindowPrimary.setOpacity(0);
+                codeWebWindowPrimary.setIgnoreMouseEvents(true);
+                codeWebWindowPrimary.hide();
+            }
+            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) {
+                codeWebWindowSecondary.setOpacity(0);
+                codeWebWindowSecondary.setIgnoreMouseEvents(true);
+                codeWebWindowSecondary.hide();
+            }
             return false;
         }
     };
@@ -2027,32 +2043,40 @@ function setupGeneralIpcHandlers() {
     });
 
     let autoTyperProcess = null;
-    ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance) => {
+    ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance, startDelay) => {
         if (mainWindow) mainWindow.webContents.send('typing-status', true);
         let cleanCode = rawCode.replace(/^(c\+\+|python|java|javascript|js)\s*\n/i, '');
         const b64Code = Buffer.from(cleanCode).toString('base64');
         const ps1Path = path.join(os.tmpdir(), 'cptyper.ps1');
         
+        const delaySecs = startDelay !== undefined ? startDelay : 5;
+        
         const psScript = `
-        param([string]$b64, [int]$wpm, [int]$mistakeChance)
+        param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay)
         Add-Type -AssemblyName System.Windows.Forms
         $text = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
         $chars = $text.ToCharArray()
         $baseDelay = [math]::Round(12000 / $wpm)
         if ($baseDelay -lt 10) { $baseDelay = 10 }
-        $lineIdx = 0
-        [Console]::WriteLine("LINE_0")
+        
+        if ($startDelay -gt 0) {
+            Start-Sleep -Seconds $startDelay
+        }
+        
+        $charIdx = 0
+        [Console]::WriteLine("CHAR_0")
         [Console]::Out.Flush()
+        
         foreach ($c in $chars) {
             $key = $c.ToString()
-            if ($key -eq "\`r") { continue }
+            if ($key -eq "\`r") { $charIdx++; continue }
             if ($key -eq "\`n") {
                 [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
                 Start-Sleep -Milliseconds 50
                 [System.Windows.Forms.SendKeys]::SendWait("x+{HOME}+{HOME}{BACKSPACE}")
                 Start-Sleep -Milliseconds ($baseDelay * 2)
-                $lineIdx++
-                [Console]::WriteLine("LINE_$lineIdx")
+                $charIdx++
+                [Console]::WriteLine("CHAR_$charIdx")
                 [Console]::Out.Flush()
                 continue
             }
@@ -2076,25 +2100,38 @@ function setupGeneralIpcHandlers() {
             $delay = $baseDelay + $variance
             if ($delay -lt 10) { $delay = 10 }
             Start-Sleep -Milliseconds $delay
+            
+            $charIdx++
+            [Console]::WriteLine("CHAR_$charIdx")
+            [Console]::Out.Flush()
         }
         `;
         fs.writeFileSync(ps1Path, psScript);
         if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
-        autoTyperProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance]);
+        
+        autoTyperProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs]);
+        
         autoTyperProcess.stdout.on('data', (data) => {
-            const lines = data.toString().split(/[\r\n]+/);
+            const text = data.toString();
+            const lines = text.split(/[\r\n]+/);
             lines.forEach(l => {
-                if (l.startsWith('LINE_')) {
-                    const idx = parseInt(l.replace('LINE_', ''));
-                    if (!isNaN(idx) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-progress', idx);
+                // 🟢 FIX: Extract exact character progression instead of lines
+                if (l.startsWith('CHAR_')) {
+                    const idx = parseInt(l.replace('CHAR_', ''));
+                    if (!isNaN(idx) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-progress-char', idx);
                 }
             });
         });
-        autoTyperProcess.on('close', () => { if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-status', false); });
+        autoTyperProcess.on('close', () => {
+            if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-status', false);
+        });
     });
 
-    ipcMain.on('stop-auto-type', () => {
-        if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} autoTyperProcess = null; }
+    ipcMain.on('stop-auto-type', (event) => {
+        if (autoTyperProcess) {
+            try { autoTyperProcess.kill(); } catch(e){}
+            autoTyperProcess = null;
+        }
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-status', false);
     });
 
