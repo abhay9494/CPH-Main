@@ -634,7 +634,7 @@ export class SettingsView extends LitElement {
             'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
             'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
             'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
-            'change_profile': '👤 Swap Pane', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
+            'change_profile': '👤 Switch Profile', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
@@ -877,15 +877,18 @@ export class SettingsView extends LitElement {
             case 'oa_mode': {
                 const cornerActions = [
                     {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
-                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🌟 Sync Optimized'},
-                    {value: 'auto_type', label: '⌨️ Trigger Auto-Type'}, {value: 'abort_oa', label: '🚪 Abort OA & Exit'},
-                    {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}, {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'},
-                    {value: 'prev_resp', label: '◀ Previous Response'}, {value: 'next_resp', label: '▶ Next Response'},
-                    {value: 'change_profile', label: '👤 Switch Profile'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
+                    {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
+                    {value: 'refactor', label: '🛠️ Refactor'}, {value: 'auto_type', label: '⌨️ Trigger Auto-Type'},
+                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'},
+                    {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'}, {value: 'scroll_up', label: '⬆️ Scroll Up'},
+                    {value: 'scroll_down', label: '⬇️ Scroll Down'}, {value: 'prev_resp', label: '◀ Previous Response'},
+                    {value: 'next_resp', label: '▶ Next Response'}, {value: 'change_profile', label: '👤 Switch Profile'},
+                    {value: 'change_ai', label: '🤖 Change AI'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
                     {value: 'language', label: '💻 Change Language'}, {value: 'reset', label: '✨ Reset Session'},
                     {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'}, {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
-                    {value: 'sync_followup', label: '🔍 Sync Follow-up Image'}, {value: 'fusion_dry_run', label: '🎯 Fusion Dry Run'}
+                    {value: 'bg_inc', label: '⬛ Opacity+'}, {value: 'bg_dec', label: '⬜ Opacity-'},
+                    {value: 'text_inc', label: 'A+ Text'}, {value: 'text_dec', label: 'A- Text'},
+                    {value: 'mic', label: '🎙️ Mic'}
                 ];
 
                 const typerActionsList = [

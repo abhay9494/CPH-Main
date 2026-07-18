@@ -433,16 +433,31 @@ export class ProctoredOA extends LitElement {
                     ipcRenderer.send('refresh-oa-hud', this.activePage);
                 }
                 break;
-            case 'change_ai':
-                let loadouts = this.prefs.dualBrainLoadouts || [];
-                let activeL = loadouts[0] || {};
-                let nextIdx = ((activeL.codeEngine !== undefined ? activeL.codeEngine : 1) + 1) % 3;
-                activeL.codeEngine = nextIdx;
-                this.savePref('dualBrainLoadouts', loadouts);
-                ipcRenderer.invoke('switch-ai-profile', activeL.codeProfileId);
+            case 'change_profile': {
+                let profiles = this.prefs.aiProfiles || [];
+                if (profiles.length === 0) {
+                    this.showToast('⚠️ No profiles found', '#f14c4c');
+                    break;
+                }
+                
+                let profileLoadouts = this.prefs.dualBrainLoadouts || [];
+                let currentL = profileLoadouts[0] || {};
+                
+                // 🟢 Find current profile index, calculate next, and extract
+                let currentProfileIdx = profiles.findIndex(p => p.id === currentL.codeProfileId);
+                let nextProfileIdx = (currentProfileIdx + 1) % profiles.length;
+                let nextProfile = profiles[nextProfileIdx];
+                
+                // 🟢 Update active loadout and push to DB
+                currentL.codeProfileId = nextProfile.id;
+                this.savePref('dualBrainLoadouts', profileLoadouts);
+                
+                // 🟢 Force a hot-reload of the AI Window with the new partition
+                ipcRenderer.invoke('switch-ai-profile', currentL.codeProfileId);
                 ipcRenderer.send('refresh-oa-hud', this.activePage);
-                this.showToast(`🤖 AI Switched`);
+                this.showToast(`👤 Profile: ${nextProfile.name}`, '#4285f4');
                 break;
+            }
             case 'fast_think':
                 ipcRenderer.invoke('toggle-ai-mode');
                 setTimeout(() => ipcRenderer.send('refresh-oa-hud', this.activePage), 200);
