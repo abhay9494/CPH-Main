@@ -280,6 +280,40 @@ export class SettingsView extends LitElement {
         
         .slider-row { width: 100%; margin-bottom: 4px; } /* 🐛 FIX: Reduced spacing between sliders */
         .slider-row label { display: flex; justify-content: space-between; font-size: 10px; color: #ccc; margin-bottom: 2px; font-weight: bold; } /* 🐛 Thinner text */
+        .blinking-alert {
+            animation: pulse-alert 1.5s infinite; background: rgba(241, 76, 76, 0.2); color: #f14c4c;
+            border: 1px solid #f14c4c; padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;
+            display: flex; align-items: center; gap: 8px; margin-left: 10px;
+        }
+        @keyframes pulse-alert { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+        .page-tabs { display: flex; gap: 5px; flex-wrap: wrap; align-items: center; }
+        .page-btn { background: var(--bg-tertiary); color: var(--text-secondary); border: 1px solid var(--border-color); padding: 6px 12px; border-radius: 4px; font-size: 11px; font-weight: bold; transition: 0.2s; }
+        .page-btn.active { background: #4285f4; color: #fff; border-color: #4285f4; }
+        .page-btn.add-btn { background: rgba(0, 204, 102, 0.1); color: #00cc66; border-color: #00cc66; margin-left: 5px;}
+        .page-btn.add-btn:hover { background: rgba(0, 204, 102, 0.2); }
+        
+        /* 🟢 NEW: Page Tabs & Delete Cross */
+        .page-btn { position: relative; padding-right: 25px; }
+        .page-btn.add-btn { padding: 6px 12px; font-size: 14px; display: flex; align-items: center; justify-content: center; width: 30px; height: 28px; }
+        .del-x { position: absolute; top: -5px; right: -5px; background: #f14c4c; color: white; border-radius: 50%; width: 14px; height: 14px; display: flex; align-items: center; justify-content: center; font-size: 10px; cursor: pointer !important; opacity: 0; transition: 0.2s; box-shadow: 0 2px 5px rgba(0,0,0,0.5); }
+        .page-btn:hover .del-x { opacity: 1; }
+        .del-x:hover { transform: scale(1.2); }
+
+        /* 🟢 NEW: Custom Modal CSS */
+        .custom-dialog-backdrop { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 2000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(3px); }
+        .custom-dialog { background: var(--bg-secondary); padding: 25px; border-radius: 8px; border: 1px solid var(--border-color); width: 350px; box-shadow: 0 10px 40px rgba(0,0,0,0.9); }
+        .custom-dialog h3 { margin-top: 0; margin-bottom: 10px; color: #fff; }
+        .custom-dialog p { font-size: 13px; color: var(--text-muted); margin-bottom: 20px; }
+        .dialog-buttons { display: flex; justify-content: flex-end; gap: 10px; }
+        .dialog-btn { padding: 8px 15px; border-radius: 4px; font-weight: bold; border: none; transition: 0.2s; }
+        .dialog-btn.cancel { background: transparent; color: var(--text-secondary); border: 1px solid var(--border-color); }
+        .dialog-btn.cancel:hover { background: rgba(255,255,255,0.1); }
+        .dialog-btn.danger { background: #f14c4c; color: #fff; }
+        .dialog-btn.danger:hover { background: #ff6b6b; }
+        .dialog-btn.confirm { background: #4285f4; color: #fff; }
+
+        /* 🟢 NEW: Drag & Drop Hover States */
+        .matrix-cell.drag-over { border-color: #00cc66 !important; background: rgba(0, 204, 102, 0.2) !important; transform: scale(1.05); }
     `;
 
     static properties = {
@@ -290,7 +324,10 @@ export class SettingsView extends LitElement {
         listeningKey: { type: String },
         activeDropdown: { type: String },
         editingZone: { type: String },
-        audioDevices: { type: Object }
+        audioDevices: { type: Object },
+        editingTyperPageIdx: { type: Number },
+        showCustomModal: { type: Boolean },
+        modalConfig: { type: Object }
     };
 
     constructor() {
@@ -343,6 +380,12 @@ export class SettingsView extends LitElement {
         this.newProfileName = '';
         this.newProfileAI = '0'; 
         this.editingZone = null;
+        this.editingPageIdx = 0;
+        this.editingTyperPageIdx = 0;
+        this.showCustomModal = false;
+        this.modalConfig = {};
+        this.draggedZone = null;
+        this.draggedMap = null;
     }
 
     async connectedCallback() {
@@ -365,6 +408,23 @@ export class SettingsView extends LitElement {
                 this.keybinds = { ...defaultKeybinds, ...keybinds };
             } else {
                 this.keybinds = { ...defaultKeybinds };
+            }
+
+            if (!this.prefs.oaPages) {
+                let p1 = this.prefs.hotCorners || {};
+                let p2 = this.prefs.hotCornersPage2 || null;
+                this.prefs.oaPages = [{ id: 'page_1', map: p1 }];
+                if (p2 && Object.keys(p2).length > 0) {
+                    this.prefs.oaPages.push({ id: 'page_2', map: p2 });
+                }
+                this.savePref('oaPages', this.prefs.oaPages);
+            }
+
+            // 🟢 NEW: Migrate Ghost Typer object to pages array
+            if (!this.prefs.typerPages) {
+                let p1 = this.prefs.typerHotCorners || {};
+                this.prefs.typerPages = [{ id: 'typer_page_1', map: p1 }];
+                this.savePref('typerPages', this.prefs.typerPages);
             }
             
             this.requestUpdate();
@@ -614,38 +674,45 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
-    getShortLabel(action) {
+    getHotCornerLabel(action) {
+        if (!action) return '🚫 None';
+        if (action.startsWith('speed_set_')) return `⚡ Set Speed: ${action.split('_')[2]} WPM`;
         const labels = {
-            'none': '—',              'capture': '📸',         'send_ai': '🚀',        'hide_unhide': '👻',
-            'scroll_up': '⬆️',       'scroll_down': '⬇️',      'prev_resp': '◀',       'next_resp': '▶',
-            'change_ai': '🤖',       'change_profile': '👤',   'fast_think': '⚡🧠',     'refactor': '🛠️',
-            'reset': '✨',           'text_inc': 'A+',         'text_dec': 'A-',        'bg_inc': '⬛',      'bg_dec': '⬜',
-            'fix_error': '🌟', 'language': '💻 Language', 'mic': '🎙️ Mic', 'toggle_ai_vis': '👁️',
-            'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
-            'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
-            'toggle_page2': '🔄', 'regenerate': '🔄 Regen',    'toggle_theme': '🌓',   'sync_followup': '🔍',
-            'fusion_dry_run': '🎯', 'on_the_go': '🏃', 'speed_inc': '⏩', 'speed_dec': '⏪'
+            'none': '🚫 None (Disabled)', 'capture': '📸 Capture Screen', 'send_ai': '🚀 Send to AI',
+            'fix_error': '🔧 Fix Error', 'refactor': '🛠️ Refactor', 'auto_type': '▶️ Start / Pause / Resume',
+            'abort_oa': '🚪 Abort OA & Exit', 'hide_unhide': '👻 Hide / Unhide', 'toggle_ai_vis': '👁️ Show / Hide AI',
+            'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Down', 'prev_resp': '◀ Previous Response',
+            'next_resp': '▶ Next Response', 'change_profile': '👤 Switch Profile', 'change_ai': '🤖 Change AI',
+            'fast_think': '🧠 Toggle Fast/Think', 'language': '💻 Change Language', 'reset': '✨ Reset Session',
+            'toggle_page2': '🔄 Next Page', 'toggle_theme': '🌓 Toggle Light/Dark Mode',
+            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'text_inc': 'A+ Text Size', 'text_dec': 'A- Text Size',
+            'mic': '🎙️ Mic Toggle', 'trim_top': '✂️ Unselect Top Line', 'trim_bottom': '✂️ Unselect Bot Line',
+            'expand_top': '➕ Expand Top Line', 'expand_bottom': '➕ Expand Bot Line', 'reset_typer': '🔄 Reset Selection',
+            'abort_typer': '🛑 Abort & Go Back', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
+            'on_the_go': '🏃 On-The-Go Dictator', 'speed_inc': '⏩ Speed +5 WPM', 'speed_dec': '⏪ Speed -5 WPM',
+            'toggle_typer_page2': '🔄 Next Typer Page'
         };
-        return labels[action] || '—';
+        return labels[action] || action || '🚫 None';
     }
 
-    getHotCornerLabel(action) {
+    getShortLabel(action) {
+        if (!action) return '—';
+        if (action.startsWith('speed_set_')) return `⚡ ${action.split('_')[2]} WPM`;
         const labels = {
-            'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
-            'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
-            'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': '🤖 Change AI',
-            'change_profile': '👤 Switch Profile', 'fast_think': '🧠 Fast/Think', 'refactor': '🛠️ Refactor',
-            'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
-            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
-            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
-            'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
-            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
-            'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2',
-            'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
-            'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 On-The-Go Dictator',
-            'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5'
+            'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI', 'fix_error': '🔧 Fix Error',
+            'refactor': '🛠️ Refactor', 'auto_type': '▶️ Auto-Type', 'abort_oa': '🚪 Abort OA',
+            'hide_unhide': '👻 Hide/Show', 'toggle_ai_vis': '👁️ Toggle AI', 'scroll_up': '⬆️ Scroll Up',
+            'scroll_down': '⬇️ Scroll Dn', 'prev_resp': '◀ Prev', 'next_resp': '▶ Next',
+            'change_profile': '👤 Profile', 'change_ai': '🤖 Switch AI', 'fast_think': '🧠 Fast/Think',
+            'language': '💻 Language', 'reset': '✨ Reset', 'toggle_page2': '🔄 Next Page',
+            'toggle_theme': '🌓 Theme', 'bg_inc': '⬛ Opac +', 'bg_dec': '⬜ Opac -', 'text_inc': 'A+ Text',
+            'text_dec': 'A- Text', 'mic': '🎙️ Mic', 'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot',
+            'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 'reset_typer': '🔄 Reset Sel',
+            'abort_typer': '🛑 Abort Typer', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
+            'on_the_go': '🏃 Dictator', 'speed_inc': '⏩ Spd +5', 'speed_dec': '⏪ Spd -5',
+            'toggle_typer_page2': '🔄 Next Page'
         };
-        return labels[action] || action || '—';
+        return labels[action] || '—';
     }
 
     syncRadialToBackend() {
@@ -665,14 +732,101 @@ export class SettingsView extends LitElement {
         window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
     }
 
-    renderMatrixCell(id, row, col, label, mapName = 'hotCorners') {
-        const currentCorners = this.prefs[mapName] || {};
-        const action = currentCorners[id] || 'none';
+    // 🟢 NEW: Custom Modals
+    openModal(type, title, text, onConfirm) {
+        this.modalConfig = { type, title, text, onConfirm, inputVal: type === 'input' ? '60' : '' };
+        this.showCustomModal = true;
+        this.requestUpdate();
+    }
+
+    // 🟢 PAGE VALIDATION & MANAGEMENT
+    getMissingTogglePages(mapName) {
+        const pages = this.prefs[mapName] || [];
+        if (pages.length <= 1) return [];
+        const toggleKey = mapName === 'oaPages' ? 'toggle_page2' : 'toggle_typer_page2';
+        return pages.map((p, idx) => Object.values(p.map || {}).includes(toggleKey) ? null : idx).filter(idx => idx !== null);
+    }
+
+    addPage(mapName) {
+        const pages = this.prefs[mapName] || [];
+        if (pages.length > 0) {
+            const lastPageMap = pages[pages.length - 1].map || {};
+            const toggleKey = mapName === 'oaPages' ? 'toggle_page2' : 'toggle_typer_page2';
+            const activeTriggers = Object.values(lastPageMap).filter(v => v !== 'none' && v !== toggleKey);
+            if (activeTriggers.length === 0) {
+                this.showToast(`⚠️ Page ${pages.length} is empty! Add triggers first.`, '#f14c4c');
+                return;
+            }
+        }
+        const newPages = [...pages, { id: `${mapName}_${Date.now()}`, map: {} }];
+        this.savePref(mapName, newPages);
+        if (mapName === 'oaPages') this.editingPageIdx = newPages.length - 1;
+        else this.editingTyperPageIdx = newPages.length - 1;
+        this.requestUpdate();
+    }
+
+    deletePage(mapName, idx, e) {
+        e.stopPropagation();
+        this.openModal('confirm', `Delete Page ${idx + 1}?`, 'Are you sure you want to delete this page and all its triggers?', () => {
+            const newPages = [...(this.prefs[mapName] || [])];
+            newPages.splice(idx, 1);
+            this.savePref(mapName, newPages);
+            if (mapName === 'oaPages') {
+                this.editingPageIdx = Math.max(0, Math.min(this.editingPageIdx, newPages.length - 1));
+                if(window.require) window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
+            } else {
+                this.editingTyperPageIdx = Math.max(0, Math.min(this.editingTyperPageIdx, newPages.length - 1));
+            }
+            this.requestUpdate();
+        });
+    }
+
+    // 🟢 NEW: Drag & Drop Handlers
+    handleDragStart(e, zone, mapName) {
+        this.draggedZone = zone;
+        this.draggedMap = mapName;
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', zone);
+    }
+
+    handleDrop(e, targetZone, targetMap) {
+        e.preventDefault();
+        e.currentTarget.classList.remove('drag-over');
+        if (this.draggedMap !== targetMap || this.draggedZone === targetZone) return;
+
+        const pages = [...(this.prefs[targetMap] || [])];
+        const pageIdx = targetMap === 'oaPages' ? this.editingPageIdx : this.editingTyperPageIdx;
+        
+        let sourceAction = (pages[pageIdx].map || {})[this.draggedZone] || 'none';
+        let targetAction = (pages[pageIdx].map || {})[targetZone] || 'none';
+
+        pages[pageIdx].map = { ...pages[pageIdx].map, [this.draggedZone]: targetAction, [targetZone]: sourceAction };
+        this.savePref(targetMap, pages);
+        
+        if (targetMap === 'oaPages' && window.require) {
+            window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
+        }
+        this.draggedZone = null;
+        this.requestUpdate();
+    }
+
+    renderMatrixCell(id, row, col, label, mapName = 'oaPages') {
+        const pages = this.prefs[mapName] || [];
+        const pageIdx = mapName === 'oaPages' ? this.editingPageIdx : this.editingTyperPageIdx;
+        const currentPage = pages[pageIdx] || { map: {} };
+        const action = currentPage.map[id] || 'none';
         const shortLabel = this.getShortLabel(action);
         
         return html`
-            <div class="matrix-cell" style="grid-area: ${row} / ${col};" @click=${() => { this.editingZone = id; this.editingMap = mapName; }}>
-                <div style="font-size: 16px; margin-bottom: 2px;">${shortLabel}</div>
+            <div class="matrix-cell" 
+                 style="grid-area: ${row} / ${col};" 
+                 draggable="true"
+                 @dragstart=${(e) => this.handleDragStart(e, id, mapName)}
+                 @dragover=${(e) => { e.preventDefault(); e.currentTarget.classList.add('drag-over'); }}
+                 @dragleave=${(e) => e.currentTarget.classList.remove('drag-over')}
+                 @drop=${(e) => this.handleDrop(e, id, mapName)}
+                 @click=${() => { this.editingZone = id; this.editingMap = mapName; }}>
+                <div style="font-size: 16px; margin-bottom: 2px; text-align: center;">${shortLabel}</div>
                 <div style="font-size: 8px; opacity: 0.4; text-align: center; line-height: 1.1; padding: 0 2px;">${label}</div>
             </div>
         `;
@@ -875,38 +1029,45 @@ export class SettingsView extends LitElement {
                 `;
               
             case 'oa_mode': {
-                const cornerActions = [
-                    {value: 'none', label: 'None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
+                let baseCornerActions = [
+                    {value: 'none', label: '🚫 None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
-                    {value: 'refactor', label: '🛠️ Refactor'}, {value: 'auto_type', label: '⌨️ Trigger Auto-Type'},
-                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'},
+                    {value: 'refactor', label: '🛠️ Refactor'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume Typer'},
+                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide'},
                     {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'}, {value: 'scroll_up', label: '⬆️ Scroll Up'},
                     {value: 'scroll_down', label: '⬇️ Scroll Down'}, {value: 'prev_resp', label: '◀ Previous Response'},
                     {value: 'next_resp', label: '▶ Next Response'}, {value: 'change_profile', label: '👤 Switch Profile'},
                     {value: 'change_ai', label: '🤖 Change AI'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
                     {value: 'language', label: '💻 Change Language'}, {value: 'reset', label: '✨ Reset Session'},
-                    {value: 'toggle_page2', label: '🔄 Toggle Page 1/2'}, {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
+                    {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
                     {value: 'bg_inc', label: '⬛ Opacity+'}, {value: 'bg_dec', label: '⬜ Opacity-'},
-                    {value: 'text_inc', label: 'A+ Text'}, {value: 'text_dec', label: 'A- Text'},
-                    {value: 'mic', label: '🎙️ Mic'}
+                    {value: 'text_inc', label: 'A+ Text Size'}, {value: 'text_dec', label: 'A- Text Size'},
+                    {value: 'mic', label: '🎙️ Mic Toggle'}
                 ];
 
+                const missingPages = this.getMissingTogglePages();
+                const totalPages = (this.prefs.oaPages || []).length;
+                if (totalPages > 1) {
+                    baseCornerActions.push({value: 'toggle_page2', label: '🔄 Next Page'});
+                }
+
+                const typerMissingPages = this.getMissingTogglePages('typerPages');
+                const typerTotalPages = (this.prefs.typerPages || []).length;
+                
                 const typerActionsList = [
-                    {value: 'none', label: 'None (Disabled)'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
+                    {value: 'none', label: '🚫 None (Disabled)'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
                     {value: 'trim_top', label: '✂️ Unselect Top Line'}, {value: 'expand_top', label: '➕ Expand Top Line'},
                     {value: 'trim_bottom', label: '✂️ Unselect Bottom Line'}, {value: 'expand_bottom', label: '➕ Expand Bottom Line'},
                     {value: 'speed_inc', label: '⏩ Speed +5 WPM'}, {value: 'speed_dec', label: '⏪ Speed -5 WPM'},
+                    {value: 'speed_set_30', label: '⚡ Set Speed: 30 WPM'}, {value: 'speed_set_60', label: '⚡ Set Speed: 60 WPM'},
+                    {value: 'speed_set_100', label: '⚡ Set Speed: 100 WPM'}, {value: 'speed_custom', label: '✏️ Set Custom Speed...'},
                     {value: 'reset_typer', label: '🔄 Reset Selection'}, {value: 'abort_typer', label: '🛑 Abort & Go Back'},
-                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide'},
+                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'}
                 ];
+                if (typerTotalPages > 1) typerActionsList.push({value: 'toggle_typer_page2', label: '🔄 Next Typer Page'});
 
-                this.editingPage = this.editingPage || 1;
                 const b = this.prefs.hotCornerBounds || { cornerSize: 20, centerX: 20, centerY: 20, dwellTime: 3, hideTime: 0 };
-                const activeMapName = this.editingPage === 1 ? 'hotCorners' : 'hotCornersPage2';
-                const currentCorners = this.prefs[activeMapName] || {};
-                const currentTyperCorners = this.prefs.typerHotCorners || {};
-
                 let midX = Math.max(0, (100 - (2 * b.cornerSize) - b.centerX) / 2);
                 let midY = Math.max(0, (100 - (2 * b.cornerSize) - b.centerY) / 2);
                 const gridCols = `${b.cornerSize}fr ${midX}fr ${b.centerX}fr ${midX}fr ${b.cornerSize}fr`;
@@ -939,34 +1100,45 @@ export class SettingsView extends LitElement {
 
                         <div style="margin-bottom: 20px;">
                             <h3 style="margin-top: 0; margin-bottom: 5px;">Main OA Hot Corners</h3>
-                            <div style="display: flex; justify-content: center; margin-bottom: 10px;">
-                                <div style="display: flex; background: var(--bg-tertiary); border: 1px solid var(--border-color); border-radius: 6px; padding: 3px;">
-                                    <button @click=${() => { this.editingPage = 1; this.requestUpdate(); }} style="background: ${this.editingPage === 1 ? '#4285f4' : 'transparent'}; color: ${this.editingPage === 1 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;">📄 Page 1 (Primary)</button>
-                                    <button @click=${() => { this.editingPage = 2; this.requestUpdate(); }} style="background: ${this.editingPage === 2 ? '#a142f4' : 'transparent'}; color: ${this.editingPage === 2 ? '#fff' : 'var(--text-secondary)'}; border: none; padding: 4px 12px; border-radius: 4px; font-size: 11px; font-weight: bold;">📄 Page 2 (Shift)</button>
-                                </div>
+                            
+                            <div class="page-tabs" style="margin-bottom: 15px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px;">
+                                ${(this.prefs.oaPages || []).map((p, idx) => html`
+                                    <button @click=${() => { this.editingPageIdx = idx; this.requestUpdate(); }} class="page-btn ${this.editingPageIdx === idx ? 'active' : ''}">
+                                        📄 Page ${idx + 1}
+                                        ${idx !== 0 ? html`<div class="del-x" @click=${(e) => this.deletePage('oaPages', idx, e)}>×</div>` : ''}
+                                    </button>
+                                `)}
+                                <button @click=${() => this.addPage('oaPages')} class="page-btn add-btn">+</button>
+                                
+                                ${missingPages.length > 0 ? html`
+                                    <div class="blinking-alert">
+                                        ⚠️ Add 'Next Page' trigger to Page ${missingPages[0] + 1}!
+                                        <button @click=${() => { this.editingPageIdx = missingPages[0]; this.requestUpdate(); }} style="background: #f14c4c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;">Fix It</button>
+                                    </div>
+                                ` : ''}
                             </div>
                             
                             <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
-                                ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', activeMapName)}
-                                ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', activeMapName)}
-                                ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', activeMapName)}
-                                ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', activeMapName)}
-                                ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', activeMapName)}
+                                ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'oaPages')}
+                                ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'oaPages')}
+                                ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'oaPages')}
+                                ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'oaPages')}
+                                ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'oaPages')}
 
-                                ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', activeMapName)}
-                                ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', activeMapName)}
+                                ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'oaPages')}
+                                ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'oaPages')}
 
-                                ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', activeMapName)}
-                                ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', activeMapName)}
+                                ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', 'oaPages')}
+                                ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', 'oaPages')}
 
-                                ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', activeMapName)}
-                                ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', activeMapName)}
+                                ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'oaPages')}
+                                ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'oaPages')}
 
-                                ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', activeMapName)}
-                                ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', activeMapName)}
-                                ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', activeMapName)}
-                                ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', activeMapName)}
-                                ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', activeMapName)}
+                                ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'oaPages')}
+                                ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'oaPages')}
+                                ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'oaPages')}
+                                ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'oaPages')}
+                                ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'oaPages')}
                                 
                                 <div class="matrix-center" style="padding: 6px 12px; border-color: #4285f4; background: rgba(66, 133, 244, 0.1);">
                                     <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">GEOMETRY CONFIG</h3>
@@ -983,27 +1155,44 @@ export class SettingsView extends LitElement {
 
                         <div>
                             <h3 style="margin-top: 0; margin-bottom: 5px;">Ghost Typer Corners</h3>
+                            <div class="page-tabs" style="margin-bottom: 15px; border: 1px solid var(--border-color); background: rgba(0,0,0,0.2); padding: 5px; border-radius: 6px;">
+                                ${(this.prefs.typerPages || []).map((p, idx) => html`
+                                    <button @click=${() => { this.editingTyperPageIdx = idx; this.requestUpdate(); }} class="page-btn ${this.editingTyperPageIdx === idx ? 'active' : ''}">
+                                        📄 Page ${idx + 1}
+                                        ${idx !== 0 ? html`<div class="del-x" @click=${(e) => this.deletePage('typerPages', idx, e)}>×</div>` : ''}
+                                    </button>
+                                `)}
+                                <button @click=${() => this.addPage('typerPages')} class="page-btn add-btn">+</button>
+                                
+                                ${typerMissingPages.length > 0 ? html`
+                                    <div class="blinking-alert">
+                                        ⚠️ Add 'Next Typer Page' trigger to Page ${typerMissingPages[0] + 1}!
+                                        <button @click=${() => { this.editingTyperPageIdx = typerMissingPages[0]; this.requestUpdate(); }} style="background: #f14c4c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;">Fix It</button>
+                                    </div>
+                                ` : ''}
+                            </div>
+
                             <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
-                                ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'typerHotCorners')}
-                                ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'typerHotCorners')}
-                                ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'typerHotCorners')}
-                                ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'typerHotCorners')}
-                                ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'typerHotCorners')}
+                                ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'typerPages')}
+                                ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'typerPages')}
+                                ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'typerPages')}
+                                ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'typerPages')}
+                                ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'typerPages')}
                                 
-                                ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'typerHotCorners')}
-                                ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'typerHotCorners')}
+                                ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'typerPages')}
+                                ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'typerPages')}
                                 
-                                ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', 'typerHotCorners')}
-                                ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', 'typerHotCorners')}
+                                ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', 'typerPages')}
+                                ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', 'typerPages')}
                                 
-                                ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'typerHotCorners')}
-                                ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'typerHotCorners')}
+                                ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'typerPages')}
+                                ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'typerPages')}
                                 
-                                ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'typerHotCorners')}
-                                ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'typerHotCorners')}
-                                ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'typerHotCorners')}
-                                ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'typerHotCorners')}
-                                ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'typerHotCorners')}
+                                ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'typerPages')}
+                                ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'typerPages')}
+                                ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'typerPages')}
+                                ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'typerPages')}
+                                ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'typerPages')}
                                 
                                 <div class="matrix-center" style="padding: 6px 12px; border-color: #a142f4; background: rgba(161, 66, 244, 0.1);">
                                     <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">TYPER SETTINGS</h3>
@@ -1019,16 +1208,62 @@ export class SettingsView extends LitElement {
 
                     </div>
                     ${this.editingZone ? html`
-                        <div class="dropdown-backdrop" @click=${() => this.editingZone = null}></div>
+                        <div class="dropdown-backdrop" @click=${() => { this.editingZone = null; this.requestUpdate(); }}></div>
                         <div class="zone-editor-modal">
                             <h3 style="margin-top: 0; margin-bottom: 15px; color: #fff;">Assign Action</h3>
                             <div class="zone-action-grid">
-                                ${(this.editingMap === 'typerHotCorners' ? typerActionsList : cornerActions).map(act => html`
-                                    <button class="action-select-btn ${(this.prefs[this.editingMap] || {})[this.editingZone] === act.value ? 'selected' : ''}" 
-                                        @click=${() => { this.savePref(this.editingMap, { ...(this.prefs[this.editingMap] || {}), [this.editingZone]: act.value }); this.editingZone = null; }}>
+                                ${(this.editingMap === 'typerPages' ? typerActionsList : baseCornerActions).map(act => {
+                                    const pages = this.prefs[this.editingMap] || [];
+                                    const pageIdx = this.editingMap === 'typerPages' ? this.editingTyperPageIdx : this.editingPageIdx;
+                                    const currentMap = (pages[pageIdx] || {}).map || {};
+                                    const isSelected = currentMap[this.editingZone] === act.value || (act.value.startsWith('speed_set_') && currentMap[this.editingZone]?.startsWith('speed_set_'));
+                                    
+                                    return html`
+                                    <button class="action-select-btn ${isSelected ? 'selected' : ''}" 
+                                        @click=${() => { 
+                                            if (act.value === 'speed_custom') {
+                                                this.openModal('input', 'Custom Speed', 'Enter exact typing speed (WPM):', (val) => {
+                                                    const newPages = [...pages];
+                                                    newPages[pageIdx].map = { ...newPages[pageIdx].map, [this.editingZone]: `speed_set_${val}` };
+                                                    this.savePref(this.editingMap, newPages);
+                                                    this.editingZone = null; this.requestUpdate();
+                                                });
+                                                return;
+                                            }
+                                            
+                                            const newPages = [...pages];
+                                            if (!newPages[pageIdx]) newPages[pageIdx] = { id: 'page_' + Date.now(), map: {} };
+                                            newPages[pageIdx].map = { ...newPages[pageIdx].map, [this.editingZone]: act.value };
+                                            this.savePref(this.editingMap, newPages);
+                                            
+                                            if(this.editingMap === 'oaPages' && window.require) window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
+                                            
+                                            this.editingZone = null; 
+                                            this.requestUpdate();
+                                        }}>
                                         ${act.label}
                                     </button>
-                                `)}
+                                `})}
+                            </div>
+                        </div>
+                    ` : ''}
+
+                    ${this.showCustomModal ? html`
+                        <div class="custom-dialog-backdrop">
+                            <div class="custom-dialog">
+                                <h3>${this.modalConfig.title}</h3>
+                                <p>${this.modalConfig.text}</p>
+                                ${this.modalConfig.type === 'input' ? html`
+                                    <input type="number" .value=${this.modalConfig.inputVal} @input=${e => this.modalConfig.inputVal = e.target.value} style="width: 100%; margin-bottom: 20px; font-size: 16px; background: var(--bg-tertiary); color: var(--text-color); border: 1px solid var(--border-color); padding: 8px; border-radius: 4px;">
+                                ` : ''}
+                                <div class="dialog-buttons">
+                                    <button class="dialog-btn cancel" @click=${() => { this.showCustomModal = false; this.requestUpdate(); }}>Cancel</button>
+                                    <button class="dialog-btn ${this.modalConfig.type === 'confirm' ? 'danger' : 'confirm'}" @click=${() => { 
+                                        this.modalConfig.onConfirm(this.modalConfig.inputVal); 
+                                        this.showCustomModal = false; 
+                                        this.requestUpdate();
+                                    }}>${this.modalConfig.type === 'confirm' ? 'Delete' : 'Save'}</button>
+                                </div>
                             </div>
                         </div>
                     ` : ''}

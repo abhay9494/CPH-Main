@@ -496,11 +496,19 @@ function launchOABrain() {
 function spawnCornerHUD(page = 1) {
     const prefs = storage.getPreferences();
     
-    // 🟢 FIX: Load Typer Corners if in Typer Mode
+    // 🟢 FIX: Dynamic Page System Loading
     let corners = {};
     if (page === 'typer') corners = prefs.typerHotCorners || {};
-    else if (page === 2) corners = prefs.hotCornersPage2 || {};
-    else corners = prefs.hotCorners || {};
+    else {
+        const pages = prefs.oaPages || [];
+        if (pages.length > 0) {
+            const idx = (page - 1) % pages.length;
+            corners = pages[idx]?.map || {};
+        } else {
+            // Fallback for legacy configuration
+            corners = page === 2 ? (prefs.hotCornersPage2 || {}) : (prefs.hotCorners || {});
+        }
+    }
     
     const aiNames = ['ChatGPT', 'Gemini', 'Grok'];
     const loadouts = prefs.dualBrainLoadouts || [];
@@ -509,21 +517,31 @@ function spawnCornerHUD(page = 1) {
     const activeAiName = aiNames[currentAiIdx] || 'AI';
     const modeName = global.isThinkModeActive ? 'Think' : 'Fast';
 
+    // 🟢 FIX: Extract Dynamic Profile Nickname
+    const profiles = prefs.aiProfiles || [];
+    const currentProfile = profiles.find(p => p.id === activeLoadout.codeProfileId);
+    const profileNick = currentProfile ? currentProfile.name : 'Profile';
+
+    // 🟢 FIX: Calculate Next Page dynamically
+    const pages = prefs.oaPages || [];
+    const totalPages = Math.max(1, pages.length > 0 ? pages.length : (prefs.hotCornersPage2 ? 2 : 1));
+    const nextPageNum = totalPages > 1 ? ((page % totalPages) + 1) : 1;
+
     const getLabel = (action) => {
         if (!action || action === 'none') return '';
         const labels = {
             'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
             'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
             'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': `🤖 ${activeAiName}`,
-            'change_profile': '👤 Profile', 'fast_think': `🧠 ${modeName}`, 'refactor': '🛠️ Refactor',
+            'change_profile': `👤 ${profileNick}`, 'fast_think': `🧠 ${modeName}`, 'refactor': '🛠️ Refactor',
             'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
             'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
-            'trim_top': '✂️ Unselect Top', 'trim_bottom': '✂️ Unselect Bot', 'abort_typer': '🛑 Abort',
-            'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
-            'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1/2',
-            'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
-            'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 Dictator',
+            'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot', 'abort_typer': '🛑 Abort Typer',
+            'auto_type': '▶️ Auto-Type', 'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 
+            'reset_typer': '🔄 Reset Sel', 'abort_oa': '🚪 Abort OA', 'toggle_page2': `🔄 Page ${nextPageNum}`,
+            'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up',
+            'fusion_dry_run': '🎯 Dry Run', 'on_the_go': '🏃 Dictator',
             'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5'
         };
         return labels[action] || action;
@@ -537,7 +555,6 @@ function spawnCornerHUD(page = 1) {
         bottom_left: getLabel(corners.bottom_left), bottom_mid_left: getLabel(corners.bottom_mid_left), bottom_center: getLabel(corners.bottom_center), bottom_mid_right: getLabel(corners.bottom_mid_right), bottom_right: getLabel(corners.bottom_right)
     };
 
-    // 🟢 FIX 3: Do NOT destroy the window. Just send it the updated labels!
     if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
         global.cornerHudWindow.webContents.send('update-labels', zoneLabels);
         return;
@@ -546,7 +563,6 @@ function spawnCornerHUD(page = 1) {
     const primaryDisplay = screen.getPrimaryDisplay();
     const { width, height, x, y } = primaryDisplay.bounds;
 
-    // 🟢 FIX 2: nodeIntegration is required to listen for dynamic progress updates
     global.cornerHudWindow = new BrowserWindow({
         width, height, x, y,
         frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
@@ -558,7 +574,6 @@ function spawnCornerHUD(page = 1) {
     global.cornerHudWindow.setContentProtection(true);
     if (process.platform === 'win32') global.cornerHudWindow.setAlwaysOnTop(true, 'screen-saver', 15);
 
-    // 🟢 FIX 1: Add solid semi-transparent boxes to fix blurry text, and include all 16 zones.
     const htmlContent = `
     <html><head><style>
         body { margin: 0; overflow: hidden; font-family: 'Segoe UI', system-ui, sans-serif; pointer-events: none; }
@@ -587,7 +602,6 @@ function spawnCornerHUD(page = 1) {
         }
         .corner.empty { display: none; }
         
-        /* Exact Positioning with 10px margins */
         #top_left { top: 10px; left: 10px; }
         #top_mid_left { top: 10px; left: 25%; transform: translateX(-50%); }
         #top_center { top: 10px; left: 50%; transform: translateX(-50%); }
@@ -623,7 +637,7 @@ function spawnCornerHUD(page = 1) {
                     const textEl = document.getElementById('text-'+z);
                     if (labels[z] && labels[z] !== 'none' && labels[z] !== '—' && labels[z] !== '') {
                         textEl.innerText = labels[z];
-                        textEl.dataset.original = labels[z]; // 🟢 Save original text for reset toggle
+                        textEl.dataset.original = labels[z]; 
                         el.classList.remove('empty');
                     } else {
                         el.classList.add('empty');
@@ -658,14 +672,32 @@ function spawnCornerHUD(page = 1) {
                 });
             });
 
-            // 🟢 FIX: Listen for Reset Armed State to change the text dynamically
             ipcRenderer.on('set-reset-armed', (e, { zone, armed }) => {
                 const textEl = document.getElementById('text-'+zone);
-                const el = document.getElementById(zone); // 🐛 FIX: Was 'z', crashed the entire script!
+                const el = document.getElementById(zone); 
                 if (textEl && el) {
                     if (armed) {
                         textEl.dataset.armed = 'true';
                         textEl.innerText = '⚠️ CONFIRM RESET';
+                        textEl.style.color = '#f14c4c';
+                        el.style.borderColor = '#f14c4c';
+                    } else {
+                        textEl.dataset.armed = 'false';
+                        textEl.innerText = textEl.dataset.original || '';
+                        textEl.style.color = 'rgba(255,255,255,0.5)';
+                        el.style.borderColor = 'rgba(255,255,255,0.1)';
+                    }
+                }
+            });
+
+            // 🟢 FIX: Listen for Abort Armed State
+            ipcRenderer.on('set-abort-armed', (e, { zone, armed }) => {
+                const textEl = document.getElementById('text-'+zone);
+                const el = document.getElementById(zone); 
+                if (textEl && el) {
+                    if (armed) {
+                        textEl.dataset.armed = 'true';
+                        textEl.innerText = '⚠️ CONFIRM ABORT';
                         textEl.style.color = '#f14c4c';
                         el.style.borderColor = '#f14c4c';
                     } else {
@@ -2248,17 +2280,17 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    // 🟢 Route frontend hover progress to the Ghost HUD
-    ipcMain.on('sync-hud-progress', (e, data) => {
-        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
-            global.cornerHudWindow.webContents.send('update-progress', data);
-        }
-    });
-
     // 🟢 Route reset arming to the Ghost HUD
     ipcMain.on('set-reset-armed', (e, data) => {
         if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
             global.cornerHudWindow.webContents.send('set-reset-armed', data);
+        }
+    });
+
+    // 🟢 Route abort arming to the Ghost HUD
+    ipcMain.on('set-abort-armed', (e, data) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('set-abort-armed', data);
         }
     });
 }

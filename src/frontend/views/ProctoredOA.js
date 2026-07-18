@@ -125,8 +125,19 @@ export class ProctoredOA extends LitElement {
                 }
 
                 if (zone !== 'none') {
-                    const map = this.viewMode === 'typer' ? (this.prefs.typerHotCorners || {}) 
-                              : (this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {}));
+                    let map = {};
+                    if (this.viewMode === 'typer') {
+                        map = this.prefs.typerHotCorners || {};
+                    } else {
+                        const pages = this.prefs.oaPages || [];
+                        if (pages.length > 0) {
+                            const idx = (this.activePage - 1) % pages.length;
+                            map = pages[idx]?.map || {};
+                        } else {
+                            map = this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {});
+                        }
+                    }
+
                     const action = map[zone];
                     const allowedInStealth = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec'];
 
@@ -309,6 +320,23 @@ export class ProctoredOA extends LitElement {
             }, 8000); // 🟢 FIX: Extended from 3s to 8s so you have time to dwell a second time!
             return;
         }
+        // 🟢 FIX: Handle the 2-step Abort Confirmation logic
+        if (action === 'abort_oa' && !this.abortArmed) {
+            this.abortArmed = true;
+            this.abortZone = this.hoverZone; 
+            ipcRenderer.send('set-abort-armed', { zone: this.abortZone, armed: true });
+            this.showToast('⚠️ CONFIRM ABORT', '#f14c4c');
+            this.requestUpdate();
+            
+            setTimeout(() => { 
+                if (this.abortArmed) {
+                    this.abortArmed = false; 
+                    ipcRenderer.send('set-abort-armed', { zone: this.abortZone, armed: false });
+                    this.requestUpdate(); 
+                }
+            }, 8000); 
+            return;
+        }
 
         switch (action) {
             case 'capture':
@@ -334,16 +362,21 @@ export class ProctoredOA extends LitElement {
                 await ipcRenderer.invoke('trigger-ghost-hide');
                 break;
             case 'abort_oa':
+                this.abortArmed = false;
+                ipcRenderer.send('set-abort-armed', { zone: this.abortZone, armed: false });
                 this.showToast('🚪 Exiting OA Mode...');
-                await ipcRenderer.invoke('clear-screenshots'); // 🟢 FIX: Clear screenshots explicitly on abort
+                await ipcRenderer.invoke('clear-screenshots'); 
                 if (window.require) window.require('electron').ipcRenderer.invoke('new-chat');
                 window.dispatchEvent(new CustomEvent('return-to-main'));
                 break;
-            case 'toggle_page2':
-                this.activePage = this.activePage === 1 ? 2 : 1;
+            case 'toggle_page2': {
+                const pages = this.prefs.oaPages || [];
+                const totalPages = Math.max(1, pages.length > 0 ? pages.length : (this.prefs.hotCornersPage2 ? 2 : 1));
+                this.activePage = (this.activePage % totalPages) + 1;
                 ipcRenderer.send('refresh-oa-hud', this.activePage);
                 this.showToast(`📄 Page ${this.activePage}`);
                 break;
+            }
             case 'auto_type':
                 if (this.typingState === 'idle') {
                     if (this.viewMode === 'typer') {
@@ -505,6 +538,25 @@ export class ProctoredOA extends LitElement {
                 break;
             case 'toggle_ai_vis':
                 await ipcRenderer.invoke('toggle-ai-visibility');
+                break;
+            default:
+                // 🟢 NEW: Dynamically parse the Custom Speeds injected from Settings
+                if (action && action.startsWith('speed_set_')) {
+                    const newSpeed = parseInt(action.replace('speed_set_', ''));
+                    this.currentWpm = newSpeed;
+                    this.showToast(`⚡ Speed Locked: ${this.currentWpm} WPM`, '#a142f4');
+                    if (this.typingState === 'typing') {
+                        this.isChangingSpeed = true;
+                        ipcRenderer.send('stop-auto-type');
+                        this.typingPauseIndex = this.typingCurrentCharIndex; 
+                        const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
+                        const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
+                        this.currentRunId = Date.now();
+                        ipcRenderer.send('start-auto-type', remainingCode, this.currentWpm, mistake, 0, this.currentRunId);
+                        setTimeout(() => { this.isChangingSpeed = false; }, 500);
+                    }
+                    break;
+                }
                 break;
             case 'speed_inc':
                 this.currentWpm = Math.min(200, this.currentWpm + 5);
