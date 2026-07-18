@@ -2,20 +2,21 @@ if (require('electron-squirrel-startup')) process.exit(0);
 
 const PROMPTS = {
     // 🟢 OA PROMPTS
-    OA_AUTOMATION: (language) => `Output ONLY functional code in ${language || 'c++'}. CRITICAL RULES:\n
+    OA_AUTOMATION: (language) => `Output ONLY functional code. CRITICAL RULES:\n
+    - Identify the programming language from the code editor in the attached screenshot and write your solution in that EXACT language. If you cannot determine the language, default to C++.\n
     - Do NOT output any greetings, explanations, or comments.\n
     - Use single letter variable names.\n
-    - Give me code with a main function so that I can run locally.\n
-    - Don't change the function signature given in the image. See function signature and test cases from the image.\n
-    - Give me test cases to be put in cph extension of vs code (only those test cases which are visible in the image) like this:\n
-    test case1\n
-    input\n
-    expected output\n
-    - Format code using standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).`,
+    - Provide a complete solution with a main function so I can run it locally.\n
+    - Strictly preserve the function signature and class names provided in the image.\n
+    - Format the ENTIRE response inside a single set of standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).\n
+    - Extract the visible test cases from the image for the VS Code CPH extension. You MUST place these test cases inside a multiline comment (/* ... */) at the very bottom of the code block so they do not break compilation. Format them exactly like this:\n
+    Test Case 1\n
+    Input:\n
+    Expected Output:`,
 
-    REFACTOR: `Refactor the above code. Output ONLY functional code. Do NOT output any greetings, explanations, or comments. Replace long switch statements or if-else chains with a Map/Array lookup. Extract complex conditions into variables with semantic names. Do not use classes. Format code using standard Markdown backticks.`,
+    REFACTOR: `Refactor the above code. Output ONLY functional code. Do NOT output any greetings, explanations, or comments. Optimize the logic for time complexity, and space complexity. Do not use classes unless absolutely necessary for the language. Format the ENTIRE response inside a single set of standard Markdown backticks.`,
 
-    FIX_ERROR: `Look at the code written by me in the code editor of the screenshot attached and see the compiler error present. Output ONLY the fully corrected functional code. Do NOT output any greetings or extra text. Format code using standard Markdown backticks.`,
+    FIX_ERROR: `Look at the code written in the code editor of the attached screenshot and identify the compiler or logic error. Output ONLY the fully corrected functional code. Do NOT output any greetings, explanations, comments, or extra text. Format the ENTIRE response inside a single set of standard Markdown backticks.`,
     
     // 🟢 LIVE INTERVIEW PROMPTS (Ultimate Shield, 1st Person, Scripted Explanations)
     
@@ -522,7 +523,8 @@ function spawnCornerHUD(page = 1) {
             'auto_type': '⌨️ Auto-Type', 'expand_top': '➕ Expand Top', 'expand_bottom': '➕ Expand Bot', 
             'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1/2',
             'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
-            'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 Dictator'
+            'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 Dictator',
+            'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5'
         };
         return labels[action] || action;
     };
@@ -1563,7 +1565,7 @@ function setupGeneralIpcHandlers() {
 
     const getModePrefix = () => global.isThinkModeActive ? '@Pro ' : '@Fast ';
 
-    ipcMain.handle('send-oa-automation', async (event, language) => {
+    ipcMain.handle('send-oa-automation', async (event) => {
         try {
             if (accumulatedScreenshots.length === 0) return false;
 
@@ -1615,8 +1617,8 @@ function setupGeneralIpcHandlers() {
                 }, 1000);
 
             } else {
-                let codePromptPrimary = PROMPTS.OA_AUTOMATION(language); 
-                let codePromptSecondary = PROMPTS.OA_AUTOMATION(language); 
+                let codePromptPrimary = PROMPTS.OA_AUTOMATION; 
+                let codePromptSecondary = PROMPTS.OA_AUTOMATION; 
                 let voicePrompt1 = PROMPTS.VOICE_CONTEXT || "Answer this.";
                 let voicePrompt2 = PROMPTS.VOICE_CONTEXT || "Answer this.";
                 let compPromptInit = PROMPTS.COMPANION_INITIAL_CONTEXT;

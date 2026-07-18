@@ -22,6 +22,16 @@ export class ProctoredOA extends LitElement {
         }
         .typer-code-container::-webkit-scrollbar { display: none; }
         .typer-line { display: flex; border-radius: 4px; padding: 2px 4px; margin-bottom: 2px; transition: 0.2s; }
+
+        .wpm-circle {
+            position: fixed; top: 40px; left: 50%; transform: translateX(-50%);
+            width: 45px; height: 45px; border-radius: 50%;
+            background: rgba(15, 15, 15, 0.9); border: 2px solid #a142f4;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 16px; font-weight: bold; color: #fff;
+            box-shadow: 0 4px 15px rgba(161, 66, 244, 0.4);
+            z-index: 1000; pointer-events: none; transition: opacity 0.2s;
+        }
         
         /* 🟢 Floating HUD Toast */
         .toast-container {
@@ -50,7 +60,8 @@ export class ProctoredOA extends LitElement {
         typingCurrentLineIndex: { type: Number },
         typingState: { type: String },
         isGhostHidden: { type: Boolean },
-        isThinkModeActive: { type: Boolean }
+        isThinkModeActive: { type: Boolean },
+        currentWpm: { type: Number }
     };
 
     constructor() {
@@ -71,6 +82,8 @@ export class ProctoredOA extends LitElement {
         this.typingCurrentCharIndex = 0;
         this.typingPauseIndex = 0;
         this.fullCodeString = '';
+        this.currentWpm = 60;
+        this.isChangingSpeed = false;
 
         this.isGhostHidden = false;
         this.isThinkModeActive = false;
@@ -115,19 +128,22 @@ export class ProctoredOA extends LitElement {
                     const map = this.viewMode === 'typer' ? (this.prefs.typerHotCorners || {}) 
                               : (this.activePage === 2 ? (this.prefs.hotCornersPage2 || {}) : (this.prefs.hotCorners || {}));
                     const action = map[zone];
+                    const allowedInStealth = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec'];
 
-                    // 🛑 STEALTH LOCK: Allow hide_unhide AND auto_type to work in the background!
-                    if (this.isGhostHidden && action !== 'hide_unhide' && action !== 'auto_type') return;
+                    // 🛑 STEALTH LOCK
+                    if (this.isGhostHidden && !allowedInStealth.includes(action)) return;
+                    
+                    // 🛑 TYPING LOCK: Block all triggers except the 4 allowed when actively typing!
+                    if (this.typingState === 'typing' && !allowedInStealth.includes(action)) return;
 
                     this.dwellStartTime = performance.now();
                     
                     let targetDuration = (this.prefs.hotCornerBounds?.dwellTime || 3) * 1000;
                     if (action === 'hide_unhide') {
                         targetDuration = !this.isGhostHidden ? 0 : ((this.prefs.hotCornerBounds?.hideTime || 0) * 1000);
-                    } else if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
+                    } else if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom', 'speed_inc', 'speed_dec'].includes(action)) {
                         targetDuration = (this.prefs.typerSelectionSpeed !== undefined ? this.prefs.typerSelectionSpeed : 0.5) * 1000;
                     } else if (action === 'auto_type' && this.typingState === 'typing') {
-                        // 🟢 FIX: PAUSE IS INSTANT! 0ms delay if you hover the trigger while it's typing!
                         targetDuration = 0;
                     }
 
@@ -156,7 +172,7 @@ export class ProctoredOA extends LitElement {
                             if (action && action !== 'none') {
                                 this.executeActionByName(action);
                                 
-                                const continuousActions = ['scroll_up', 'scroll_down', 'trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'];
+                                const continuousActions = ['scroll_up', 'scroll_down', 'trim_top', 'trim_bottom', 'expand_top', 'expand_bottom', 'speed_inc', 'speed_dec'];
                                 if (continuousActions.includes(action)) {
                                     this.isActionFired = false;
                                     // 🟢 FIX: Set back to exactly performance.now() to make it wait the full slider time every loop
@@ -181,6 +197,7 @@ export class ProctoredOA extends LitElement {
 
             this.typingStatusHandler = (_, status) => {
                 if (!status) {
+                    if (this.isChangingSpeed) return; // 🟢 FIX: Ignore the fake "stop" signal during hot-swapping!
                     if (this.typingState === 'typing') { 
                         this.typingState = 'idle';
                         this.viewMode = 'hidden';
@@ -225,6 +242,7 @@ export class ProctoredOA extends LitElement {
 
         this.addEventListener('trigger-typer', (e) => {
             let rawCode = e.detail;
+            this.currentWpm = this.prefs.wpmSpeed || 60;
             
             // 🟢 FIX: Destroy ALL carriage returns. This guarantees JS and PowerShell calculate the exact same string length!
             rawCode = rawCode.replace(/\r/g, '');
@@ -298,7 +316,7 @@ export class ProctoredOA extends LitElement {
                 break;
             case 'send_ai':
                 this.showToast('🚀 Processing...');
-                await ipcRenderer.invoke('send-oa-automation', this.prefs.programmingLanguage || 'C++');
+                await ipcRenderer.invoke('send-oa-automation');
                 break;
             case 'fix_error':
                 this.showToast('🌟 Fixing Error...');
@@ -330,7 +348,7 @@ export class ProctoredOA extends LitElement {
                 if (this.typingState === 'idle') {
                     if (this.viewMode === 'typer') {
                         this.fullCodeString = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
-                        const speed = this.prefs.wpmSpeed || 60;
+                        const speed = this.currentWpm;
                         const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
                         const startDelay = this.prefs.typerDelay !== undefined ? this.prefs.typerDelay : 5; 
                         
@@ -382,7 +400,7 @@ export class ProctoredOA extends LitElement {
                 } else if (this.typingState === 'paused') {
                     // 🟢 RESUME MODE
                     const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
-                    const speed = this.prefs.wpmSpeed || 60;
+                    const speed = this.currentWpm;
                     const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
                     
                     // 🟢 FIX: Use the configured Start Delay for resuming!
@@ -473,6 +491,39 @@ export class ProctoredOA extends LitElement {
             case 'toggle_ai_vis':
                 await ipcRenderer.invoke('toggle-ai-visibility');
                 break;
+            case 'speed_inc':
+                this.currentWpm = Math.min(200, this.currentWpm + 5);
+                this.showToast(`⏩ Speed: ${this.currentWpm} WPM`, '#4285f4');
+                if (this.typingState === 'typing') {
+                    this.isChangingSpeed = true;
+                    ipcRenderer.send('stop-auto-type');
+                    this.typingPauseIndex = this.typingCurrentCharIndex; // Save the exact char we stopped at
+                    
+                    const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
+                    const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
+                    this.currentRunId = Date.now();
+                    
+                    // 🟢 Instantly resume at new speed with 0s start delay!
+                    ipcRenderer.send('start-auto-type', remainingCode, this.currentWpm, mistake, 0, this.currentRunId);
+                    setTimeout(() => { this.isChangingSpeed = false; }, 500);
+                }
+                break;
+            case 'speed_dec':
+                this.currentWpm = Math.max(10, this.currentWpm - 5);
+                this.showToast(`⏪ Speed: ${this.currentWpm} WPM`, '#f59e0b');
+                if (this.typingState === 'typing') {
+                    this.isChangingSpeed = true;
+                    ipcRenderer.send('stop-auto-type');
+                    this.typingPauseIndex = this.typingCurrentCharIndex; 
+                    
+                    const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
+                    const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
+                    this.currentRunId = Date.now();
+                    
+                    ipcRenderer.send('start-auto-type', remainingCode, this.currentWpm, mistake, 0, this.currentRunId);
+                    setTimeout(() => { this.isChangingSpeed = false; }, 500);
+                }
+                break;
         }
         this.requestUpdate();
     }
@@ -531,6 +582,10 @@ export class ProctoredOA extends LitElement {
             <div class="main-wrapper">
                 ${this.viewMode === 'typer' && this.typingState === 'idle' ? this.renderTyper() : ''}
                 
+                ${this.viewMode === 'typer' && !this.isGhostHidden ? html`
+                    <div class="wpm-circle">${this.currentWpm}</div>
+                ` : ''}
+
                 ${this.toastMessage ? html`
                     <div class="toast-container" style="color: ${this.toastColor}; border-color: ${this.toastColor}; animation: fadeIn 0.2s;">
                         ${this.toastMessage}

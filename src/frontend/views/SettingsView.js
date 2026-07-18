@@ -624,7 +624,7 @@ export class SettingsView extends LitElement {
             'auto_type': '⌨️',       'trim_top': '✂️⬇️',      'trim_bottom': '✂️⬆️',  'abort_typer': '🛑', 'abort_oa': '🚪',
             'expand_top': '➕⬆️',    'expand_bottom': '➕⬇️', 'reset_typer': '✨',
             'toggle_page2': '🔄', 'regenerate': '🔄 Regen',    'toggle_theme': '🌓',   'sync_followup': '🔍',
-            'fusion_dry_run': '🎯', 'on_the_go': '🏃'
+            'fusion_dry_run': '🎯', 'on_the_go': '🏃', 'speed_inc': '⏩', 'speed_dec': '⏪'
         };
         return labels[action] || '—';
     }
@@ -643,6 +643,7 @@ export class SettingsView extends LitElement {
             'reset_typer': '🔄 Reset', 'abort_oa': '🚪 Abort OA', 'toggle_page2': '🔄 Page 1 / 2',
             'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up Image',
             'fusion_dry_run': '🎯 Fusion Dry Run', 'on_the_go': '🏃 On-The-Go Dictator',
+            'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5'
         };
         return labels[action] || action || '—';
     }
@@ -829,24 +830,9 @@ export class SettingsView extends LitElement {
                     {value: 'de-DE', label: 'German'}, {value: 'hi-IN', label: 'Hindi'},
                     {value: 'zh-CN', label: 'Chinese (Simplified)'}
                 ];
-                const codeLangOpts = [
-                    {value: 'C++', label: 'C++'},
-                    {value: 'Python', label: 'Python'},
-                    {value: 'Java', label: 'Java'},
-                    {value: 'JavaScript', label: 'JavaScript'},
-                    {value: 'Go', label: 'GoLang'}
-                ];
                 return html`
                     <div class="scrollable-tab">
                         <h2>Language Settings</h2>
-                        
-                        <div style="background: rgba(66, 133, 244, 0.1); padding: 15px; border-radius: 6px; border: 1px solid rgba(66, 133, 244, 0.3); margin-bottom: 25px;">
-                            <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px; color: #4285f4;">💻 Target Programming Language</h3>
-                            <p style="font-size: 11px; color: #ccc; margin-bottom: 15px;">The AI will exclusively write solutions in this language.</p>
-                            <div class="form-group" style="margin-bottom: 0;">
-                                ${this.renderCustomDropdown('programmingLanguage', codeLangOpts, this.prefs.programmingLanguage || 'C++', (val) => this.savePref('programmingLanguage', val))}
-                            </div>
-                        </div>
 
                         <div style="background: rgba(255,255,255,0.05); padding: 15px; border-radius: 6px; border: 1px solid var(--border-color);">
                             <h3 style="margin-top: 0; font-size: 14px; margin-bottom: 10px;">🗣️ Speech Recognition</h3>
@@ -906,6 +892,7 @@ export class SettingsView extends LitElement {
                     {value: 'none', label: 'None (Disabled)'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
                     {value: 'trim_top', label: '✂️ Unselect Top Line'}, {value: 'expand_top', label: '➕ Expand Top Line'},
                     {value: 'trim_bottom', label: '✂️ Unselect Bottom Line'}, {value: 'expand_bottom', label: '➕ Expand Bottom Line'},
+                    {value: 'speed_inc', label: '⏩ Speed +5 WPM'}, {value: 'speed_dec', label: '⏪ Speed -5 WPM'},
                     {value: 'reset_typer', label: '🔄 Reset Selection'}, {value: 'abort_typer', label: '🛑 Abort & Go Back'},
                     {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide'},
                     {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'}
