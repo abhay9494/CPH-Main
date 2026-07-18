@@ -123,11 +123,12 @@ export class ProctoredOA extends LitElement {
                     
                     let targetDuration = (this.prefs.hotCornerBounds?.dwellTime || 3) * 1000;
                     if (action === 'hide_unhide') {
-                        // 🟢 FIX: Hide is always Instant (0s). Unhide follows "Unhide Delay" (hideTime).
                         targetDuration = !this.isGhostHidden ? 0 : ((this.prefs.hotCornerBounds?.hideTime || 0) * 1000);
                     } else if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom'].includes(action)) {
-                        // 🟢 FIX: Use 'Select Speed' slider for the purple line selection corners!
                         targetDuration = (this.prefs.typerSelectionSpeed !== undefined ? this.prefs.typerSelectionSpeed : 0.5) * 1000;
+                    } else if (action === 'auto_type' && this.typingState === 'typing') {
+                        // 🟢 FIX: PAUSE IS INSTANT! 0ms delay if you hover the trigger while it's typing!
+                        targetDuration = 0;
                     }
 
                     if (targetDuration === 0) {
@@ -180,7 +181,6 @@ export class ProctoredOA extends LitElement {
 
             this.typingStatusHandler = (_, status) => {
                 if (!status) {
-                    // If it is 'typing', it means the script naturally finished (wasn't manually paused)
                     if (this.typingState === 'typing') { 
                         this.typingState = 'idle';
                         this.viewMode = 'hidden';
@@ -188,9 +188,9 @@ export class ProctoredOA extends LitElement {
                         this.showToast('✅ Typing Complete');
                         this.typerStartLine = 0;
                         this.typingCurrentCharIndex = 0;
+                        this.typingCurrentLineIndex = 0; // 🟢 Reset line tracker
                         this.typingPauseIndex = 0;
                         
-                        // 🟢 Restore AI window ONLY if we didn't start the session fully stealthed
                         if (!this.isGhostHidden) {
                             ipcRenderer.invoke('toggle-ai-visibility', true);
                         }
@@ -200,8 +200,14 @@ export class ProctoredOA extends LitElement {
                 }
             };
 
-            this.typingProgressCharHandler = (_, charIdx) => {
-                this.typingCurrentCharIndex = this.typingPauseIndex + charIdx;
+            this.typingProgressCharHandler = (_, data) => {
+                // 🟢 FIX: Completely ignore delayed "ghost" messages from killed processes!
+                if (data.runId !== this.currentRunId) return; 
+                
+                this.typingCurrentCharIndex = this.typingPauseIndex + data.idx;
+                const typedString = this.fullCodeString.substring(0, this.typingCurrentCharIndex);
+                this.typingCurrentLineIndex = (typedString.match(/\n/g) || []).length;
+                this.requestUpdate();
             };
 
             this.screenshotHandler = () => { this.showToast('📸 Captured', '#4285f4'); };
@@ -211,12 +217,19 @@ export class ProctoredOA extends LitElement {
             ipcRenderer.on('execute-direct-action', this.directActionHandler);
             ipcRenderer.on('code-new-message', this.codeMsgHandler);
             ipcRenderer.on('typing-status', this.typingStatusHandler);
-            ipcRenderer.on('typing-progress', this.typingProgressHandler);
+            
+            // 🟢 FIX: Actually register the Character tracker! (It was incorrectly registered as typing-progress)
+            ipcRenderer.on('typing-progress-char', this.typingProgressCharHandler); 
             ipcRenderer.on('screenshot-captured', this.screenshotHandler);
         }
 
         this.addEventListener('trigger-typer', (e) => {
-            const rawCode = e.detail;
+            let rawCode = e.detail;
+            
+            // 🟢 FIX: Destroy ALL carriage returns. This guarantees JS and PowerShell calculate the exact same string length!
+            rawCode = rawCode.replace(/\r/g, '');
+            rawCode = rawCode.replace(/^(c\+\+|cpp|python|java|javascript|js|c|go)\s*\n/i, '');
+            
             this.typerCodeLines = rawCode.split('\n');
             if (this.typerCodeLines[this.typerCodeLines.length - 1].trim() === '') this.typerCodeLines.pop();
             this.typerStartLine = 0;
@@ -324,8 +337,9 @@ export class ProctoredOA extends LitElement {
                         this.typingState = 'typing';
                         this.typingCurrentCharIndex = 0;
                         this.typingPauseIndex = 0;
+                        this.currentRunId = Date.now(); // 🟢 NEW
                         
-                        ipcRenderer.send('start-auto-type', this.fullCodeString, speed, mistake, startDelay);
+                        ipcRenderer.send('start-auto-type', this.fullCodeString, speed, mistake, startDelay, this.currentRunId);
                         this.showToast(`▶️ Auto-Typing in ${startDelay}s...`);
                         
                         ipcRenderer.send('set-ignore-mouse-events', true);
@@ -370,11 +384,21 @@ export class ProctoredOA extends LitElement {
                     const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
                     const speed = this.prefs.wpmSpeed || 60;
                     const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
-                    const startDelay = 1; // Quick 1s safety delay to click IDE
+                    
+                    // 🟢 FIX: Use the configured Start Delay for resuming!
+                    const startDelay = this.prefs.typerDelay !== undefined ? this.prefs.typerDelay : 5; 
                     
                     this.typingState = 'typing';
-                    ipcRenderer.send('start-auto-type', remainingCode, speed, mistake, startDelay);
-                    this.showToast(`▶️ Resuming...`);
+                    this.currentRunId = Date.now(); // 🟢 NEW
+                    ipcRenderer.send('start-auto-type', remainingCode, speed, mistake, startDelay, this.currentRunId);
+                    this.showToast(`▶️ Resuming in ${startDelay}s...`);
+                    
+                    // 🟢 FIX: Ensure UI goes back to full Stealth while resuming
+                    this.viewMode = 'hidden';
+                    ipcRenderer.send('set-ignore-mouse-events', true);
+                    if (!this.isGhostHidden) {
+                        ipcRenderer.invoke('trigger-ghost-hide');
+                    }
                 }
                 break;
             case 'abort_typer':

@@ -2043,10 +2043,10 @@ function setupGeneralIpcHandlers() {
     });
 
     let autoTyperProcess = null;
-    ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance, startDelay) => {
+    // 🟢 FIX: Accept runId parameter
+    ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance, startDelay, runId) => {
         if (mainWindow) mainWindow.webContents.send('typing-status', true);
-        let cleanCode = rawCode.replace(/^(c\+\+|python|java|javascript|js)\s*\n/i, '');
-        const b64Code = Buffer.from(cleanCode).toString('base64');
+        const b64Code = Buffer.from(rawCode).toString('base64');
         const ps1Path = path.join(os.tmpdir(), 'cptyper.ps1');
         
         const delaySecs = startDelay !== undefined ? startDelay : 5;
@@ -2074,10 +2074,13 @@ function setupGeneralIpcHandlers() {
                 [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
                 Start-Sleep -Milliseconds 50
                 [System.Windows.Forms.SendKeys]::SendWait("x+{HOME}+{HOME}{BACKSPACE}")
-                Start-Sleep -Milliseconds ($baseDelay * 2)
+                
+                # 🟢 FIX: Emit character index immediately AFTER typing, BEFORE sleeping!
                 $charIdx++
                 [Console]::WriteLine("CHAR_$charIdx")
                 [Console]::Out.Flush()
+                
+                Start-Sleep -Milliseconds ($baseDelay * 2)
                 continue
             }
             if ('+^%~(){}[]'.Contains($key)) { $key = "{$key}" }
@@ -2096,14 +2099,16 @@ function setupGeneralIpcHandlers() {
                 Start-Sleep -Milliseconds 40
                 [System.Windows.Forms.SendKeys]::SendWait("{DELETE}")
             }
+            
+            # 🟢 FIX: Emit character index immediately AFTER typing, BEFORE sleeping!
+            $charIdx++
+            [Console]::WriteLine("CHAR_$charIdx")
+            [Console]::Out.Flush()
+            
             $variance = Get-Random -Minimum -10 -Maximum 10
             $delay = $baseDelay + $variance
             if ($delay -lt 10) { $delay = 10 }
             Start-Sleep -Milliseconds $delay
-            
-            $charIdx++
-            [Console]::WriteLine("CHAR_$charIdx")
-            [Console]::Out.Flush()
         }
         `;
         fs.writeFileSync(ps1Path, psScript);
@@ -2115,10 +2120,10 @@ function setupGeneralIpcHandlers() {
             const text = data.toString();
             const lines = text.split(/[\r\n]+/);
             lines.forEach(l => {
-                // 🟢 FIX: Extract exact character progression instead of lines
                 if (l.startsWith('CHAR_')) {
                     const idx = parseInt(l.replace('CHAR_', ''));
-                    if (!isNaN(idx) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-progress-char', idx);
+                    // 🟢 FIX: Attach the runId to the payload so the UI knows if it is safe
+                    if (!isNaN(idx) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-progress-char', { idx, runId });
                 }
             });
         });
@@ -2129,7 +2134,13 @@ function setupGeneralIpcHandlers() {
 
     ipcMain.on('stop-auto-type', (event) => {
         if (autoTyperProcess) {
-            try { autoTyperProcess.kill(); } catch(e){}
+            try { 
+                // 🟢 FIX: Use execSync for a BLOCKING, instantaneous OS-level kill
+                const { execSync } = require('child_process');
+                execSync(`taskkill /pid ${autoTyperProcess.pid} /f /t`, { windowsHide: true });
+            } catch(e){}
+            
+            try { autoTyperProcess.kill('SIGKILL'); } catch(e){}
             autoTyperProcess = null;
         }
         if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-status', false);
