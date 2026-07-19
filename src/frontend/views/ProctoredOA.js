@@ -52,6 +52,8 @@ export class ProctoredOA extends LitElement {
         hoverZone: { type: String },
         hoverProgress: { type: Number },
         activePage: { type: Number },
+        activeTyperPage: { type: Number },
+        showTyperDuringTyping: { type: Boolean },
         prefs: { type: Object },
         toastMessage: { type: String },
         typerCodeLines: { type: Array },
@@ -70,6 +72,8 @@ export class ProctoredOA extends LitElement {
         this.hoverZone = null;
         this.hoverProgress = 0;
         this.activePage = 1;
+        this.activeTyperPage = 1;
+        this.showTyperDuringTyping = false;
         this.prefs = {};
         this.toastMessage = '';
         this.resetArmed = false;
@@ -146,7 +150,14 @@ export class ProctoredOA extends LitElement {
                 if (zone !== 'none') {
                     let map = {};
                     if (this.viewMode === 'typer') {
-                        map = this.prefs.typerHotCorners || {};
+                        // 🟢 FIX: Pull from the new Typer Pages array
+                        const tPages = this.prefs.typerPages || [];
+                        if (tPages.length > 0) {
+                            const idx = (this.activeTyperPage - 1) % tPages.length;
+                            map = tPages[idx]?.map || {};
+                        } else {
+                            map = this.prefs.typerHotCorners || {};
+                        }
                     } else {
                         const pages = this.prefs.oaPages || [];
                         if (pages.length > 0) {
@@ -158,7 +169,7 @@ export class ProctoredOA extends LitElement {
                     }
 
                     const action = map[zone];
-                    const allowedInStealth = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec'];
+                    const allowedInStealth = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec', 'toggle_typer_vis', 'toggle_typer_page2', 'toggle_perfect_mode'];
 
                     // 🛑 STEALTH LOCK
                     if (this.isGhostHidden && !allowedInStealth.includes(action)) return;
@@ -238,13 +249,14 @@ export class ProctoredOA extends LitElement {
 
             this.typingStatusHandler = (_, status) => {
                 if (!status) {
-                    if (this.isChangingSpeed) return; // 🟢 FIX: Ignore the fake "stop" signal during hot-swapping!
+                    if (this.isChangingSpeed) return; 
                     if (this.typingState === 'typing') { 
                         
                         // 🟢 NEW: Fire the 3-Blink Green Dot!
                         ipcRenderer.send('trigger-completion-dot');
 
                         this.typingState = 'idle';
+                        this.showTyperDuringTyping = false; // 🟢 Reset Spectator Mode
                         this.viewMode = 'hidden';
                         ipcRenderer.send('set-ignore-mouse-events', true);
                         this.showToast('✅ Typing Complete');
@@ -299,11 +311,12 @@ export class ProctoredOA extends LitElement {
             this.typerEndLine = this.typerCodeLines.length - 1;
             this.typingCurrentLineIndex = 0;
             this.viewMode = 'typer';
+            this.activeTyperPage = 1; // 🟢 Reset to page 1
             
             // 🟢 FIX: Instantly hide the AI Window and switch to Typer HUD Corners!
             if (window.require) {
                 window.require('electron').ipcRenderer.invoke('toggle-ai-visibility', false);
-                window.require('electron').ipcRenderer.send('refresh-oa-hud', 'typer');
+                window.require('electron').ipcRenderer.send('refresh-oa-hud', 'typer_1');
             }
             
             this.requestUpdate();
@@ -416,6 +429,32 @@ export class ProctoredOA extends LitElement {
                 this.showToast(`📄 Page ${this.activePage}`);
                 break;
             }
+            case 'toggle_typer_page2': {
+                const tPages = this.prefs.typerPages || [];
+                const totalPages = Math.max(1, tPages.length > 0 ? tPages.length : 1);
+                this.activeTyperPage = (this.activeTyperPage % totalPages) + 1;
+                ipcRenderer.send('refresh-oa-hud', `typer_${this.activeTyperPage}`);
+                this.showToast(`📄 Typer Page ${this.activeTyperPage}`);
+                break;
+            }
+            case 'toggle_perfect_mode': {
+                const isPerfect = await ipcRenderer.invoke('toggle-perfect-mode');
+                this.showToast(isPerfect ? '🤖 Perfect Mode: ON' : '👨‍💻 Human Mode: ON', isPerfect ? '#a142f4' : '#00cc66');
+                setTimeout(() => ipcRenderer.send('refresh-oa-hud', this.viewMode === 'typer' ? `typer_${this.activeTyperPage}` : this.activePage), 200);
+                
+                // 🟢 NEW: Instantly Hot-Swap the script if it is currently typing!
+                if (this.typingState === 'typing') {
+                    this.isChangingSpeed = true;
+                    ipcRenderer.send('stop-auto-type');
+                    this.typingPauseIndex = this.typingCurrentCharIndex; 
+                    const remainingCode = this.fullCodeString.substring(this.typingCurrentCharIndex);
+                    const mistake = this.prefs.typerMistakes !== undefined ? this.prefs.typerMistakes : 2;
+                    this.currentRunId = Date.now();
+                    ipcRenderer.send('start-auto-type', remainingCode, this.currentWpm, mistake, 0, this.currentRunId);
+                    setTimeout(() => { this.isChangingSpeed = false; }, 500);
+                }
+                break;
+            }
             case 'auto_type':
                 if (this.typingState === 'idle') {
                     if (this.viewMode === 'typer') {
@@ -503,6 +542,13 @@ export class ProctoredOA extends LitElement {
                         ipcRenderer.invoke('toggle-ai-visibility', true);
                     }
                     ipcRenderer.send('refresh-oa-hud', this.activePage);
+                }
+                break;
+            case 'toggle_typer_vis':
+                if (this.viewMode === 'typer' && this.typingState === 'typing') {
+                    this.showTyperDuringTyping = !this.showTyperDuringTyping;
+                    this.showToast(this.showTyperDuringTyping ? '👁️ Spectator Mode ON' : '👁️ Spectator Mode OFF', '#00cc66');
+                    this.requestUpdate();
                 }
                 break;
             case 'change_profile': {
@@ -670,23 +716,35 @@ export class ProctoredOA extends LitElement {
                     const isHighlighted = idx >= this.typerStartLine && idx <= this.typerEndLine;
                     const isCurrent = (this.typingState === 'typing') && isHighlighted && (idx === this.typerStartLine + this.typingCurrentLineIndex);
                     let bg = 'transparent', b = 'transparent', tc = 'var(--text-color)', nc = '#666';
-                    if (isCurrent) { bg = 'rgba(0, 204, 102, 0.25)'; b = '#00cc66'; tc = '#fff'; nc = '#00cc66'; }
-                    else if (isHighlighted) { bg = 'rgba(161, 66, 244, 0.2)'; b = 'rgba(161, 66, 244, 0.3)'; tc = 'var(--text-color)'; nc = '#a142f4'; }
-                    return html`
-                        <div class="typer-line" style="background: ${bg}; border: 1px solid ${b}; color: ${tc};" @click=${() => this.handleLineClick(idx)}>
-                            <div style="width: 40px; text-align: right; padding-right: 12px; font-weight: bold; color: ${nc};">${idx + 1}</div>
-                            <div style="white-space: pre-wrap; word-wrap: break-word; flex: 1;">${line || ' '}</div>
-                        </div>
-                    `;
+                            if (isCurrent) { bg = 'rgba(0, 204, 102, 0.25)'; b = '#00cc66'; tc = '#fff'; nc = '#00cc66'; }
+                            else if (isHighlighted) { bg = 'rgba(161, 66, 244, 0.2)'; b = 'rgba(161, 66, 244, 0.3)'; tc = 'var(--text-color)'; nc = '#a142f4'; }
+                            return html`
+                                <div class="typer-line ${isCurrent ? 'active-typer-line' : ''}" style="background: ${bg}; border: 1px solid ${b}; color: ${tc};" @click=${() => { if (this.typingState === 'idle') this.handleLineClick(idx); }}>
+                                    <div style="width: 40px; text-align: right; padding-right: 12px; font-weight: bold; color: ${nc};">${idx + 1}</div>
+                                    <div style="white-space: pre-wrap; word-wrap: break-word; flex: 1;">${line || ' '}</div>
+                                </div>
+                            `;
                 })}
             </div>
         `;
     }
 
+    // 🟢 NEW: LitElement auto-scroll engine. Fires dynamically every time the line changes!
+    updated(changedProperties) {
+        super.updated(changedProperties);
+        if (changedProperties.has('typingCurrentLineIndex') || changedProperties.has('showTyperDuringTyping')) {
+            const activeLine = this.shadowRoot?.querySelector('.active-typer-line');
+            if (activeLine) {
+                // Smoothly keeps the green line perfectly in the center of the box
+                activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+        }
+    }
+
     render() {
         return html`
             <div class="main-wrapper">
-                ${this.viewMode === 'typer' && this.typingState === 'idle' ? this.renderTyper() : ''}
+                ${this.viewMode === 'typer' && (this.typingState === 'idle' || this.showTyperDuringTyping) ? this.renderTyper() : ''}
                 
                 ${this.viewMode === 'typer' && !this.isGhostHidden ? html`
                     <div class="wpm-circle">${this.currentWpm}</div>

@@ -323,6 +323,7 @@ global.activeRadialLabels = Array(16).fill('—');
 global.isOAModeActive = false;
 global.isGhostHidden = false; 
 global.isThinkModeActive = false; 
+global.isPerfectModeActive = false; // 🟢 NEW: Perfect Mode Tracker
 global.isExtractingFollowup = false;
 global.followupJustSent = false;
 
@@ -496,10 +497,21 @@ function launchOABrain() {
 function spawnCornerHUD(page = 1) {
     const prefs = storage.getPreferences();
     
-    // 🟢 FIX: Dynamic Page System Loading
+    // 🟢 FIX: Dynamic Page System Loading (Supports Both OA and Typer Pages)
     let corners = {};
-    if (page === 'typer') corners = prefs.typerHotCorners || {};
-    else {
+    let isTyper = String(page).startsWith('typer');
+    
+    if (isTyper) {
+        const tPages = prefs.typerPages || [];
+        let tIdx = 0;
+        if (String(page).includes('_')) tIdx = parseInt(String(page).split('_')[1]) - 1 || 0;
+        
+        if (tPages.length > 0) {
+            corners = tPages[tIdx % tPages.length]?.map || {};
+        } else {
+            corners = prefs.typerHotCorners || {};
+        }
+    } else {
         const pages = prefs.oaPages || [];
         if (pages.length > 0) {
             const idx = (page - 1) % pages.length;
@@ -517,18 +529,24 @@ function spawnCornerHUD(page = 1) {
     const activeAiName = aiNames[currentAiIdx] || 'AI';
     const modeName = global.isThinkModeActive ? 'Think' : 'Fast';
 
-    // 🟢 FIX: Extract Dynamic Profile Nickname
     const profiles = prefs.aiProfiles || [];
     const currentProfile = profiles.find(p => p.id === activeLoadout.codeProfileId);
     const profileNick = currentProfile ? currentProfile.name : 'Profile';
 
-    // 🟢 FIX: Calculate Next Page dynamically
-    const pages = prefs.oaPages || [];
-    const totalPages = Math.max(1, pages.length > 0 ? pages.length : (prefs.hotCornersPage2 ? 2 : 1));
-    const nextPageNum = totalPages > 1 ? ((page % totalPages) + 1) : 1;
+    // Calculate dynamic next page numbers based on the active domain (OA vs Typer)
+    const pagesArray = isTyper ? (prefs.typerPages || []) : (prefs.oaPages || []);
+    const totalPages = Math.max(1, pagesArray.length > 0 ? pagesArray.length : 1);
+    let currentPageNum = 1;
+    if (isTyper && String(page).includes('_')) currentPageNum = parseInt(String(page).split('_')[1]) || 1;
+    else if (!isTyper) currentPageNum = page;
+    const nextPageNum = totalPages > 1 ? ((currentPageNum % totalPages) + 1) : 1;
 
     const getLabel = (action) => {
         if (!action || action === 'none') return '';
+        
+        // Parse custom speeds natively
+        if (action.startsWith('speed_set_')) return `⚡ ${action.split('_')[2]} WPM`;
+        
         const labels = {
             'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
             'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
@@ -540,9 +558,11 @@ function spawnCornerHUD(page = 1) {
             'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot', 'abort_typer': '🛑 Abort Typer',
             'auto_type': '▶️ Auto-Type', 'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 
             'reset_typer': '🔄 Reset Sel', 'abort_oa': '🚪 Abort OA', 'toggle_page2': `🔄 Page ${nextPageNum}`,
+            'toggle_typer_page2': `🔄 Page ${nextPageNum}`, 'toggle_typer_vis': '👁️ Show/Hide Code',
             'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up',
-            'fusion_dry_run': '🎯 Dry Run', 'on_the_go': '🏃 Dictator',
-            'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5'
+            'fusion_dry_run': '🎯 Dry Run', 'on_the_go': '🏃 Dictator', 'refresh_page': '🔄 Refresh Page',
+            'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5',
+            'toggle_perfect_mode': global.isPerfectModeActive ? '🤖 Perfect Mode' : '👨‍💻 Human Mode' // 🟢 Dynamic Label
         };
         return labels[action] || action;
     };
@@ -1973,6 +1993,12 @@ function setupGeneralIpcHandlers() {
         } catch(e) { return false; }
     });
 
+    // 🟢 NEW: Perfect Mode Handler
+    ipcMain.handle('toggle-perfect-mode', () => {
+        global.isPerfectModeActive = !global.isPerfectModeActive;
+        return global.isPerfectModeActive;
+    });
+
     ipcMain.handle('set-ai-provider', async (event, targetIdx) => { return AI_CONFIGS[targetIdx].name; });
 
     ipcMain.handle('check-active-ai', () => {
@@ -2148,10 +2174,11 @@ function setupGeneralIpcHandlers() {
         
         let delaySecs = parseInt(startDelay);
         if (isNaN(delaySecs) || delaySecs < 0) delaySecs = 0;
-        if (delaySecs > 10) delaySecs = 10; // Cap to 10s max
+        if (delaySecs > 10) delaySecs = 10; 
         
         const psScript = `
-        param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay)
+        param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay, [string]$isPerfectStr)
+        $isPerfect = $isPerfectStr -eq '$true'
         if ($wpm -lt 10) { $wpm = 10 }
         
         Add-Type -AssemblyName System.Windows.Forms
@@ -2160,7 +2187,6 @@ function setupGeneralIpcHandlers() {
         $baseDelay = [math]::Round(12000 / $wpm)
         if ($baseDelay -lt 10) { $baseDelay = 10 }
         
-        # 🟢 NEW: Transmit countdown ticks during Start Delay
         if ($startDelay -gt 0) {
             for ($i = $startDelay; $i -gt 0; $i--) {
                 [Console]::WriteLine("TICK_$i")
@@ -2181,34 +2207,38 @@ function setupGeneralIpcHandlers() {
             $key = $c.ToString()
             if ($key -eq "\`r") { continue } 
             if ($key -eq "\`n") {
-                [System.Windows.Forms.SendKeys]::SendWait("{ENTER}x+{HOME}+{HOME}{BACKSPACE}")
+                # 🟢 FIX: Separate the Enter key from the Backspace cleanup!
+                [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
                 
                 $charIdx++
                 [Console]::WriteLine("CHAR_$charIdx")
                 [Console]::Out.Flush()
                 
-                # 🟢 NORMAL HUMANIZATION: Small breath after every single line
-                Start-Sleep -Milliseconds ([math]::Round($baseDelay) + (Get-Random -Minimum 15 -Maximum 30))
+                # 🟢 FIX: Give the IDE 500ms to register the new line and move the cursor down before erasing!
+                Start-Sleep -Milliseconds 500
+                [System.Windows.Forms.SendKeys]::SendWait(" x{LEFT}^{BACKSPACE}{DELETE}")
                 
-                # 🟢 MACRO-PAUSE: 8% chance to take a massive 15 to 30 SECOND break
-                if ((Get-Random -Minimum 1 -Maximum 100) -le 8) {
-                    $thinkTime = Get-Random -Minimum 15 -Maximum 30
-                    
-                    # 🟢 NEW: Transmit countdown ticks during Macro Pause
-                    for ($i = $thinkTime; $i -gt 0; $i--) {
-                        [Console]::WriteLine("TICK_$i")
+                if (-not $isPerfect) {
+                    Start-Sleep -Milliseconds ([math]::Round($baseDelay) + (Get-Random -Minimum 15 -Maximum 30))
+                    if ((Get-Random -Minimum 1 -Maximum 100) -le 8) {
+                        $thinkTime = Get-Random -Minimum 10 -Maximum 20
+                        for ($i = $thinkTime; $i -gt 0; $i--) {
+                            [Console]::WriteLine("TICK_$i")
+                            [Console]::Out.Flush()
+                            Start-Sleep -Seconds 1
+                        }
+                        [Console]::WriteLine("TICK_0")
                         [Console]::Out.Flush()
-                        Start-Sleep -Seconds 1
                     }
-                    [Console]::WriteLine("TICK_0")
-                    [Console]::Out.Flush()
                 }
                 
                 $driftPhase = 0.0
                 continue
             }
+            
             if ('+^%~(){}[]'.Contains($key)) { $key = "{$key}" }
-            if ($key -match '^[a-z]$') {
+            
+            if (-not $isPerfect -and $key -match '^[a-z]$') {
                 if ((Get-Random -Minimum 1 -Maximum 100) -le $mistakeChance) {
                     $wrongChars = "abcdefghijklmnopqrstuvwxyz"
                     $wrong = $wrongChars[(Get-Random -Maximum 26)].ToString()
@@ -2218,6 +2248,7 @@ function setupGeneralIpcHandlers() {
                     Start-Sleep -Milliseconds ($baseDelay + 15)
                 }
             }
+            
             [System.Windows.Forms.SendKeys]::SendWait($key)
             if ($c -eq '{' -or $c -eq '[' -or $c -eq '(' -or $c -eq '"' -or $c -eq "'") {
                 Start-Sleep -Milliseconds 20
@@ -2228,29 +2259,32 @@ function setupGeneralIpcHandlers() {
             [Console]::WriteLine("CHAR_$charIdx")
             [Console]::Out.Flush()
             
-            $driftPhase += (Get-Random -Minimum 5 -Maximum 15) / 100.0 
-            $driftSine = [math]::Sin($driftPhase)
-            $driftMultiplier = 1.1 + ($driftSine * 0.25) 
-            
-            $variance = Get-Random -Minimum -15 -Maximum 15
-            $delay = ($baseDelay * $driftMultiplier) + $variance
-            if ($delay -lt 10) { $delay = 10 }
-            
-            # 🟢 FIX: Added parentheses. Without them, PowerShell crashes and skips the sleep entirely!
-            Start-Sleep -Milliseconds ([math]::Round($delay))
-            
-            # 🟢 HUMANIZATION: User Requested Cap: 15-30ms micro-pause
-            if ($c -eq ' ' -and (Get-Random -Minimum 1 -Maximum 100) -le 3) {
-                Start-Sleep -Milliseconds (Get-Random -Minimum 15 -Maximum 30)
+            if (-not $isPerfect) {
+                $driftPhase += (Get-Random -Minimum 5 -Maximum 15) / 100.0 
+                $driftSine = [math]::Sin($driftPhase)
+                $driftMultiplier = 1.1 + ($driftSine * 0.25) 
+                
+                $variance = Get-Random -Minimum -15 -Maximum 15
+                $delay = ($baseDelay * $driftMultiplier) + $variance
+                if ($delay -lt 10) { $delay = 10 }
+                
+                Start-Sleep -Milliseconds ([math]::Round($delay))
+                
+                if ($c -eq ' ' -and (Get-Random -Minimum 1 -Maximum 100) -le 3) {
+                    Start-Sleep -Milliseconds (Get-Random -Minimum 15 -Maximum 30)
+                }
+            } else {
+                # 🟢 PERFECT MODE: Flat, robotic, mathematical delay with 0 variance
+                Start-Sleep -Milliseconds $baseDelay
             }
         }
         `;
         fs.writeFileSync(ps1Path, psScript);
         if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
         
-        // 🟢 FIX 1: Added -NoProfile and -NonInteractive to completely bypass Windows loading delays!
-        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs]);
-        
+        // 🟢 FIX: Pass the perfect mode boolean into the powershell spawn!
+        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs, global.isPerfectModeActive ? '$true' : '$false']);
+
         autoTyperProcess.stdout.on('data', (data) => {
             const text = data.toString();
             const lines = text.split(/[\r\n]+/);

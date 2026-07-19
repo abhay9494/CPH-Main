@@ -688,9 +688,9 @@ export class SettingsView extends LitElement {
             'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'text_inc': 'A+ Text Size', 'text_dec': 'A- Text Size',
             'mic': '🎙️ Mic Toggle', 'trim_top': '✂️ Unselect Top Line', 'trim_bottom': '✂️ Unselect Bot Line',
             'expand_top': '➕ Expand Top Line', 'expand_bottom': '➕ Expand Bot Line', 'reset_typer': '🔄 Reset Selection',
-            'abort_typer': '🛑 Abort & Go Back', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
+            'abort_typer': '🛑 Abort & Go Back', 'toggle_typer_vis': '👁️ Show / Hide Typer Code', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
             'on_the_go': '🏃 On-The-Go Dictator', 'speed_inc': '⏩ Speed +5 WPM', 'speed_dec': '⏪ Speed -5 WPM',
-            'toggle_typer_page2': '🔄 Next Typer Page'
+            'toggle_typer_page2': '🔄 Next Typer Page', 'toggle_perfect_mode': '🤖 Toggle Perfect / Human Mode'
         };
         return labels[action] || action || '🚫 None';
     }
@@ -708,9 +708,9 @@ export class SettingsView extends LitElement {
             'toggle_theme': '🌓 Theme', 'bg_inc': '⬛ Opac +', 'bg_dec': '⬜ Opac -', 'text_inc': 'A+ Text',
             'text_dec': 'A- Text', 'mic': '🎙️ Mic', 'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot',
             'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 'reset_typer': '🔄 Reset Sel',
-            'abort_typer': '🛑 Abort Typer', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
+            'abort_typer': '🛑 Abort Typer', 'toggle_typer_vis': '👁️ Show/Hide Code', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
             'on_the_go': '🏃 Dictator', 'speed_inc': '⏩ Spd +5', 'speed_dec': '⏪ Spd -5',
-            'toggle_typer_page2': '🔄 Next Page'
+            'toggle_typer_page2': '🔄 Next Page', 'toggle_perfect_mode': '🤖 Perfect/Human'
         };
         return labels[action] || '—';
     }
@@ -1056,6 +1056,7 @@ export class SettingsView extends LitElement {
                 
                 const typerActionsList = [
                     {value: 'none', label: '🚫 None (Disabled)'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
+                    {value: 'toggle_typer_vis', label: '👁️ Show / Hide Typer Code'}, {value: 'toggle_perfect_mode', label: '🤖 Toggle Perfect / Human Mode'},
                     {value: 'trim_top', label: '✂️ Unselect Top Line'}, {value: 'expand_top', label: '➕ Expand Top Line'},
                     {value: 'trim_bottom', label: '✂️ Unselect Bottom Line'}, {value: 'expand_bottom', label: '➕ Expand Bottom Line'},
                     {value: 'speed_inc', label: '⏩ Speed +5 WPM'}, {value: 'speed_dec', label: '⏪ Speed -5 WPM'},
