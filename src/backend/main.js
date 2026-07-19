@@ -2077,16 +2077,19 @@ function setupGeneralIpcHandlers() {
     });
 
     let autoTyperProcess = null;
-    // 🟢 FIX: Accept runId parameter
     ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance, startDelay, runId) => {
         if (mainWindow) mainWindow.webContents.send('typing-status', true);
         const b64Code = Buffer.from(rawCode).toString('base64');
         const ps1Path = path.join(os.tmpdir(), 'cptyper.ps1');
         
-        const delaySecs = startDelay !== undefined ? startDelay : 5;
+        let delaySecs = parseInt(startDelay);
+        if (isNaN(delaySecs) || delaySecs < 0) delaySecs = 0;
+        if (delaySecs > 10) delaySecs = 10; // Cap to 10s max
         
         const psScript = `
         param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay)
+        if ($wpm -lt 10) { $wpm = 10 }
+        
         Add-Type -AssemblyName System.Windows.Forms
         $text = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
         $chars = $text.ToCharArray()
@@ -2101,20 +2104,28 @@ function setupGeneralIpcHandlers() {
         [Console]::WriteLine("CHAR_0")
         [Console]::Out.Flush()
         
+        $driftPhase = 0.0
+        
         foreach ($c in $chars) {
             $key = $c.ToString()
-            if ($key -eq "\`r") { $charIdx++; continue }
+            if ($key -eq "\`r") { continue } 
             if ($key -eq "\`n") {
-                [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
-                Start-Sleep -Milliseconds 50
-                [System.Windows.Forms.SendKeys]::SendWait("x+{HOME}+{HOME}{BACKSPACE}")
+                [System.Windows.Forms.SendKeys]::SendWait("{ENTER}x+{HOME}+{HOME}{BACKSPACE}")
                 
-                # 🟢 FIX: Emit character index immediately AFTER typing, BEFORE sleeping!
                 $charIdx++
                 [Console]::WriteLine("CHAR_$charIdx")
                 [Console]::Out.Flush()
                 
-                Start-Sleep -Milliseconds ($baseDelay * 2)
+                # 🟢 NORMAL HUMANIZATION: Small breath after every single line
+                Start-Sleep -Milliseconds ([math]::Round($baseDelay) + (Get-Random -Minimum 15 -Maximum 30))
+                
+                # 🟢 MACRO-PAUSE: 8% chance to take a massive 15 to 30 SECOND break to simulate reading/thinking!
+                if ((Get-Random -Minimum 1 -Maximum 100) -le 8) {
+                    $thinkTime = Get-Random -Minimum 15 -Maximum 30
+                    Start-Sleep -Seconds $thinkTime
+                }
+                
+                $driftPhase = 0.0
                 continue
             }
             if ('+^%~(){}[]'.Contains($key)) { $key = "{$key}" }
@@ -2123,32 +2134,42 @@ function setupGeneralIpcHandlers() {
                     $wrongChars = "abcdefghijklmnopqrstuvwxyz"
                     $wrong = $wrongChars[(Get-Random -Maximum 26)].ToString()
                     [System.Windows.Forms.SendKeys]::SendWait($wrong)
-                    Start-Sleep -Milliseconds ($baseDelay + 50)
+                    Start-Sleep -Milliseconds ($baseDelay + 15)
                     [System.Windows.Forms.SendKeys]::SendWait("{BACKSPACE}")
-                    Start-Sleep -Milliseconds ($baseDelay + 50)
+                    Start-Sleep -Milliseconds ($baseDelay + 15)
                 }
             }
             [System.Windows.Forms.SendKeys]::SendWait($key)
             if ($c -eq '{' -or $c -eq '[' -or $c -eq '(' -or $c -eq '"' -or $c -eq "'") {
-                Start-Sleep -Milliseconds 40
+                Start-Sleep -Milliseconds 20
                 [System.Windows.Forms.SendKeys]::SendWait("{DELETE}")
             }
             
-            # 🟢 FIX: Emit character index immediately AFTER typing, BEFORE sleeping!
             $charIdx++
             [Console]::WriteLine("CHAR_$charIdx")
             [Console]::Out.Flush()
             
-            $variance = Get-Random -Minimum -10 -Maximum 10
-            $delay = $baseDelay + $variance
+            $driftPhase += (Get-Random -Minimum 5 -Maximum 15) / 100.0 
+            $driftSine = [math]::Sin($driftPhase)
+            $driftMultiplier = 1.1 + ($driftSine * 0.25) 
+            
+            $variance = Get-Random -Minimum -15 -Maximum 15
+            $delay = ($baseDelay * $driftMultiplier) + $variance
             if ($delay -lt 10) { $delay = 10 }
-            Start-Sleep -Milliseconds $delay
+            
+            Start-Sleep -Milliseconds [math]::Round($delay)
+            
+            # 🟢 HUMANIZATION: User Requested Cap: 15-30ms micro-pause
+            if ($c -eq ' ' -and (Get-Random -Minimum 1 -Maximum 100) -le 3) {
+                Start-Sleep -Milliseconds (Get-Random -Minimum 15 -Maximum 30)
+            }
         }
         `;
         fs.writeFileSync(ps1Path, psScript);
         if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
         
-        autoTyperProcess = spawn('powershell.exe', ['-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs]);
+        // 🟢 FIX 1: Added -NoProfile and -NonInteractive to completely bypass Windows loading delays!
+        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs]);
         
         autoTyperProcess.stdout.on('data', (data) => {
             const text = data.toString();
@@ -2156,11 +2177,14 @@ function setupGeneralIpcHandlers() {
             lines.forEach(l => {
                 if (l.startsWith('CHAR_')) {
                     const idx = parseInt(l.replace('CHAR_', ''));
-                    // 🟢 FIX: Attach the runId to the payload so the UI knows if it is safe
                     if (!isNaN(idx) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-progress-char', { idx, runId });
                 }
             });
         });
+
+        // 🟢 FIX 2: Drain stderr to guarantee the process never hangs on a full error buffer!
+        autoTyperProcess.stderr.on('data', () => {}); 
+
         autoTyperProcess.on('close', () => {
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-status', false);
         });
