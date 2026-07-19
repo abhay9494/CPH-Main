@@ -98,8 +98,21 @@ export class ProctoredOA extends LitElement {
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
             const raw = await window.cheatingDaddy.storage.getPreferences();
             this.prefs = raw?.data || raw || {};
+            
+            // 🟢 FIX: Initialize the WPM correctly on boot!
+            if (this.prefs.wpmSpeed) this.currentWpm = this.prefs.wpmSpeed;
             this.requestUpdate();
         }
+
+        // 🟢 FIX: Listen for live updates from the Settings page!
+        this.syncPrefHandler = (e) => {
+            if (e.detail && e.detail.key) {
+                this.prefs = { ...this.prefs, [e.detail.key]: e.detail.value };
+                if (e.detail.key === 'wpmSpeed') this.currentWpm = e.detail.value;
+                this.requestUpdate();
+            }
+        };
+        window.addEventListener('sync-preference', this.syncPrefHandler);
 
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
@@ -299,6 +312,7 @@ export class ProctoredOA extends LitElement {
 
     disconnectedCallback() {
         super.disconnectedCallback();
+        window.removeEventListener('sync-preference', this.syncPrefHandler); // 🟢 FIX: Remove listener
         if (window.require) {
             const { ipcRenderer } = window.require('electron');
             ipcRenderer.removeListener('hot-corner-hover', this.hoverHandler);

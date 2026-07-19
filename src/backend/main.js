@@ -2236,7 +2236,8 @@ function setupGeneralIpcHandlers() {
             $delay = ($baseDelay * $driftMultiplier) + $variance
             if ($delay -lt 10) { $delay = 10 }
             
-            Start-Sleep -Milliseconds [math]::Round($delay)
+            # 🟢 FIX: Added parentheses. Without them, PowerShell crashes and skips the sleep entirely!
+            Start-Sleep -Milliseconds ([math]::Round($delay))
             
             # 🟢 HUMANIZATION: User Requested Cap: 15-30ms micro-pause
             if ($c -eq ' ' -and (Get-Random -Minimum 1 -Maximum 100) -le 3) {
