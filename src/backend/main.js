@@ -631,6 +631,16 @@ function spawnCornerHUD(page = 1) {
         .red-constant { background: #f14c4c; box-shadow: 0 0 10px #f14c4c; transition: opacity 0.1s; transform: translateX(-50%); }
         .green-blink { background: #00cc66; box-shadow: 0 0 10px #00cc66; }
         
+        /* 🟢 NEW: Countdown Timer Circle */
+        .countdown-dot {
+            position: fixed; bottom: 15px; left: 50%; transform: translateX(-50%);
+            width: 26px; height: 26px; border-radius: 50%;
+            background: rgba(245, 158, 11, 0.95); box-shadow: 0 0 12px rgba(245, 158, 11, 0.8);
+            color: #000; font-weight: 900; font-size: 12px;
+            display: flex; align-items: center; justify-content: center;
+            opacity: 0; z-index: 9999; transition: opacity 0.2s;
+        }
+
         @keyframes blink3 {
             0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
             16% { opacity: 1; transform: translateX(-50%) scale(1.2); }
@@ -643,9 +653,21 @@ function spawnCornerHUD(page = 1) {
     </style></head><body>
         <div id="unhide-dot" class="indicator-dot red-constant"></div>
         <div id="complete-dot" class="indicator-dot green-blink"></div>
+        <div id="countdown-dot" class="countdown-dot"></div>
         
         <script>
             const { ipcRenderer } = require('electron');
+            
+            // 🟢 NEW: Listeners for the Countdown Dot
+            ipcRenderer.on('update-countdown', (e, seconds) => {
+                const dot = document.getElementById('countdown-dot');
+                if (seconds > 0) {
+                    dot.innerText = seconds;
+                    dot.style.opacity = '1';
+                } else {
+                    dot.style.opacity = '0';
+                }
+            });
             const zones = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
             
             zones.forEach(z => {
@@ -2138,9 +2160,16 @@ function setupGeneralIpcHandlers() {
         $baseDelay = [math]::Round(12000 / $wpm)
         if ($baseDelay -lt 10) { $baseDelay = 10 }
         
+        # 🟢 NEW: Transmit countdown ticks during Start Delay
         if ($startDelay -gt 0) {
-            Start-Sleep -Seconds $startDelay
+            for ($i = $startDelay; $i -gt 0; $i--) {
+                [Console]::WriteLine("TICK_$i")
+                [Console]::Out.Flush()
+                Start-Sleep -Seconds 1
+            }
         }
+        [Console]::WriteLine("TICK_0")
+        [Console]::Out.Flush()
         
         $charIdx = 0
         [Console]::WriteLine("CHAR_0")
@@ -2161,10 +2190,18 @@ function setupGeneralIpcHandlers() {
                 # 🟢 NORMAL HUMANIZATION: Small breath after every single line
                 Start-Sleep -Milliseconds ([math]::Round($baseDelay) + (Get-Random -Minimum 15 -Maximum 30))
                 
-                # 🟢 MACRO-PAUSE: 8% chance to take a massive 15 to 30 SECOND break to simulate reading/thinking!
+                # 🟢 MACRO-PAUSE: 8% chance to take a massive 15 to 30 SECOND break
                 if ((Get-Random -Minimum 1 -Maximum 100) -le 8) {
                     $thinkTime = Get-Random -Minimum 15 -Maximum 30
-                    Start-Sleep -Seconds $thinkTime
+                    
+                    # 🟢 NEW: Transmit countdown ticks during Macro Pause
+                    for ($i = $thinkTime; $i -gt 0; $i--) {
+                        [Console]::WriteLine("TICK_$i")
+                        [Console]::Out.Flush()
+                        Start-Sleep -Seconds 1
+                    }
+                    [Console]::WriteLine("TICK_0")
+                    [Console]::Out.Flush()
                 }
                 
                 $driftPhase = 0.0
@@ -2221,6 +2258,13 @@ function setupGeneralIpcHandlers() {
                     const idx = parseInt(l.replace('CHAR_', ''));
                     if (!isNaN(idx) && mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-progress-char', { idx, runId });
                 }
+                // 🟢 NEW: Catch the TICK command and beam it straight to the Ghost HUD
+                if (l.startsWith('TICK_')) {
+                    const sec = parseInt(l.replace('TICK_', ''));
+                    if (!isNaN(sec) && global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+                        global.cornerHudWindow.webContents.send('update-countdown', sec);
+                    }
+                }
             });
         });
 
@@ -2228,14 +2272,20 @@ function setupGeneralIpcHandlers() {
         autoTyperProcess.stderr.on('data', () => {}); 
 
         autoTyperProcess.on('close', () => {
+            // 🟢 NEW: Turn off countdown if script finishes naturally
+            if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.webContents.send('update-countdown', 0);
             if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('typing-status', false);
         });
     });
 
     ipcMain.on('stop-auto-type', (event) => {
+        // 🟢 NEW: Turn off countdown instantly if aborted/paused manually
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('update-countdown', 0);
+        }
+        
         if (autoTyperProcess) {
             try { 
-                // 🟢 FIX: Use execSync for a BLOCKING, instantaneous OS-level kill
                 const { execSync } = require('child_process');
                 execSync(`taskkill /pid ${autoTyperProcess.pid} /f /t`, { windowsHide: true });
             } catch(e){}
