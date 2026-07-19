@@ -119,6 +119,12 @@ export class ProctoredOA extends LitElement {
                 // Clear the progress bar immediately when leaving a zone
                 ipcRenderer.send('sync-hud-progress', { zone: this.hoverZone, progress: 0 });
 
+                // 🟢 NEW: Kill the Red Dot instantly if they slip out of the unhide corner
+                if (this.unhideDotActive) {
+                    ipcRenderer.send('set-unhide-dot', false);
+                    this.unhideDotActive = false;
+                }
+
                 if (this.dwellAnimationFrame) {
                     cancelAnimationFrame(this.dwellAnimationFrame);
                     this.dwellAnimationFrame = null;
@@ -174,11 +180,22 @@ export class ProctoredOA extends LitElement {
                         
                         this.hoverProgress = Math.min(100, (elapsed / targetDuration) * 100);
                         
+                        // 🟢 NEW: Trigger the Red Constant Dot specifically for Stealth Unhiding
+                        if (action === 'hide_unhide' && this.isGhostHidden && !this.unhideDotActive && this.hoverProgress > 0) {
+                            ipcRenderer.send('set-unhide-dot', true);
+                            this.unhideDotActive = true;
+                        }
+                        
                         // 🟢 Send the live progress to the backend HUD!
                         ipcRenderer.send('sync-hud-progress', { zone, progress: this.hoverProgress });
                         this.requestUpdate();
 
                         if (this.hoverProgress >= 100) {
+                            // 🟢 NEW: Kill the Red Dot when the timer hits 100% and unhides
+                            if (this.unhideDotActive) {
+                                ipcRenderer.send('set-unhide-dot', false);
+                                this.unhideDotActive = false;
+                            }
                             this.isActionFired = true;
                             if (action && action !== 'none') {
                                 this.executeActionByName(action);
@@ -210,6 +227,10 @@ export class ProctoredOA extends LitElement {
                 if (!status) {
                     if (this.isChangingSpeed) return; // 🟢 FIX: Ignore the fake "stop" signal during hot-swapping!
                     if (this.typingState === 'typing') { 
+                        
+                        // 🟢 NEW: Fire the 3-Blink Green Dot!
+                        ipcRenderer.send('trigger-completion-dot');
+
                         this.typingState = 'idle';
                         this.viewMode = 'hidden';
                         ipcRenderer.send('set-ignore-mouse-events', true);
@@ -357,6 +378,10 @@ export class ProctoredOA extends LitElement {
             case 'regenerate':
                 this.showToast('🔄 Regenerating...');
                 await ipcRenderer.invoke('send-oa-regenerate');
+                break;
+            case 'refresh_page':
+                this.showToast('🔄 Refreshing Page...');
+                await ipcRenderer.invoke('refresh-ai-page');
                 break;
             case 'hide_unhide':
                 await ipcRenderer.invoke('trigger-ghost-hide');

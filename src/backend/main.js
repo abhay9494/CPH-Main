@@ -586,7 +586,7 @@ function spawnCornerHUD(page = 1) {
             overflow: hidden;
             display: flex; align-items: center; justify-content: center;
             box-shadow: 0 4px 12px rgba(0,0,0,0.5);
-            transition: border-color 0.2s;
+            transition: border-color 0.2s, opacity 0.2s;
         }
         .fill {
             position: absolute; top: 0; left: 0; bottom: 0; width: 0%;
@@ -622,7 +622,28 @@ function spawnCornerHUD(page = 1) {
         #bottom_center { bottom: 10px; left: 50%; transform: translateX(-50%); }
         #bottom_mid_right { bottom: 10px; left: 75%; transform: translateX(-50%); }
         #bottom_right { bottom: 10px; right: 10px; }
+        
+        /* 🟢 NEW: Indicator Dots */
+        .indicator-dot {
+            position: fixed; bottom: 15px; left: 50%; width: 10px; height: 10px; 
+            border-radius: 50%; opacity: 0; pointer-events: none; z-index: 9999;
+        }
+        .red-constant { background: #f14c4c; box-shadow: 0 0 10px #f14c4c; transition: opacity 0.1s; transform: translateX(-50%); }
+        .green-blink { background: #00cc66; box-shadow: 0 0 10px #00cc66; }
+        
+        @keyframes blink3 {
+            0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+            16% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+            33% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+            49% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+            66% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+            82% { opacity: 1; transform: translateX(-50%) scale(1.2); }
+            100% { opacity: 0; transform: translateX(-50%) scale(0.8); }
+        }
     </style></head><body>
+        <div id="unhide-dot" class="indicator-dot red-constant"></div>
+        <div id="complete-dot" class="indicator-dot green-blink"></div>
+        
         <script>
             const { ipcRenderer } = require('electron');
             const zones = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
@@ -707,6 +728,24 @@ function spawnCornerHUD(page = 1) {
                         el.style.borderColor = 'rgba(255,255,255,0.1)';
                     }
                 }
+            });
+
+            ipcRenderer.on('set-stealth-mode', (e, isHidden) => {
+                document.querySelectorAll('.corner').forEach(c => {
+                    c.style.opacity = isHidden ? '0' : '1';
+                });
+            });
+
+            // 🟢 NEW: Listeners for the Indicator Dots
+            ipcRenderer.on('set-unhide-dot', (e, visible) => {
+                document.getElementById('unhide-dot').style.opacity = visible ? '1' : '0';
+            });
+
+            ipcRenderer.on('trigger-completion-dot', () => {
+                const dot = document.getElementById('complete-dot');
+                dot.style.animation = 'none'; // Reset
+                void dot.offsetWidth; // Trigger reflow to restart animation
+                dot.style.animation = 'blink3 1.5s forwards';
             });
         </script>
     </body></html>
@@ -2026,7 +2065,9 @@ function setupGeneralIpcHandlers() {
                 });
                 
                 if (global.radialHudWindow && !global.radialHudWindow.isDestroyed()) { global.radialHudWindow.webContents.send('update-hud', { slice: null, labels: global.activeRadialLabels, isActive: false, ghostMode: true }); }
-                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.setOpacity(0); // 🟢 NEW
+                
+                // 🟢 FIX: Send IPC to hide corners, but keep the window itself visible so dots can render!
+                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.webContents.send('set-stealth-mode', true);
             } else {
                 mainWindow.webContents.send('app-made-visible');
                 mainWindow.webContents.send('ghost-state-changed', false); // 🟢 FIX: Sync stealth state to UI
@@ -2056,7 +2097,8 @@ function setupGeneralIpcHandlers() {
                     setTimeout(() => { if (!global.radialHudWindow.isDestroyed()) { global.radialHudWindow.setAlwaysOnTop(true, 'screen-saver', 9); global.radialHudWindow.moveTop(); } }, 50);
                 }
                                 
-                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_oa') global.cornerHudWindow.setOpacity(1); // 🟢 NEW
+                // 🟢 FIX: Send IPC to show corners again
+                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed() && global.currentSessionMode === 'proctored_oa') global.cornerHudWindow.webContents.send('set-stealth-mode', false);
             }
         }
     };
@@ -2316,5 +2358,29 @@ function setupGeneralIpcHandlers() {
         if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
             global.cornerHudWindow.webContents.send('set-abort-armed', data);
         }
+    });
+
+    // 🟢 NEW: Route Dot indicators to HUD
+    ipcMain.on('set-unhide-dot', (e, isVisible) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('set-unhide-dot', isVisible);
+        }
+    });
+
+    ipcMain.on('trigger-completion-dot', () => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('trigger-completion-dot');
+        }
+    });
+
+    // 🟢 NEW: Refresh AI Page Handler
+    ipcMain.handle('refresh-ai-page', () => {
+        try {
+            if (codeWebWindowPrimary && !codeWebWindowPrimary.isDestroyed()) codeWebWindowPrimary.reload();
+            if (codeWebWindowSecondary && !codeWebWindowSecondary.isDestroyed()) codeWebWindowSecondary.reload();
+            if (voiceWebWindowPrimary && !voiceWebWindowPrimary.isDestroyed()) voiceWebWindowPrimary.reload();
+            if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.reload();
+            return true;
+        } catch(e) { return false; }
     });
 }
