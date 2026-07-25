@@ -485,8 +485,8 @@ function launchOABrain() {
 
     startOAScraper();
 
-    // 🟢 FIX: Instantly pop the AI Window open when OA Mode starts!
-    setTimeout(() => { if (global.applyAIBounds) global.applyAIBounds(true); }, 500);
+    // 🟢 FIX: Keep the AI Window strictly hidden on boot!
+    setTimeout(() => { if (global.applyAIBounds) global.applyAIBounds(false); }, 500);
 
     // 🟢 FIX: Spawn the Fullscreen Ghost HUD for corner labels
     global.currentOAPage = 1;
@@ -562,7 +562,8 @@ function spawnCornerHUD(page = 1) {
             'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up',
             'fusion_dry_run': '🎯 Dry Run', 'on_the_go': '🏃 Dictator', 'refresh_page': '🔄 Refresh Page',
             'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5',
-            'toggle_perfect_mode': global.isPerfectModeActive ? '🤖 Perfect Mode' : '👨‍💻 Human Mode' // 🟢 Dynamic Label
+            'toggle_perfect_mode': global.isPerfectModeActive ? '🤖 Perfect Mode' : '👨‍💻 Human Mode',
+            'set_question_count': '🔢 Num Questions'
         };
         return labels[action] || action;
     };
@@ -660,6 +661,16 @@ function spawnCornerHUD(page = 1) {
             display: flex; align-items: center; justify-content: center;
             opacity: 0; z-index: 9999; transition: opacity 0.2s;
         }
+        
+        /* 🟢 NEW: Main Exam Timer */
+        .exam-timer {
+            position: fixed; top: 85px; left: 50%; transform: translateX(-50%);
+            font-size: 16px; font-weight: 800; color: #fff; background: rgba(20,20,20,0.85);
+            padding: 6px 16px; border-radius: 20px; border: 1px solid #a142f4;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.5); z-index: 9999;
+            opacity: 0; transition: opacity 0.2s; pointer-events: none;
+            letter-spacing: 2px;
+        }
 
         @keyframes blink3 {
             0% { opacity: 0; transform: translateX(-50%) scale(0.8); }
@@ -674,6 +685,7 @@ function spawnCornerHUD(page = 1) {
         <div id="unhide-dot" class="indicator-dot red-constant"></div>
         <div id="complete-dot" class="indicator-dot green-blink"></div>
         <div id="countdown-dot" class="countdown-dot"></div>
+        <div id="exam-timer" class="exam-timer"></div>
         
         <script>
             const { ipcRenderer } = require('electron');
@@ -772,15 +784,60 @@ function spawnCornerHUD(page = 1) {
                 }
             });
 
+            ipcRenderer.on('set-timer-text', (e, text) => {
+                const el = document.getElementById('exam-timer');
+                if (el) {
+                    el.innerText = text;
+                    el.style.opacity = text && !document.body.classList.contains('stealth-active') ? '1' : '0';
+                }
+            });
+
             ipcRenderer.on('set-stealth-mode', (e, isHidden) => {
-                document.querySelectorAll('.corner').forEach(c => {
-                    c.style.opacity = isHidden ? '0' : '1';
+                if (isHidden) document.body.classList.add('stealth-active');
+                else document.body.classList.remove('stealth-active');
+                
+                document.querySelectorAll('.corner, .exam-timer').forEach(c => {
+                    if (c.id === 'exam-timer' && !c.innerText) c.style.opacity = '0';
+                    else c.style.opacity = isHidden ? '0' : '1';
                 });
             });
 
             // 🟢 NEW: Listeners for the Indicator Dots
             ipcRenderer.on('set-unhide-dot', (e, visible) => {
                 document.getElementById('unhide-dot').style.opacity = visible ? '1' : '0';
+            });
+
+            // 🟢 NEW: Dynamic NumPad Injector
+            const cornerOrder = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
+            let originalHUDContents = {};
+            
+            ipcRenderer.on('toggle-numpad', (e, enable) => {
+                cornerOrder.forEach((id, idx) => {
+                    const el = document.getElementById(id);
+                    const textEl = document.getElementById('text-' + id);
+                    if (el && textEl) {
+                        if (enable) {
+                            if (!originalHUDContents[id]) originalHUDContents[id] = textEl.innerHTML;
+                            
+                            // 🟢 FIX: Adjusted font size and color to match the standard native triggers
+                            textEl.innerHTML = \`<span style="font-size: 16px; font-weight: 800; color: #fff;">\${idx + 1}</span>\`;
+                            el.style.backgroundColor = 'rgba(20,20,20,0.85)';
+                            el.style.borderColor = '#a142f4';
+                            el.classList.remove('empty'); // Force it to show even if the corner was empty
+                        } else {
+                            if (originalHUDContents[id]) {
+                                textEl.innerHTML = originalHUDContents[id];
+                            }
+                            el.style.backgroundColor = 'rgba(20,20,20,0.85)';
+                            el.style.borderColor = 'rgba(255,255,255,0.1)';
+                            
+                            // Hide it again if it was originally an empty corner
+                            if (!textEl.dataset.original || textEl.dataset.original === 'none' || textEl.dataset.original === '—') {
+                                el.classList.add('empty');
+                            }
+                        }
+                    }
+                });
             });
 
             ipcRenderer.on('trigger-completion-dot', () => {
@@ -1994,8 +2051,9 @@ function setupGeneralIpcHandlers() {
     });
 
     // 🟢 NEW: Perfect Mode Handler
-    ipcMain.handle('toggle-perfect-mode', () => {
-        global.isPerfectModeActive = !global.isPerfectModeActive;
+    ipcMain.handle('toggle-perfect-mode', (event, forceState) => {
+        if (typeof forceState === 'boolean') global.isPerfectModeActive = forceState;
+        else global.isPerfectModeActive = !global.isPerfectModeActive;
         return global.isPerfectModeActive;
     });
 
@@ -2167,7 +2225,7 @@ function setupGeneralIpcHandlers() {
     });
 
     let autoTyperProcess = null;
-    ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance, startDelay, runId) => {
+    ipcMain.on('start-auto-type', (event, rawCode, wpmSpeed, mistakeChance, startDelay, runId, isPanicPacing, isResume) => {
         if (mainWindow) mainWindow.webContents.send('typing-status', true);
         const b64Code = Buffer.from(rawCode).toString('base64');
         const ps1Path = path.join(os.tmpdir(), 'cptyper.ps1');
@@ -2177,15 +2235,24 @@ function setupGeneralIpcHandlers() {
         if (delaySecs > 10) delaySecs = 10; 
         
         const psScript = `
-        param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay, [string]$isPerfectStr)
+        param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay, [string]$isPerfectStr, [string]$isPanicStr, [string]$isResumeStr)
         $isPerfect = $isPerfectStr -eq '$true'
+        $isPanic = $isPanicStr -eq '$true'
+        $isResume = $isResumeStr -eq '$true'
+        
+        # 🟢 FIX: Always calculate the exact WPM delay, capping strictly at 400!
         if ($wpm -lt 10) { $wpm = 10 }
+        if ($wpm -gt 400) { $wpm = 400 }
+        $baseDelay = [math]::Round(12000 / $wpm)
+        if ($baseDelay -lt 10) { $baseDelay = 10 }
+        
+        if ($isPanic) {
+            $isPerfect = $true
+        }
         
         Add-Type -AssemblyName System.Windows.Forms
         $text = [System.Text.Encoding]::UTF8.GetString([System.Convert]::FromBase64String($b64))
         $chars = $text.ToCharArray()
-        $baseDelay = [math]::Round(12000 / $wpm)
-        if ($baseDelay -lt 10) { $baseDelay = 10 }
         
         if ($startDelay -gt 0) {
             for ($i = $startDelay; $i -gt 0; $i--) {
@@ -2197,6 +2264,12 @@ function setupGeneralIpcHandlers() {
         [Console]::WriteLine("TICK_0")
         [Console]::Out.Flush()
         
+        if ($isResume) {
+            # 🟢 RESUME FIX: Jumps to the end of the line, highlights cleanly back to column 0, and deletes!
+            [System.Windows.Forms.SendKeys]::SendWait("{END}+{HOME}+{HOME}{BACKSPACE}")
+            Start-Sleep -Milliseconds 300
+        }
+        
         $charIdx = 0
         [Console]::WriteLine("CHAR_0")
         [Console]::Out.Flush()
@@ -2207,18 +2280,24 @@ function setupGeneralIpcHandlers() {
             $key = $c.ToString()
             if ($key -eq "\`r") { continue } 
             if ($key -eq "\`n") {
-                # 🟢 FIX: Separate the Enter key from the Backspace cleanup!
                 [System.Windows.Forms.SendKeys]::SendWait("{ENTER}")
                 
                 $charIdx++
                 [Console]::WriteLine("CHAR_$charIdx")
                 [Console]::Out.Flush()
                 
-                # 🟢 FIX: Give the IDE 500ms to register the new line and move the cursor down before erasing!
-                Start-Sleep -Milliseconds 500
-                [System.Windows.Forms.SendKeys]::SendWait(" x{LEFT}^{BACKSPACE}{DELETE}")
+                if (-not $isPerfect -or $isPanic) {
+                    # 🟢 STRICT HUMAN/PANIC MODE: Mandatory 2-second wait before interacting with the new line
+                    Start-Sleep -Seconds 2
+                } else {
+                    Start-Sleep -Milliseconds 100
+                }
                 
-                if (-not $isPerfect) {
+                $anchorChars = "abcdefghijklmnopqrstuvwxyz"
+                $anchor = $anchorChars[(Get-Random -Maximum 26)].ToString()
+                [System.Windows.Forms.SendKeys]::SendWait(" $anchor{LEFT}^{BACKSPACE}{DELETE}")
+                
+                if (-not $isPerfect -and -not $isPanic) {
                     Start-Sleep -Milliseconds ([math]::Round($baseDelay) + (Get-Random -Minimum 15 -Maximum 30))
                     if ((Get-Random -Minimum 1 -Maximum 100) -le 8) {
                         $thinkTime = Get-Random -Minimum 10 -Maximum 20
@@ -2238,7 +2317,7 @@ function setupGeneralIpcHandlers() {
             
             if ('+^%~(){}[]'.Contains($key)) { $key = "{$key}" }
             
-            if (-not $isPerfect -and $key -match '^[a-z]$') {
+            if (-not $isPerfect -and -not $isPanic -and $key -match '^[a-z]$') {
                 if ((Get-Random -Minimum 1 -Maximum 100) -le $mistakeChance) {
                     $wrongChars = "abcdefghijklmnopqrstuvwxyz"
                     $wrong = $wrongChars[(Get-Random -Maximum 26)].ToString()
@@ -2274,7 +2353,6 @@ function setupGeneralIpcHandlers() {
                     Start-Sleep -Milliseconds (Get-Random -Minimum 15 -Maximum 30)
                 }
             } else {
-                # 🟢 PERFECT MODE: Flat, robotic, mathematical delay with 0 variance
                 Start-Sleep -Milliseconds $baseDelay
             }
         }
@@ -2282,9 +2360,9 @@ function setupGeneralIpcHandlers() {
         fs.writeFileSync(ps1Path, psScript);
         if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
         
-        // 🟢 FIX: Pass the perfect mode boolean into the powershell spawn!
-        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs, global.isPerfectModeActive ? '$true' : '$false']);
-
+        // 🟢 FIX: Pass all required booleans into powershell
+        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs, global.isPerfectModeActive ? '$true' : '$false', isPanicPacing ? '$true' : '$false', isResume ? '$true' : '$false']);
+        
         autoTyperProcess.stdout.on('data', (data) => {
             const text = data.toString();
             const lines = text.split(/[\r\n]+/);
@@ -2455,6 +2533,54 @@ function setupGeneralIpcHandlers() {
     ipcMain.on('trigger-completion-dot', () => {
         if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
             global.cornerHudWindow.webContents.send('trigger-completion-dot');
+        }
+    });
+
+    let examEndTime = 0;
+    let examTimerInterval = null;
+
+    ipcMain.on('init-hud-timer', (e, mins) => {
+        const hrs = Math.floor(mins / 60).toString().padStart(2, '0');
+        const m = (mins % 60).toString().padStart(2, '0');
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.webContents.send('set-timer-text', hrs > 0 ? `${hrs}:${m}:00` : `${m}:00`);
+    });
+
+    ipcMain.on('start-exam-timer', (e, durationMins) => {
+        if (examTimerInterval) return; 
+        examEndTime = Date.now() + (durationMins * 60000);
+        examTimerInterval = setInterval(() => {
+            const remainingMs = examEndTime - Date.now();
+            if (remainingMs <= 0) {
+                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.webContents.send('set-timer-text', '00:00:00');
+                clearInterval(examTimerInterval);
+                examTimerInterval = null;
+            } else {
+                const hrs = Math.floor(remainingMs / 3600000).toString().padStart(2, '0');
+                const mins = Math.floor((remainingMs % 3600000) / 60000).toString().padStart(2, '0');
+                const secs = Math.floor((remainingMs % 60000) / 1000).toString().padStart(2, '0');
+                
+                // 🟢 FIX: Explicit mathematical coercion to guarantee JS evaluates it correctly!
+                const timeStr = Number(hrs) > 0 ? `${hrs}:${mins}:${secs}` : `${mins}:${secs}`;
+                
+                if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.webContents.send('set-timer-text', timeStr);
+                
+                // 🟢 Sync live time back to the AI Window so it can pace the auto-typer!
+                const windows = require('electron').BrowserWindow.getAllWindows();
+                windows.forEach(w => { if (w.webContents && !w.isDestroyed()) w.webContents.send('sync-exam-time', remainingMs); });
+            }
+        }, 1000);
+    });
+
+    ipcMain.on('stop-exam-timer', () => {
+        if (examTimerInterval) clearInterval(examTimerInterval);
+        examTimerInterval = null;
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) global.cornerHudWindow.webContents.send('set-timer-text', '');
+    });
+
+    // 🟢 NEW: Route NumPad Trigger
+    ipcMain.on('toggle-hud-numpad', (e, enable) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('toggle-numpad', enable);
         }
     });
 

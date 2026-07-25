@@ -690,7 +690,8 @@ export class SettingsView extends LitElement {
             'expand_top': '➕ Expand Top Line', 'expand_bottom': '➕ Expand Bot Line', 'reset_typer': '🔄 Reset Selection',
             'abort_typer': '🛑 Abort & Go Back', 'toggle_typer_vis': '👁️ Show / Hide Typer Code', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
             'on_the_go': '🏃 On-The-Go Dictator', 'speed_inc': '⏩ Speed +5 WPM', 'speed_dec': '⏪ Speed -5 WPM',
-            'toggle_typer_page2': '🔄 Next Typer Page', 'toggle_perfect_mode': '🤖 Toggle Perfect / Human Mode'
+            'toggle_typer_page2': '🔄 Next Typer Page', 'toggle_perfect_mode': '🤖 Toggle Perfect / Human Mode',
+            'set_question_count': '🔢 Set Question Count'
         };
         return labels[action] || action || '🚫 None';
     }
@@ -710,7 +711,8 @@ export class SettingsView extends LitElement {
             'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 'reset_typer': '🔄 Reset Sel',
             'abort_typer': '🛑 Abort Typer', 'toggle_typer_vis': '👁️ Show/Hide Code', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
             'on_the_go': '🏃 Dictator', 'speed_inc': '⏩ Spd +5', 'speed_dec': '⏪ Spd -5',
-            'toggle_typer_page2': '🔄 Next Page', 'toggle_perfect_mode': '🤖 Perfect/Human'
+            'toggle_typer_page2': '🔄 Next Page', 'toggle_perfect_mode': '🤖 Perfect/Human',
+            'set_question_count': '🔢 Num Questions'
         };
         return labels[action] || '—';
     }
@@ -1040,6 +1042,7 @@ export class SettingsView extends LitElement {
                     {value: 'change_ai', label: '🤖 Change AI'}, {value: 'fast_think', label: '🧠 Toggle Fast/Think'},
                     {value: 'language', label: '💻 Change Language'}, {value: 'reset', label: '✨ Reset Session'},
                     {value: 'refresh_page', label: '🔄 Refresh Page'}, {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
+                    {value: 'set_question_count', label: '🔢 Set Total Questions (NumPad)'},
                     {value: 'bg_inc', label: '⬛ Opacity+'}, {value: 'bg_dec', label: '⬜ Opacity-'},
                     {value: 'text_inc', label: 'A+ Text Size'}, {value: 'text_dec', label: 'A- Text Size'},
                     {value: 'mic', label: '🎙️ Mic Toggle'}
