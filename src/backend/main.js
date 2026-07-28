@@ -840,6 +840,46 @@ function spawnCornerHUD(page = 1) {
                 });
             });
 
+            // 🟢 NEW: Dynamic Chat History Menu
+            ipcRenderer.on('toggle-hud-history', (e, data) => {
+                const { enable, page, titles = [] } = data;
+                cornerOrder.forEach((id, idx) => {
+                    const el = document.getElementById(id);
+                    const textEl = document.getElementById('text-' + id);
+                    if (el && textEl) {
+                        if (enable) {
+                            if (!originalHUDContents[id]) originalHUDContents[id] = textEl.innerHTML;
+                            
+                            let displayHtml = '';
+                            if (idx < 14) { // Triggers 1-14: Chat Slots
+                                const targetIdx = (page * 14) + idx;
+                                const rawTitle = titles[targetIdx] ? titles[targetIdx] : \`Chat \${targetIdx + 1}\`;
+                                
+                                // 🟢 FIX: Cleanly split and keep the first 2 words + '...'
+                                const words = rawTitle.trim().split(/\s+/);
+                                const titleText = words.length > 2 ? words[0] + ' ' + words[1] + '...' : rawTitle;
+                                
+                                displayHtml = \`<div style="font-size: 11px; font-weight: 700; color: #fff; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;" title="\${rawTitle}">\${titleText}</div>\`;
+                            } else if (idx === 14) { // Trigger 15: Next
+                                displayHtml = \`<span style="font-size: 20px;">⏭️</span>\`;
+                            } else if (idx === 15) { // Trigger 16: Prev
+                                displayHtml = \`<span style="font-size: 20px;">⏮️</span>\`;
+                            }
+
+                            textEl.innerHTML = displayHtml;
+                            el.style.backgroundColor = 'rgba(20,20,20,0.95)';
+                            el.style.borderColor = '#4285f4'; // Blue to distinguish from standard purple setup
+                            el.classList.remove('empty');
+                        } else {
+                            if (originalHUDContents[id]) textEl.innerHTML = originalHUDContents[id];
+                            el.style.backgroundColor = 'rgba(20,20,20,0.85)';
+                            el.style.borderColor = 'rgba(255,255,255,0.1)';
+                            if (!textEl.dataset.original || textEl.dataset.original === 'none' || textEl.dataset.original === '—') el.classList.add('empty');
+                        }
+                    }
+                });
+            });
+
             ipcRenderer.on('trigger-completion-dot', () => {
                 const dot = document.getElementById('complete-dot');
                 dot.style.animation = 'none'; // Reset
@@ -2234,13 +2274,24 @@ function setupGeneralIpcHandlers() {
         if (isNaN(delaySecs) || delaySecs < 0) delaySecs = 0;
         if (delaySecs > 10) delaySecs = 10; 
         
-        const psScript = `
-        param([string]$b64, [int]$wpm, [int]$mistakeChance, [int]$startDelay, [string]$isPerfectStr, [string]$isPanicStr, [string]$isResumeStr)
-        $isPerfect = $isPerfectStr -eq '$true'
-        $isPanic = $isPanicStr -eq '$true'
-        $isResume = $isResumeStr -eq '$true'
+        // 🟢 FIX: Sanitize numbers to prevent PowerShell casting crashes
+        let safeWpm = parseInt(wpmSpeed);
+        if (isNaN(safeWpm)) safeWpm = 190;
+        let safeMistake = parseInt(mistakeChance);
+        if (isNaN(safeMistake)) safeMistake = 2;
         
-        # 🟢 FIX: Always calculate the exact WPM delay, capping strictly at 400!
+        // 🟢 FIX: Inject variables directly into the script instead of passing CLI arguments!
+        // This eliminates command-line length limits and Windows quote-escaping bugs.
+        const psScript = `
+        $b64 = "${b64Code}"
+        $wpm = ${safeWpm}
+        $mistakeChance = ${safeMistake}
+        $startDelay = ${delaySecs}
+        $isPerfect = $${global.isPerfectModeActive ? 'true' : 'false'}
+        $isPanic = $${isPanicPacing ? 'true' : 'false'}
+        $isResume = $${isResume ? 'true' : 'false'}
+        
+        # Always calculate the exact WPM delay, capping strictly at 400!
         if ($wpm -lt 10) { $wpm = 10 }
         if ($wpm -gt 400) { $wpm = 400 }
         $baseDelay = [math]::Round(12000 / $wpm)
@@ -2360,8 +2411,8 @@ function setupGeneralIpcHandlers() {
         fs.writeFileSync(ps1Path, psScript);
         if (autoTyperProcess) { try { autoTyperProcess.kill(); } catch(e){} }
         
-        // 🟢 FIX: Pass all required booleans into powershell
-        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path, b64Code, wpmSpeed, mistakeChance, delaySecs, global.isPerfectModeActive ? '$true' : '$false', isPanicPacing ? '$true' : '$false', isResume ? '$true' : '$false']);
+        // 🟢 FIX: Spawn cleanly with no extra arguments to prevent OS crashes!
+        autoTyperProcess = spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', ps1Path]);
         
         autoTyperProcess.stdout.on('data', (data) => {
             const text = data.toString();
@@ -2582,6 +2633,53 @@ function setupGeneralIpcHandlers() {
         if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
             global.cornerHudWindow.webContents.send('toggle-numpad', enable);
         }
+    });
+
+    ipcMain.on('toggle-hud-history', (e, data) => {
+        if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+            global.cornerHudWindow.webContents.send('toggle-hud-history', data);
+        }
+    });
+
+    // 🟢 VIRTUAL MOUSE COORD MAPPER: Clicks exact vertical positions in the Gemini sidebar without moving your real mouse!
+    ipcMain.handle('switch-ai-history', async (e, index) => {
+        if (!global.codeWebWindowPrimary || global.codeWebWindowPrimary.isDestroyed()) return false;
+        
+        try {
+            // 1. Calculate virtual Y coordinate based on the chat index (Assuming sidebar list starts around Y: 140px, spaced 40px apart)
+            const sidebarX = 90; // Horizontal pixel location of Gemini's sidebar
+            const startY = 140;  // Pixel offset of the first chat item
+            const rowHeight = 42;  // Height of each chat row
+            const targetY = startY + (index * rowHeight);
+
+            // 2. Dispatch background OS-level mouse events directly to the background AI window
+            global.codeWebWindowPrimary.webContents.sendInputEvent({ type: 'mouseMove', x: sidebarX, y: targetY });
+            global.codeWebWindowPrimary.webContents.sendInputEvent({ type: 'mouseDown', x: sidebarX, y: targetY, button: 'left', clickCount: 1 });
+            global.codeWebWindowPrimary.webContents.sendInputEvent({ type: 'mouseUp', x: sidebarX, y: targetY, button: 'left', clickCount: 1 });
+
+            return true;
+        } catch(err) {
+            return false;
+        }
+    });
+
+    // 🟢 SCAPE TITLES FOR GHOST HUD
+    ipcMain.handle('fetch-ai-history-titles', async (e) => {
+        if (!global.codeWebWindowPrimary || global.codeWebWindowPrimary.isDestroyed()) return [];
+        return await global.codeWebWindowPrimary.webContents.executeJavaScript(`
+            (() => {
+                try {
+                    const links = Array.from(document.querySelectorAll('a')).filter(a => {
+                        const href = a.getAttribute('href') || '';
+                        return (href.includes('/app/') && href.length > 15) || (href.includes('/c/') && href.length > 10);
+                    });
+                    return links.map(el => {
+                        const raw = el.textContent || '';
+                        return raw.trim().split('\\n')[0];
+                    }).filter(t => t.length > 0);
+                } catch(err) { return []; }
+            })();
+        `);
     });
 
     // 🟢 NEW: Refresh AI Page Handler

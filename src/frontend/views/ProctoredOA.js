@@ -18,7 +18,7 @@ export class ProctoredOA extends LitElement {
             color: #e5e5e5; background: rgba(20, 20, 20, 0.95); 
             border: 1px solid #444; border-radius: 8px; 
             box-shadow: 0 10px 40px rgba(0,0,0,0.8);
-            pointer-events: none; /* Allows clicking to select lines */
+            pointer-events: auto; /* 🟢 FIX: Allows native scrolling and clicking! */
         }
         .typer-code-container::-webkit-scrollbar { display: none; }
         .typer-line { display: flex; border-radius: 4px; padding: 2px 4px; margin-bottom: 2px; transition: 0.2s; }
@@ -69,6 +69,9 @@ export class ProctoredOA extends LitElement {
         setupHours: { type: Number }, 
         setupMinutes: { type: Number }, 
         isSettingQuestions: { type: Boolean },
+        isSettingHistory: { type: Boolean }, // 🟢 NEW
+        historyPage: { type: Number }, // 🟢 NEW
+        historyTitles: { type: Array },
         toastMessage: { type: String },
         timeRemainingMins: { type: Number }, // 🟢 NEW
         typingStartLineIndexForChunk: { type: Number }, // 🟢 NEW
@@ -111,6 +114,9 @@ export class ProctoredOA extends LitElement {
         this.setupHours = 1; 
         this.setupMinutes = 30; 
         this.isSettingQuestions = false; 
+        this.isSettingHistory = false;
+        this.historyPage = 0;
+        this.historyTitles = []; // 🟢 NEW 
 
         this.isGhostHidden = false;
         this.isThinkModeActive = false;
@@ -161,12 +167,14 @@ export class ProctoredOA extends LitElement {
             this.hoverHandler = (_, zone) => {
                 if (this.hoverZone === zone) return; 
 
+                // 🟢 FIX: Clear the progress bar of the OLD zone before updating hoverZone!
+                if (this.hoverZone && this.hoverZone !== 'none') {
+                    ipcRenderer.send('sync-hud-progress', { zone: this.hoverZone, progress: 0 });
+                }
+
                 this.hoverZone = zone;
                 this.hoverProgress = 0;
                 this.isActionFired = false;
-                
-                // Clear the progress bar immediately when leaving a zone
-                ipcRenderer.send('sync-hud-progress', { zone: this.hoverZone, progress: 0 });
 
                 // 🟢 NEW: Kill the Red Dot instantly if they slip out of the unhide corner
                 if (this.unhideDotActive) {
@@ -202,15 +210,20 @@ export class ProctoredOA extends LitElement {
 
                     const action = map[zone];
                     
-                    // 🟢 FIX: If the NumPad is active, bypass ALL action checks!
-                    if (!this.isSettingQuestions) {
-                        const allowedInStealth = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec', 'toggle_typer_vis', 'toggle_typer_page2', 'toggle_perfect_mode'];
+                    // 🟢 FIX: If the NumPad or History Menu is active, bypass ALL action checks!
+                    if (!this.isSettingQuestions && !this.isSettingHistory) {
+                        // 🟢 FIX: Strictly restrict stealth mode to ONLY Hide/Unhide and Auto-Type! 
+                        // This prevents accidentally swapping pages or changing settings while invisible.
+                        const allowedInStealth = ['hide_unhide', 'auto_type'];
+                        
+                        // 🟢 FIX: Allow necessary live-adjustments while actively typing
+                        const allowedWhileTyping = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec', 'toggle_typer_vis', 'toggle_perfect_mode', 'abort_typer'];
 
                         // 🛑 STEALTH LOCK
                         if (this.isGhostHidden && !allowedInStealth.includes(action)) return;
                         
-                        // 🛑 TYPING LOCK: Block all triggers except the 4 allowed when actively typing!
-                        if (this.typingState === 'typing' && !allowedInStealth.includes(action)) return;
+                        // 🛑 TYPING LOCK
+                        if (this.typingState === 'typing' && !allowedWhileTyping.includes(action)) return;
                     }
 
                     this.dwellStartTime = performance.now();
@@ -261,6 +274,29 @@ export class ProctoredOA extends LitElement {
                             }
                             this.isActionFired = true;
                             
+                            // 🟢 HISTORY NAV LOGIC
+                            if (this.isSettingHistory) {
+                                const cornerOrder = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
+                                const cIndex = cornerOrder.indexOf(zone);
+                                
+                                if (cIndex === 14) { // Next Page
+                                    this.historyPage++;
+                                    ipcRenderer.send('toggle-hud-history', { enable: true, page: this.historyPage, titles: this.historyTitles });
+                                    this.showToast(`📄 Page ${this.historyPage + 1}`, '#4285f4');
+                                } else if (cIndex === 15) { // Prev Page
+                                    this.historyPage = Math.max(0, this.historyPage - 1);
+                                    ipcRenderer.send('toggle-hud-history', { enable: true, page: this.historyPage, titles: this.historyTitles });
+                                    this.showToast(`📄 Page ${this.historyPage + 1}`, '#4285f4');
+                                } else if (cIndex >= 0 && cIndex < 14) { // Selected a Conversation
+                                    const targetIndex = (this.historyPage * 14) + cIndex;
+                                    this.isSettingHistory = false;
+                                    ipcRenderer.send('toggle-hud-history', { enable: false });
+                                    this.showToast(`🔄 Loading Chat ${targetIndex + 1}...`, '#4285f4');
+                                    ipcRenderer.invoke('switch-ai-history', targetIndex);
+                                }
+                                return;
+                            }
+
                             // 🟢 NUMPAD LOGIC
                             if (this.isSettingQuestions) {
                                 const zoneMap = { 'top_left': 1, 'top_mid_left': 2, 'top_center': 3, 'top_mid_right': 4, 'top_right': 5, 'left_mid_top': 6, 'right_mid_top': 7, 'middle_left': 8, 'middle_right': 9, 'left_mid_bottom': 10, 'right_mid_bottom': 11, 'bottom_left': 12, 'bottom_mid_left': 13, 'bottom_center': 14, 'bottom_mid_right': 15, 'bottom_right': 16 };
@@ -519,6 +555,16 @@ export class ProctoredOA extends LitElement {
                 ipcRenderer.send('toggle-hud-numpad', true);
                 this.showToast('🔢 Select Question Count (1-16)', '#4285f4');
                 break;
+            case 'open_history_nav':
+                this.isSettingHistory = true;
+                this.historyPage = 0; // Reset to page 1
+                this.showToast('🔍 Fetching Chats...', '#4285f4');
+                ipcRenderer.invoke('fetch-ai-history-titles').then(titles => {
+                    this.historyTitles = titles || [];
+                    ipcRenderer.send('toggle-hud-history', { enable: true, page: 0, titles: this.historyTitles });
+                    this.showToast('📜 Select Chat to Load', '#4285f4');
+                });
+                break;
             case 'toggle_page2': {
                 const pages = this.prefs.oaPages || [];
                 const totalPages = Math.max(1, pages.length > 0 ? pages.length : (this.prefs.hotCornersPage2 ? 2 : 1));
@@ -546,6 +592,12 @@ export class ProctoredOA extends LitElement {
                 if (this.typingState === 'idle') {
                     if (this.viewMode === 'typer') {
                         this.fullCodeString = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
+                        
+                        // 🟢 FIX: Prevent the engine from crashing instantly if the selection is completely empty
+                        if (!this.fullCodeString || this.fullCodeString.trim() === '') {
+                            this.showToast('⚠️ No Code Selected!', '#f14c4c');
+                            return;
+                        }
                         
                         let speed = this.currentWpm;
                         let isPanicPacing = false;
@@ -672,19 +724,45 @@ export class ProctoredOA extends LitElement {
                     if (container) container.scrollBy({ top: 100, behavior: 'smooth' });
                 }
                 break;
-            case 'trim_top':
-                if (this.viewMode === 'typer' && this.typerStartLine < this.typerEndLine) { this.typerStartLine++; this.requestUpdate(); }
-                break;
-            case 'trim_bottom':
-                if (this.viewMode === 'typer' && this.typerEndLine > this.typerStartLine) { this.typerEndLine--; this.requestUpdate(); }
-                break;
             case 'expand_top':
-                if (this.viewMode === 'typer' && this.typerStartLine > 0) { this.typerStartLine--; this.requestUpdate(); }
+                if (this.viewMode === 'typer' && this.typerStartLine > 0) { 
+                    this.typerStartLine--; 
+                    this.requestUpdate(); 
+                    this._scrollPrecise(this.typerStartLine); // 🟢 Target TOP
+                }
+                break;
+            case 'trim_top':
+                if (this.viewMode === 'typer' && this.typerStartLine < this.typerEndLine) { 
+                    this.typerStartLine++; 
+                    this.requestUpdate(); 
+                    this._scrollPrecise(this.typerStartLine); // 🟢 Target TOP
+                }
                 break;
             case 'expand_bottom':
-                if (this.viewMode === 'typer' && this.typerEndLine < this.typerCodeLines.length - 1) { this.typerEndLine++; this.requestUpdate(); }
+                if (this.viewMode === 'typer' && this.typerEndLine < this.typerCodeLines.length - 1) { 
+                    this.typerEndLine++; 
+                    this.requestUpdate(); 
+                    this._scrollPrecise(this.typerEndLine); // 🟢 Target BOTTOM
+                }
+                break;
+            case 'trim_bottom':
+                if (this.viewMode === 'typer' && this.typerEndLine > this.typerStartLine) { 
+                    this.typerEndLine--; 
+                    this.requestUpdate(); 
+                    this._scrollPrecise(this.typerEndLine); // 🟢 Target BOTTOM
+                }
                 break;
             case 'reset_typer':
+                // 🟢 FIX: Stop the typer if it's actively running when reset is triggered
+                if (this.typingState !== 'idle') ipcRenderer.send('stop-auto-type');
+                
+                // 🟢 FIX: Completely wipe all internal typing memory so it starts fresh!
+                this.typingState = 'idle';
+                this.typingCurrentLineIndex = 0;
+                this.typingCurrentCharIndex = 0;
+                this.typingPauseIndex = 0;
+                this.typingStartLineIndexForChunk = 0;
+                
                 this.typerStartLine = 0;
                 this.typerEndLine = this.typerCodeLines.length - 1;
                 this.showToast('✨ Selection Reset');
@@ -768,8 +846,10 @@ export class ProctoredOA extends LitElement {
 
     renderTyper() {
         return html`
-            <div class="typer-code-container">
-                <div style="background: rgba(161, 66, 244, 0.15); border: 1px solid rgba(161, 66, 244, 0.5); padding: 10px; border-radius: 6px; margin-bottom: 15px;">
+            <div class="typer-code-container"
+                 @mouseenter=${() => window.require && window.require('electron').ipcRenderer.send('set-ignore-mouse-events', false)}
+                 @mouseleave=${() => window.require && window.require('electron').ipcRenderer.send('set-ignore-mouse-events', true)}
+                 @mousedown=${(e) => { e.preventDefault(); e.stopPropagation(); }}> <div style="background: rgba(161, 66, 244, 0.15); border: 1px solid rgba(161, 66, 244, 0.5); padding: 10px; border-radius: 6px; margin-bottom: 15px;">
                     <strong style="color: #a142f4;">Select Range to Type.</strong> Area in purple will be typed.
                 </div>
                 ${this.typerCodeLines.map((line, idx) => {
@@ -779,7 +859,7 @@ export class ProctoredOA extends LitElement {
                             if (isCurrent) { bg = 'rgba(0, 204, 102, 0.25)'; b = '#00cc66'; tc = '#fff'; nc = '#00cc66'; }
                             else if (isHighlighted) { bg = 'rgba(161, 66, 244, 0.2)'; b = 'rgba(161, 66, 244, 0.3)'; tc = 'var(--text-color)'; nc = '#a142f4'; }
                             return html`
-                                <div class="typer-line ${isCurrent ? 'active-typer-line' : ''}" style="background: ${bg}; border: 1px solid ${b}; color: ${tc};" @click=${() => { if (this.typingState === 'idle') this.handleLineClick(idx); }}>
+                                <div class="typer-line ${isCurrent ? 'active-typer-line' : ''}" style="background: ${bg}; border: 1px solid ${b}; color: ${tc}; pointer-events: none;">
                                     <div style="width: 40px; text-align: right; padding-right: 12px; font-weight: bold; color: ${nc};">${idx + 1}</div>
                                     <div style="white-space: pre-wrap; word-wrap: break-word; flex: 1;">${line || ' '}</div>
                                 </div>
@@ -789,16 +869,31 @@ export class ProctoredOA extends LitElement {
         `;
     }
 
-    // 🟢 NEW: LitElement auto-scroll engine. Fires dynamically every time the line changes!
+    // 🟢 LitElement auto-scroll engine. Fires during active typing!
     updated(changedProperties) {
         super.updated(changedProperties);
         if (changedProperties.has('typingCurrentLineIndex') || changedProperties.has('isTyperOverlayVisible')) {
+            const container = this.shadowRoot?.querySelector('.typer-code-container');
             const activeLine = this.shadowRoot?.querySelector('.active-typer-line');
-            if (activeLine) {
-                // Smoothly keeps the green line perfectly in the center of the box
+            if (activeLine && container) {
                 activeLine.scrollIntoView({ behavior: 'smooth', block: 'center' });
             }
         }
+    }
+
+    // 🟢 FIX: Flawless native DOM tracking. Locks the exact line being edited to the center of the overlay!
+    _scrollPrecise(lineIndex) {
+        setTimeout(() => {
+            const container = this.shadowRoot?.querySelector('.typer-code-container');
+            if (container) {
+                // Find the exact HTML element for the line being expanded/trimmed (nth-child is 1-indexed)
+                const targetNode = container.querySelector(`div:nth-child(${lineIndex + 1})`);
+                if (targetNode) {
+                    // Force the browser to smoothly lock this exact element to the dead center of the container
+                    targetNode.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }
+            }
+        }, 10);
     }
 
     render() {

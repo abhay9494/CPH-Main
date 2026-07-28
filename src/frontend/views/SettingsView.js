@@ -691,7 +691,7 @@ export class SettingsView extends LitElement {
             'abort_typer': '🛑 Abort & Go Back', 'toggle_typer_vis': '👁️ Show / Hide Typer Code', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
             'on_the_go': '🏃 On-The-Go Dictator', 'speed_inc': '⏩ Speed +5 WPM', 'speed_dec': '⏪ Speed -5 WPM',
             'toggle_typer_page2': '🔄 Next Typer Page', 'toggle_perfect_mode': '🤖 Toggle Perfect / Human Mode',
-            'set_question_count': '🔢 Set Question Count'
+            'set_question_count': '🔢 Set Question Count', 'open_history_nav': '📜 Chat History'
         };
         return labels[action] || action || '🚫 None';
     }
@@ -712,7 +712,7 @@ export class SettingsView extends LitElement {
             'abort_typer': '🛑 Abort Typer', 'toggle_typer_vis': '👁️ Show/Hide Code', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
             'on_the_go': '🏃 Dictator', 'speed_inc': '⏩ Spd +5', 'speed_dec': '⏪ Spd -5',
             'toggle_typer_page2': '🔄 Next Page', 'toggle_perfect_mode': '🤖 Perfect/Human',
-            'set_question_count': '🔢 Num Questions'
+            'set_question_count': '🔢 Num Questions', 'open_history_nav': '📜 History'
         };
         return labels[action] || '—';
     }
@@ -1043,6 +1043,7 @@ export class SettingsView extends LitElement {
                     {value: 'language', label: '💻 Change Language'}, {value: 'reset', label: '✨ Reset Session'},
                     {value: 'refresh_page', label: '🔄 Refresh Page'}, {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
                     {value: 'set_question_count', label: '🔢 Set Total Questions (NumPad)'},
+                    {value: 'open_history_nav', label: '📜 Navigate Chat History'},
                     {value: 'bg_inc', label: '⬛ Opacity+'}, {value: 'bg_dec', label: '⬜ Opacity-'},
                     {value: 'text_inc', label: 'A+ Text Size'}, {value: 'text_dec', label: 'A- Text Size'},
                     {value: 'mic', label: '🎙️ Mic Toggle'}
@@ -1066,8 +1067,7 @@ export class SettingsView extends LitElement {
                     {value: 'speed_set_30', label: '⚡ Set Speed: 30 WPM'}, {value: 'speed_set_60', label: '⚡ Set Speed: 60 WPM'},
                     {value: 'speed_set_100', label: '⚡ Set Speed: 100 WPM'}, {value: 'speed_custom', label: '✏️ Set Custom Speed...'},
                     {value: 'reset_typer', label: '🔄 Reset Selection'}, {value: 'abort_typer', label: '🛑 Abort & Go Back'},
-                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'},
-                    {value: 'scroll_up', label: '⬆️ Scroll Up'}, {value: 'scroll_down', label: '⬇️ Scroll Down'}
+                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}
                 ];
                 if (typerTotalPages > 1) typerActionsList.push({value: 'toggle_typer_page2', label: '🔄 Next Typer Page'});
 
