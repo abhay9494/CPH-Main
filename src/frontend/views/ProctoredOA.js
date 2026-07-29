@@ -69,9 +69,12 @@ export class ProctoredOA extends LitElement {
         setupHours: { type: Number }, 
         setupMinutes: { type: Number }, 
         isSettingQuestions: { type: Boolean },
-        isSettingHistory: { type: Boolean }, // 🟢 NEW
-        historyPage: { type: Number }, // 🟢 NEW
-        historyTitles: { type: Array },
+        isSettingHistory: { type: Boolean }, 
+        historyPage: { type: Number }, 
+        historyTitles: { type: Array }, 
+        isMouseTrackerActive: { type: Boolean },
+        historyAbortArmed: { type: Boolean }, // 🟢 NEW: Track if we are confirming abort // 🟢 NEW
+        mouseCoords: { type: String },           // 🟢 NEW
         toastMessage: { type: String },
         timeRemainingMins: { type: Number }, // 🟢 NEW
         typingStartLineIndexForChunk: { type: Number }, // 🟢 NEW
@@ -116,7 +119,9 @@ export class ProctoredOA extends LitElement {
         this.isSettingQuestions = false; 
         this.isSettingHistory = false;
         this.historyPage = 0;
-        this.historyTitles = []; // 🟢 NEW 
+        this.historyTitles = []; 
+        this.isMouseTrackerActive = false;
+        this.mouseCoords = 'Waiting for mouse...';
 
         this.isGhostHidden = false;
         this.isThinkModeActive = false;
@@ -131,10 +136,20 @@ export class ProctoredOA extends LitElement {
         
         if (window.require && !this.isTestActive) {
             const { ipcRenderer } = window.require('electron');
-            ipcRenderer.invoke('toggle-ai-visibility', false); // 🟢 Hide AI Window
-            ipcRenderer.send('set-ignore-mouse-events', false); // 🟢 Allow user to click the Modal!
             
-            // 🟢 FIX: Do NOT hide the triggers! Keep them visible alongside the setup modal.
+            // 1. 🟢 FIX: Send the correct IPC events to officially register the OA state in the backend!
+            // This allows the backend to securely unhide the corners.
+            ipcRenderer.send('set-session-mode', 'proctored_oa');
+            ipcRenderer.send('set-oa-mode', true);
+            
+            // 2. Hide the AI window initially so it doesn't block your view
+            ipcRenderer.invoke('toggle-ai-visibility', false); 
+            ipcRenderer.send('set-ignore-mouse-events', false); 
+            
+            // 3. Wait 800ms for the backend HUD window to actually finish building its HTML before sending the text labels!
+            setTimeout(() => {
+                ipcRenderer.send('refresh-oa-hud', this.activePage || 1);
+            }, 800);
         }
 
         if (window.cheatingDaddy && window.cheatingDaddy.storage) {
@@ -189,7 +204,9 @@ export class ProctoredOA extends LitElement {
 
                 if (zone !== 'none') {
                     let map = {};
-                    if (this.viewMode === 'typer') {
+                    if (this.isSettingHistory) {
+                        map = this.prefs.historyCorners || { top_left: 'abort_history_nav', bottom_left: 'prev_history_page', bottom_right: 'next_history_page' };
+                    } else if (this.viewMode === 'typer') {
                         // 🟢 FIX: Pull from the new Typer Pages array
                         const tPages = this.prefs.typerPages || [];
                         if (tPages.length > 0) {
@@ -212,12 +229,11 @@ export class ProctoredOA extends LitElement {
                     
                     // 🟢 FIX: If the NumPad or History Menu is active, bypass ALL action checks!
                     if (!this.isSettingQuestions && !this.isSettingHistory) {
-                        // 🟢 FIX: Strictly restrict stealth mode to ONLY Hide/Unhide and Auto-Type! 
-                        // This prevents accidentally swapping pages or changing settings while invisible.
-                        const allowedInStealth = ['hide_unhide', 'auto_type'];
+                        // 🟢 FIX: Strictly restrict stealth mode to ONLY Hide/Unhide and Typer Auto-Type! 
+                        const allowedInStealth = ['hide_unhide', 'typer_auto_type', 'oa_auto_type', 'auto_type'];
                         
                         // 🟢 FIX: Allow necessary live-adjustments while actively typing
-                        const allowedWhileTyping = ['hide_unhide', 'auto_type', 'speed_inc', 'speed_dec', 'toggle_typer_vis', 'toggle_perfect_mode', 'abort_typer'];
+                        const allowedWhileTyping = ['hide_unhide', 'typer_auto_type', 'oa_auto_type', 'auto_type', 'speed_inc', 'speed_dec', 'toggle_typer_vis', 'toggle_perfect_mode', 'abort_typer'];
 
                         // 🛑 STEALTH LOCK
                         if (this.isGhostHidden && !allowedInStealth.includes(action)) return;
@@ -233,8 +249,7 @@ export class ProctoredOA extends LitElement {
                         targetDuration = !this.isGhostHidden ? 0 : ((this.prefs.hotCornerBounds?.hideTime || 0) * 1000);
                     } else if (['trim_top', 'trim_bottom', 'expand_top', 'expand_bottom', 'speed_inc', 'speed_dec'].includes(action)) {
                         targetDuration = (this.prefs.typerSelectionSpeed !== undefined ? this.prefs.typerSelectionSpeed : 0.5) * 1000;
-                    } else if (action === 'auto_type') {
-                        // 🟢 FIX: Make Pause (state === typing) AND Resume (line index > 0) completely instant!
+                    } else if (action === 'typer_auto_type' || action === 'oa_auto_type' || action === 'auto_type') { // 🟢 FIX: Check for ALL variations
                         if (this.typingState === 'typing' || this.typingCurrentLineIndex > 0) {
                             targetDuration = 0;
                         }
@@ -276,25 +291,56 @@ export class ProctoredOA extends LitElement {
                             
                             // 🟢 HISTORY NAV LOGIC
                             if (this.isSettingHistory) {
-                                const cornerOrder = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
-                                const cIndex = cornerOrder.indexOf(zone);
-                                
-                                if (cIndex === 14) { // Next Page
+                                const map = this.prefs.historyCorners || {
+                                    top_left: 'abort_history_nav',
+                                    bottom_left: 'prev_history_page',
+                                    bottom_right: 'next_history_page'
+                                };
+                                const hAction = map[zone];
+
+                                if (hAction === 'next_history_page') { 
                                     this.historyPage++;
                                     ipcRenderer.send('toggle-hud-history', { enable: true, page: this.historyPage, titles: this.historyTitles });
                                     this.showToast(`📄 Page ${this.historyPage + 1}`, '#4285f4');
-                                } else if (cIndex === 15) { // Prev Page
+                                } else if (hAction === 'prev_history_page') { 
                                     this.historyPage = Math.max(0, this.historyPage - 1);
                                     ipcRenderer.send('toggle-hud-history', { enable: true, page: this.historyPage, titles: this.historyTitles });
                                     this.showToast(`📄 Page ${this.historyPage + 1}`, '#4285f4');
-                                } else if (cIndex >= 0 && cIndex < 14) { // Selected a Conversation
-                                    const targetIndex = (this.historyPage * 14) + cIndex;
-                                    this.isSettingHistory = false;
-                                    ipcRenderer.send('toggle-hud-history', { enable: false });
-                                    this.showToast(`🔄 Loading Chat ${targetIndex + 1}...`, '#4285f4');
-                                    ipcRenderer.invoke('switch-ai-history', targetIndex);
+                                } else if (hAction === 'hide_unhide') {
+                                    this.executeActionByName('hide_unhide');
+                                } else if (hAction === 'abort_history_nav') {
+                                    if (!this.historyAbortArmed) {
+                                        this.historyAbortArmed = true;
+                                        this.showToast('⚠️ CONFIRM ABORT HISTORY', '#f14c4c');
+                                        setTimeout(() => { this.historyAbortArmed = false; }, 4000);
+                                    } else {
+                                        this.historyAbortArmed = false;
+                                        this.isSettingHistory = false;
+                                        
+                                        // 1. Tell the backend to kill the history UI
+                                        ipcRenderer.send('toggle-hud-history', { enable: false });
+                                        this.showToast('🚪 Exited History Mode', '#f14c4c');
+                                        
+                                        // 2. 🟢 FIX: Wait 200ms for the history DOM to fully clear out before drawing the OA triggers!
+                                        setTimeout(() => {
+                                            ipcRenderer.send('refresh-oa-hud', this.activePage || 1); 
+                                        }, 200);
+                                    }
+                                } else {
+                                    // 🟢 FIX: Dynamically calculate chat slots based on remaining available corners
+                                    const cornerOrder = ['top_left', 'top_mid_left', 'top_center', 'top_mid_right', 'top_right', 'left_mid_top', 'right_mid_top', 'middle_left', 'middle_right', 'left_mid_bottom', 'right_mid_bottom', 'bottom_left', 'bottom_mid_left', 'bottom_center', 'bottom_mid_right', 'bottom_right'];
+                                    const availableCorners = cornerOrder.filter(c => !map[c] || map[c] === 'none');
+                                    const cIndex = availableCorners.indexOf(zone);
+                                    
+                                    if (cIndex >= 0) { 
+                                        const targetIndex = (this.historyPage * availableCorners.length) + cIndex;
+                                        
+                                        // 🟢 FIX: Do NOT exit History Mode! Stay inside it so user can click other chats.
+                                        this.showToast(`🔄 Loading Chat ${targetIndex + 1}...`, '#4285f4');
+                                        ipcRenderer.invoke('switch-ai-history', targetIndex);
+                                    }
                                 }
-                                return;
+                                return; // 🟢 Stop processing any standard OA actions!
                             }
 
                             // 🟢 NUMPAD LOGIC
@@ -375,6 +421,12 @@ export class ProctoredOA extends LitElement {
                 this.timeRemainingMins = remainingMs / 60000;
             };
             ipcRenderer.on('sync-exam-time', this.syncExamTimeHandler);
+
+            // 🟢 NEW: Live Tracker Listener
+            ipcRenderer.on('mouse-tracker-data', (_, data) => {
+                this.mouseCoords = data;
+                this.requestUpdate();
+            });
 
             this.typingProgressCharHandler = (_, data) => {
                 if (data.runId !== this.currentRunId) return; 
@@ -565,6 +617,11 @@ export class ProctoredOA extends LitElement {
                     this.showToast('📜 Select Chat to Load', '#4285f4');
                 });
                 break;
+            case 'toggle_mouse_tracker':
+                this.isMouseTrackerActive = !this.isMouseTrackerActive;
+                ipcRenderer.send('toggle-mouse-tracker', this.isMouseTrackerActive);
+                this.showToast(this.isMouseTrackerActive ? '🎯 Tracker ON' : '🎯 Tracker OFF', '#f14c4c');
+                break;
             case 'toggle_page2': {
                 const pages = this.prefs.oaPages || [];
                 const totalPages = Math.max(1, pages.length > 0 ? pages.length : (this.prefs.hotCornersPage2 ? 2 : 1));
@@ -589,6 +646,8 @@ export class ProctoredOA extends LitElement {
                 break;
             }
             case 'auto_type':
+            case 'oa_auto_type':
+            case 'typer_auto_type':
                 if (this.typingState === 'idle') {
                     if (this.viewMode === 'typer') {
                         this.fullCodeString = this.typerCodeLines.slice(this.typerStartLine, this.typerEndLine + 1).join('\n');
@@ -945,6 +1004,13 @@ export class ProctoredOA extends LitElement {
 
         return html`
             <div class="main-wrapper">
+                
+                ${this.isMouseTrackerActive ? html`
+                    <div style="position: absolute; top: 20px; left: 50%; transform: translateX(-50%); background: #f14c4c; color: #fff; padding: 12px 24px; font-weight: 800; border-radius: 8px; font-family: 'SF Mono', monospace; font-size: 18px; z-index: 99999; pointer-events: none; box-shadow: 0 4px 20px rgba(0,0,0,0.5);">
+                        🎯 ${this.mouseCoords}
+                    </div>
+                ` : ''}
+
                 ${this.viewMode === 'typer' && this.isTyperOverlayVisible ? this.renderTyper() : ''}
                 
                 ${this.viewMode === 'typer' && !this.isGhostHidden ? html`

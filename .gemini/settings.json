@@ -1,0 +1,30 @@
+{
+  "editor.formatOnSave": true,
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/CVS": true,
+    "**/.DS_Store": true,
+    "**/node_modules": true,
+    "**/out": true
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/out": true
+  },
+  "lit-html.format.enabled": true,
+  "lit-plugin.rules.no-unknown-tag-name": "off",
+  "lit-plugin.rules.no-incompatible-type-binding": "warn",
+  "editor.tokenColorCustomizations": {
+    "textMateRules": [
+      {
+        "scope": "meta.template.expression",
+        "settings": {
+          "foreground": "#4285f4"
+        }
+      }
+    ]
+  }
+}

@@ -39,21 +39,24 @@ const DEFAULT_PREFERENCES = {
         left_mid_top: 'refactor', right_mid_top: 'prev_resp',
         middle_left: 'change_ai', middle_right: 'fast_think',
         left_mid_bottom: 'fix_error', right_mid_bottom: 'next_resp',
-        bottom_left: 'send_ai', bottom_mid_left: 'reset', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'auto_type'
+        bottom_left: 'send_ai', bottom_mid_left: 'reset', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'oa_auto_type'
     },
     hotCornersPage2: {
         top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',
         left_mid_top: 'bg_inc', right_mid_top: 'text_inc',
         middle_left: 'change_profile', middle_right: 'language',
         left_mid_bottom: 'bg_dec', right_mid_bottom: 'text_dec',
-        bottom_left: 'send_ai', bottom_mid_left: 'mic', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'auto_type'
+        bottom_left: 'send_ai', bottom_mid_left: 'mic', bottom_center: 'scroll_down', bottom_mid_right: 'toggle_page2', bottom_right: 'oa_auto_type'
     },
     typerHotCorners: { 
         top_left: 'abort_oa', top_mid_left: 'none', top_center: 'scroll_up', top_mid_right: 'none', top_right: 'hide_unhide',
         left_mid_top: 'trim_top', right_mid_top: 'trim_bottom',
         middle_left: 'none', middle_right: 'none',
         left_mid_bottom: 'expand_top', right_mid_bottom: 'expand_bottom',
-        bottom_left: 'reset_typer', bottom_mid_left: 'none', bottom_center: 'scroll_down', bottom_mid_right: 'none', bottom_right: 'auto_type'
+        bottom_left: 'reset_typer', bottom_mid_left: 'none', bottom_center: 'scroll_down', bottom_mid_right: 'none', bottom_right: 'typer_auto_type'
+    },
+    historyCorners: {
+        top_left: 'abort_history_nav', bottom_left: 'prev_history_page', bottom_right: 'next_history_page'
     },
     interviewCorners: {
         top_left: 'capture', top_mid_left: 'abort_oa', top_center: 'scroll_up', top_mid_right: 'toggle_ai_vis', top_right: 'hide_unhide',

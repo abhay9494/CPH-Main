@@ -547,25 +547,32 @@ function spawnCornerHUD(page = 1) {
         // Parse custom speeds natively
         if (action.startsWith('speed_set_')) return `⚡ ${action.split('_')[2]} WPM`;
         
+        if (action === 'auto_type') {
+            return isTyper ? '▶️ Start Typing' : '▶️ Enter Typer';
+        }
+        
         const labels = {
-            'capture': '📸 Capture', 'send_ai': '🚀 Send AI',
-            'hide_unhide': '👻 Hide/Show', 'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Dn',
-            'prev_resp': '◀ Prev', 'next_resp': '▶ Next', 'change_ai': `🤖 ${activeAiName}`,
-            'change_profile': `👤 ${profileNick}`, 'fast_think': `🧠 ${modeName}`, 'refactor': '🛠️ Refactor',
-            'reset': '✨ Reset', 'text_inc': 'A+ Text', 'text_dec': 'A- Text',
-            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'toggle_ai_vis': '👁️ Toggle AI',
-            'fix_error': '🔧 Fix Error', 'language': '💻 Language', 'mic': '🎙️ Mic',
-            'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot', 'abort_typer': '🛑 Abort Typer',
-            'auto_type': '▶️ Auto-Type', 'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 
-            'reset_typer': '🔄 Reset Sel', 'abort_oa': '🚪 Abort OA', 'toggle_page2': `🔄 Page ${nextPageNum}`,
-            'toggle_typer_page2': `🔄 Page ${nextPageNum}`, 'toggle_typer_vis': '👁️ Show/Hide Code',
-            'regenerate': '🔄 Regen', 'toggle_theme': '🌓 Theme Flip', 'sync_followup': '🔍 Follow-up',
-            'fusion_dry_run': '🎯 Dry Run', 'on_the_go': '🏃 Dictator', 'refresh_page': '🔄 Refresh Page',
-            'speed_inc': '⏩ Speed +5', 'speed_dec': '⏪ Speed -5',
-            'toggle_perfect_mode': global.isPerfectModeActive ? '🤖 Perfect Mode' : '👨‍💻 Human Mode',
-            'set_question_count': '🔢 Num Questions'
+            'capture': '📸 Capture', 'send_ai': '🚀 Send AI', 'fix_error': '🔧 Fix Error',
+            'refactor': '🛠️ Refactor', 'abort_oa': '🚪 Exit OA',
+            'hide_unhide': '👻 Hide/Show', 'toggle_ai_vis': '👁️ Hide/Show AI', 'scroll_up': '⬆️ Scroll Up',
+            'scroll_down': '⬇️ Scroll Dn', 'prev_resp': '◀ Prev Resp', 'next_resp': '▶ Next Resp',
+            'change_profile': `👤 ${profileNick}`, 'change_ai': `🤖 ${activeAiName}`, 'fast_think': `🧠 ${modeName}`,
+            'language': '💻 Language', 'reset': '✨ Reset', 'refresh_page': '🔄 Refresh Page', 'toggle_page2': `🔄 Page ${nextPageNum}`,
+            'toggle_theme': '🌓 Toggle Theme', 'bg_inc': '⬛ Opacity +', 'bg_dec': '⬜ Opacity -', 'text_inc': 'A+ Text',
+            'text_dec': 'A- Text', 'mic': '🎙️ Toggle Mic', 'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot',
+            'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 'reset_typer': '🔄 Reset Sel',
+            'abort_typer': '🛑 Exit Typer', 'toggle_typer_vis': '👁️ Hide/Show Code', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
+            'on_the_go': '🏃 Dictator', 'speed_inc': '⏩ Spd +5', 'speed_dec': '⏪ Spd -5',
+            'toggle_typer_page2': `🔄 Page ${nextPageNum}`, 'toggle_perfect_mode': global.isPerfectModeActive ? '🤖 Perfect Mode' : '👨‍💻 Human Mode',
+            'set_question_count': '🔢 Num Questions', 'open_history_nav': '📜 History Menu',
+            'toggle_mouse_tracker': '🎯 Tracker', 'speed_custom': '✏️ Custom Spd',
+            'oa_auto_type': '▶️ OA Type', 'typer_auto_type': '▶️ Bot Type',
+            'abort_history_nav': '🛑 Exit History', 'next_history_page': '⏭️ Next Chats', 'prev_history_page': '⏮️ Prev Chats',
+            'regenerate': '🔄 Regen'
         };
-        return labels[action] || action;
+        
+        // Final fallback: replace underscores with spaces and capitalize
+        return labels[action] || action.replace(/_/g, ' ').toUpperCase();
     };
 
     const zoneLabels = {
@@ -588,12 +595,13 @@ function spawnCornerHUD(page = 1) {
         width, height, x, y,
         frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true,
         hasShadow: false, focusable: false,
-        webPreferences: { nodeIntegration: true, contextIsolation: false }
+        webPreferences: { nodeIntegration: true, contextIsolation: false, sandbox: false }
     });
     
     global.cornerHudWindow.setIgnoreMouseEvents(true, { forward: true });
     global.cornerHudWindow.setContentProtection(true);
     if (process.platform === 'win32') global.cornerHudWindow.setAlwaysOnTop(true, 'screen-saver', 15);
+    global.cornerHudWindow.showInactive();
 
     const htmlContent = `
     <html><head><style>
@@ -843,6 +851,9 @@ function spawnCornerHUD(page = 1) {
             // 🟢 NEW: Dynamic Chat History Menu
             ipcRenderer.on('toggle-hud-history', (e, data) => {
                 const { enable, page, titles = [] } = data;
+                const hMap = ${JSON.stringify(prefs.historyCorners || { top_left: 'abort_history_nav', bottom_mid_right: 'prev_history_page', bottom_right: 'next_history_page' })};
+                const availableCorners = cornerOrder.filter(c => !hMap[c] || hMap[c] === 'none');
+                
                 cornerOrder.forEach((id, idx) => {
                     const el = document.getElementById(id);
                     const textEl = document.getElementById('text-' + id);
@@ -851,19 +862,26 @@ function spawnCornerHUD(page = 1) {
                             if (!originalHUDContents[id]) originalHUDContents[id] = textEl.innerHTML;
                             
                             let displayHtml = '';
-                            if (idx < 14) { // Triggers 1-14: Chat Slots
-                                const targetIdx = (page * 14) + idx;
-                                const rawTitle = titles[targetIdx] ? titles[targetIdx] : \`Chat \${targetIdx + 1}\`;
-                                
-                                // 🟢 FIX: Cleanly split and keep the first 2 words + '...'
-                                const words = rawTitle.trim().split(/\s+/);
-                                const titleText = words.length > 2 ? words[0] + ' ' + words[1] + '...' : rawTitle;
-                                
-                                displayHtml = \`<div style="font-size: 11px; font-weight: 700; color: #fff; max-width: 80px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.2;" title="\${rawTitle}">\${titleText}</div>\`;
-                            } else if (idx === 14) { // Trigger 15: Next
-                                displayHtml = \`<span style="font-size: 20px;">⏭️</span>\`;
-                            } else if (idx === 15) { // Trigger 16: Prev
-                                displayHtml = \`<span style="font-size: 20px;">⏮️</span>\`;
+                            const hAction = hMap[id];
+                            
+                            if (hAction === 'abort_history_nav') {
+                                displayHtml = '<span style="font-size: 11px; font-weight: bold; color: #f14c4c;">🛑 EXIT HISTORY</span>';
+                            } else if (hAction === 'next_history_page') {
+                                displayHtml = '<span style="font-size: 11px; font-weight: bold; color: #fff;">⏭️ NEXT CHATS</span>';
+                            } else if (hAction === 'prev_history_page') {
+                                displayHtml = '<span style="font-size: 11px; font-weight: bold; color: #fff;">⏮️ PREV CHATS</span>';
+                            } else if (hAction === 'hide_unhide') {
+                                displayHtml = '<span style="font-size: 11px; font-weight: bold; color: #fff;">👻 HIDE/SHOW</span>';
+                            } else { 
+                                // Standard Chat Slot
+                                const cIndex = availableCorners.indexOf(id);
+                                if (cIndex >= 0) {
+                                    const targetIdx = (page * availableCorners.length) + cIndex;
+                                    const rawTitle = titles[targetIdx] ? titles[targetIdx] : \`Chat \${targetIdx + 1}\`;
+                                    
+                                    // 🟢 FIX: Show the full name! Expand max-width to allow the entire string.
+                                    displayHtml = \`<div style="font-size: 10px; font-weight: 700; color: #fff; max-width: 150px; white-space: normal; line-height: 1.2; text-align: center;" title="\${rawTitle}">\${rawTitle}</div>\`;
+                                }
                             }
 
                             textEl.innerHTML = displayHtml;
@@ -892,7 +910,11 @@ function spawnCornerHUD(page = 1) {
     global.cornerHudWindow.loadURL('data:text/html;charset=utf-8,' + encodeURIComponent(htmlContent));
     
     global.cornerHudWindow.webContents.once('did-finish-load', () => {
-        global.cornerHudWindow.webContents.send('update-labels', zoneLabels);
+        setTimeout(() => {
+            if (global.cornerHudWindow && !global.cornerHudWindow.isDestroyed()) {
+                global.cornerHudWindow.webContents.send('update-labels', zoneLabels);
+            }
+        }, 150);
     });
 }
 
@@ -1257,6 +1279,29 @@ app.whenReady().then(async () => {
         }
     }, 30);
     // ==========================================
+
+    const { screen, globalShortcut } = require('electron');
+
+    // 🟢 MOUSE TRACKER DIAGNOSTIC TOOL
+    globalShortcut.register('CommandOrControl+Shift+M', () => {
+        const point = screen.getCursorScreenPoint();
+        let aiBoundsStr = 'AI Window not found';
+        
+        if (global.codeWebWindowPrimary && !global.codeWebWindowPrimary.isDestroyed()) {
+            const bounds = global.codeWebWindowPrimary.getBounds();
+            // Calculate relative position inside the AI window
+            const relativeX = point.x - bounds.x;
+            const relativeY = point.y - bounds.y;
+            aiBoundsStr = `AI Window -> X:${bounds.x}, Y:${bounds.y}, W:${bounds.width}, H:${bounds.height}\n` +
+                          `Relative to AI Window -> X: ${relativeX}, Y: ${relativeY}`;
+        }
+
+        console.log(`\n============================`);
+        console.log(`📍 MOUSE DIAGNOSTICS`);
+        console.log(`Absolute Screen -> X: ${point.x}, Y: ${point.y}`);
+        console.log(aiBoundsStr);
+        console.log(`============================\n`);
+    });
     
     registerTrackpadGestures();
     setTimeout(() => registerTrackpadGestures(), 3000);
@@ -2641,45 +2686,92 @@ function setupGeneralIpcHandlers() {
         }
     });
 
-    // 🟢 VIRTUAL MOUSE COORD MAPPER: Clicks exact vertical positions in the Gemini sidebar without moving your real mouse!
+    // 🟢 UNIVERSAL DOM ROUTER: Hunts through every window to find the active AI sidebar!
     ipcMain.handle('switch-ai-history', async (e, index) => {
-        if (!global.codeWebWindowPrimary || global.codeWebWindowPrimary.isDestroyed()) return false;
-        
-        try {
-            // 1. Calculate virtual Y coordinate based on the chat index (Assuming sidebar list starts around Y: 140px, spaced 40px apart)
-            const sidebarX = 90; // Horizontal pixel location of Gemini's sidebar
-            const startY = 140;  // Pixel offset of the first chat item
-            const rowHeight = 42;  // Height of each chat row
-            const targetY = startY + (index * rowHeight);
+        const { BrowserWindow } = require('electron');
+        const windows = BrowserWindow.getAllWindows();
 
-            // 2. Dispatch background OS-level mouse events directly to the background AI window
-            global.codeWebWindowPrimary.webContents.sendInputEvent({ type: 'mouseMove', x: sidebarX, y: targetY });
-            global.codeWebWindowPrimary.webContents.sendInputEvent({ type: 'mouseDown', x: sidebarX, y: targetY, button: 'left', clickCount: 1 });
-            global.codeWebWindowPrimary.webContents.sendInputEvent({ type: 'mouseUp', x: sidebarX, y: targetY, button: 'left', clickCount: 1 });
+        for (const win of windows) {
+            try {
+                if (!win.webContents || win.isDestroyed()) continue;
+                
+                const success = await win.webContents.executeJavaScript(`
+                    (() => {
+                        try {
+                            // Target both Gemini and ChatGPT sidebars
+                            const links = document.querySelectorAll('gem-nav-list-item a, a[href*="/c/"]');
+                            
+                            // If this specific window doesn't have the AI sidebar, tell Node to check the next window
+                            if (!links || links.length === 0 || !links[${index}]) return false;
+                            
+                            const targetLink = links[${index}];
 
-            return true;
-        } catch(err) {
-            return false;
+                            // 🎯 Visual Ping: Flash green to prove it found the right window!
+                            const origBg = targetLink.style.backgroundColor;
+                            targetLink.style.transition = '0.3s';
+                            targetLink.style.backgroundColor = 'rgba(0, 204, 102, 0.5)';
+                            setTimeout(() => { targetLink.style.backgroundColor = origBg; }, 600);
+
+                            // Execute native clicks
+                            targetLink.click();
+                            targetLink.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+                            targetLink.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+
+                            // Router force-navigation
+                            setTimeout(() => {
+                                if (targetLink.href && !window.location.href.includes(targetLink.href)) {
+                                    window.location.assign(targetLink.href);
+                                }
+                            }, 250);
+
+                            return true; // Click successful!
+                        } catch(err) { return false; }
+                    })();
+                `);
+                
+                // If it successfully found and clicked the chat, stop searching other windows!
+                if (success) return true;
+            } catch (err) {}
         }
+        return false;
     });
 
-    // 🟢 SCAPE TITLES FOR GHOST HUD
+    // 🟢 UNIVERSAL DOM SCRAPER: Finds the correct AI window and extracts the names
     ipcMain.handle('fetch-ai-history-titles', async (e) => {
-        if (!global.codeWebWindowPrimary || global.codeWebWindowPrimary.isDestroyed()) return [];
-        return await global.codeWebWindowPrimary.webContents.executeJavaScript(`
-            (() => {
-                try {
-                    const links = Array.from(document.querySelectorAll('a')).filter(a => {
-                        const href = a.getAttribute('href') || '';
-                        return (href.includes('/app/') && href.length > 15) || (href.includes('/c/') && href.length > 10);
-                    });
-                    return links.map(el => {
-                        const raw = el.textContent || '';
-                        return raw.trim().split('\\n')[0];
-                    }).filter(t => t.length > 0);
-                } catch(err) { return []; }
-            })();
-        `);
+        const { BrowserWindow } = require('electron');
+        const windows = BrowserWindow.getAllWindows();
+
+        for (const win of windows) {
+            try {
+                if (!win.webContents || win.isDestroyed()) continue;
+
+                const titles = await win.webContents.executeJavaScript(`
+                    (() => {
+                        try {
+                            const links = document.querySelectorAll('gem-nav-list-item a, a[href*="/c/"]');
+                            if (!links || links.length === 0) return null; // No AI sidebar here
+                            
+                            return Array.from(links).map(a => {
+                                // Prefer the exact span class from Gemini's HTML
+                                const span = a.querySelector('.title-text');
+                                if (span && span.textContent) return span.textContent.trim();
+                                
+                                // Fallback to aria-labels or inner text for other AI formats
+                                return (a.getAttribute('aria-label') || a.textContent || '').trim();
+                            }).filter(t => t.length > 0);
+                        } catch(err) { return null; }
+                    })();
+                `);
+
+                // If this window returned actual titles, beam them straight to the UI!
+                if (titles && titles.length > 0) return titles;
+            } catch (err) {}
+        }
+
+        // Ultimate Failsafe (Only triggers if NO window has a sidebar open)
+        let fallback = [];
+        for(let i=1; i<=20; i++) fallback.push('Chat ' + i);
+        return fallback;
     });
 
     // 🟢 NEW: Refresh AI Page Handler
@@ -2691,5 +2783,29 @@ function setupGeneralIpcHandlers() {
             if (voiceWebWindowSecondary && !voiceWebWindowSecondary.isDestroyed()) voiceWebWindowSecondary.reload();
             return true;
         } catch(e) { return false; }
+    });
+
+    // 🟢 NEW: Live Diagnostic Mouse Tracker
+    let mouseTrackerInterval = null;
+    ipcMain.on('toggle-mouse-tracker', (e, enable) => {
+        if (mouseTrackerInterval) clearInterval(mouseTrackerInterval);
+        if (enable) {
+            mouseTrackerInterval = setInterval(() => {
+                const { screen, BrowserWindow } = require('electron');
+                const point = screen.getCursorScreenPoint();
+                let msg = `Absolute -> X:${point.x} Y:${point.y}`;
+                if (global.codeWebWindowPrimary && !global.codeWebWindowPrimary.isDestroyed()) {
+                    const bounds = global.codeWebWindowPrimary.getBounds();
+                    msg = `AI Relative -> X: ${point.x - bounds.x}, Y: ${point.y - bounds.y}`;
+                }
+                
+                // 🟢 FIX: Broadcast the coordinates to ALL windows so ProctoredOA catches it!
+                BrowserWindow.getAllWindows().forEach(w => {
+                    if (w.webContents && !w.isDestroyed()) {
+                        w.webContents.send('mouse-tracker-data', msg);
+                    }
+                });
+            }, 50); // Updates 20 times a second for buttery smooth tracking
+        }
     });
 }

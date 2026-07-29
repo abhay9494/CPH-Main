@@ -674,45 +674,61 @@ export class SettingsView extends LitElement {
         this.requestUpdate();
     }
 
-    getHotCornerLabel(action) {
+    getHotCornerLabel(action, mapName) {
         if (!action) return '🚫 None';
         if (action.startsWith('speed_set_')) return `⚡ Set Speed: ${action.split('_')[2]} WPM`;
+        
+        if (action === 'auto_type') {
+            return mapName === 'typerPages' ? '▶️ Start Typing' : '▶️ Enter Auto Typer Mode';
+        }
+        
         const labels = {
             'none': '🚫 None (Disabled)', 'capture': '📸 Capture Screen', 'send_ai': '🚀 Send to AI',
-            'fix_error': '🔧 Fix Error', 'refactor': '🛠️ Refactor', 'auto_type': '▶️ Start / Pause / Resume',
-            'abort_oa': '🚪 Abort OA & Exit', 'hide_unhide': '👻 Hide / Unhide', 'toggle_ai_vis': '👁️ Show / Hide AI',
+            'fix_error': '🔧 Fix Error', 'refactor': '🛠️ Refactor',
+            'abort_oa': '🚪 Exit OA Mode', 'hide_unhide': '👻 Hide/Show Overlay', 'toggle_ai_vis': '👁️ Show/Hide AI Window',
             'scroll_up': '⬆️ Scroll Up', 'scroll_down': '⬇️ Scroll Down', 'prev_resp': '◀ Previous Response',
-            'next_resp': '▶ Next Response', 'change_profile': '👤 Switch Profile', 'change_ai': '🤖 Change AI',
-            'fast_think': '🧠 Toggle Fast/Think', 'language': '💻 Change Language', 'reset': '✨ Reset Session',
-            'refresh_page': '🔄 Refresh Page', 'toggle_page2': '🔄 Next Page', 'toggle_theme': '🌓 Toggle Light/Dark Mode',
-            'bg_inc': '⬛ Opacity+', 'bg_dec': '⬜ Opacity-', 'text_inc': 'A+ Text Size', 'text_dec': 'A- Text Size',
-            'mic': '🎙️ Mic Toggle', 'trim_top': '✂️ Unselect Top Line', 'trim_bottom': '✂️ Unselect Bot Line',
+            'next_resp': '▶ Next Response', 'change_profile': '👤 Switch Profile', 'change_ai': '🤖 Switch AI',
+            'fast_think': '🧠 Toggle Fast/Think Mode', 'language': '💻 Change Language', 'reset': '✨ Reset Session',
+            'refresh_page': '🔄 Refresh Page', 'toggle_page2': '🔄 Next Page', 'toggle_theme': '🌓 Toggle Theme',
+            'bg_inc': '⬛ Opacity +', 'bg_dec': '⬜ Opacity -', 'text_inc': 'A+ Text Size', 'text_dec': 'A- Text Size',
+            'mic': '🎙️ Toggle Mic', 'trim_top': '✂️ Unselect Top Line', 'trim_bottom': '✂️ Unselect Bot Line',
             'expand_top': '➕ Expand Top Line', 'expand_bottom': '➕ Expand Bot Line', 'reset_typer': '🔄 Reset Selection',
-            'abort_typer': '🛑 Abort & Go Back', 'toggle_typer_vis': '👁️ Show / Hide Typer Code', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
+            'abort_typer': '🛑 Exit Auto Typer Mode', 'toggle_typer_vis': '👁️ Show/Hide Typer Code', 'sync_followup': '🔍 Sync Follow-up Image', 'fusion_dry_run': '🎯 Fusion Dry Run',
             'on_the_go': '🏃 On-The-Go Dictator', 'speed_inc': '⏩ Speed +5 WPM', 'speed_dec': '⏪ Speed -5 WPM',
-            'toggle_typer_page2': '🔄 Next Typer Page', 'toggle_perfect_mode': '🤖 Toggle Perfect / Human Mode',
-            'set_question_count': '🔢 Set Question Count', 'open_history_nav': '📜 Chat History'
+            'toggle_typer_page2': '🔄 Next Typer Page', 'toggle_perfect_mode': '🤖 Perfect/Human Mode',
+            'set_question_count': '🔢 Set Question Count', 'open_history_nav': '📜 Chat History',
+            'toggle_mouse_tracker': '🎯 Mouse Tracker', 'speed_custom': '✏️ Custom Speed...',
+            'oa_auto_type': '▶️ Start OA Type', 'typer_auto_type': '▶️ Start Bot Type',
+            'abort_history_nav': '🛑 Exit History Mode', 'next_history_page': '⏭️ Next Chats', 'prev_history_page': '⏮️ Prev Chats'
         };
         return labels[action] || action || '🚫 None';
     }
 
-    getShortLabel(action) {
+    getShortLabel(action, mapName) {
         if (!action) return '—';
         if (action.startsWith('speed_set_')) return `⚡ ${action.split('_')[2]} WPM`;
+        
+        if (action === 'auto_type') {
+            return mapName === 'typerPages' ? '▶️ Start Typing' : '▶️ Enter Typer';
+        }
+        
         const labels = {
             'none': '—', 'capture': '📸 Capture', 'send_ai': '🚀 Send AI', 'fix_error': '🔧 Fix Error',
-            'refactor': '🛠️ Refactor', 'auto_type': '▶️ Auto-Type', 'abort_oa': '🚪 Abort OA',
-            'hide_unhide': '👻 Hide/Show', 'toggle_ai_vis': '👁️ Toggle AI', 'scroll_up': '⬆️ Scroll Up',
-            'scroll_down': '⬇️ Scroll Dn', 'prev_resp': '◀ Prev', 'next_resp': '▶ Next',
-            'change_profile': '👤 Profile', 'change_ai': '🤖 Switch AI', 'fast_think': '🧠 Fast/Think',
-            'language': '💻 Language', 'reset': '✨ Reset', 'refresh_page': '🔄 Refresh', 'toggle_page2': '🔄 Next Page',
-            'toggle_theme': '🌓 Theme', 'bg_inc': '⬛ Opac +', 'bg_dec': '⬜ Opac -', 'text_inc': 'A+ Text',
-            'text_dec': 'A- Text', 'mic': '🎙️ Mic', 'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot',
+            'refactor': '🛠️ Refactor', 'abort_oa': '🚪 Exit OA',
+            'hide_unhide': '👻 Hide/Show', 'toggle_ai_vis': '👁️ Hide/Show AI', 'scroll_up': '⬆️ Scroll Up',
+            'scroll_down': '⬇️ Scroll Dn', 'prev_resp': '◀ Prev Resp', 'next_resp': '▶ Next Resp',
+            'change_profile': '👤 Switch Profile', 'change_ai': '🤖 Switch AI', 'fast_think': '🧠 Fast/Think Mode',
+            'language': '💻 Language', 'reset': '✨ Reset', 'refresh_page': '🔄 Refresh Page', 'toggle_page2': '🔄 Next Page',
+            'toggle_theme': '🌓 Toggle Theme', 'bg_inc': '⬛ Opacity +', 'bg_dec': '⬜ Opacity -', 'text_inc': 'A+ Text',
+            'text_dec': 'A- Text', 'mic': '🎙️ Toggle Mic', 'trim_top': '✂️ Unsel Top', 'trim_bottom': '✂️ Unsel Bot',
             'expand_top': '➕ Exp Top', 'expand_bottom': '➕ Exp Bot', 'reset_typer': '🔄 Reset Sel',
-            'abort_typer': '🛑 Abort Typer', 'toggle_typer_vis': '👁️ Show/Hide Code', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
+            'abort_typer': '🛑 Exit Typer', 'toggle_typer_vis': '👁️ Hide/Show Code', 'sync_followup': '🔍 Follow-up', 'fusion_dry_run': '🎯 Dry Run',
             'on_the_go': '🏃 Dictator', 'speed_inc': '⏩ Spd +5', 'speed_dec': '⏪ Spd -5',
             'toggle_typer_page2': '🔄 Next Page', 'toggle_perfect_mode': '🤖 Perfect/Human',
-            'set_question_count': '🔢 Num Questions', 'open_history_nav': '📜 History'
+            'set_question_count': '🔢 Num Questions', 'open_history_nav': '📜 History Menu',
+            'toggle_mouse_tracker': '🎯 Tracker', 'speed_custom': '✏️ Custom Spd',
+            'oa_auto_type': '▶️ OA Type', 'typer_auto_type': '▶️ Bot Type',
+            'abort_history_nav': '🛑 Exit History', 'next_history_page': '⏭️ Next Chats', 'prev_history_page': '⏮️ Prev Chats'
         };
         return labels[action] || '—';
     }
@@ -730,7 +746,7 @@ export class SettingsView extends LitElement {
         }
 
         const clockWiseGrid = ['top_center', 'top_mid_right', 'top_right', 'right_mid_top', 'middle_right', 'right_mid_bottom', 'bottom_right', 'bottom_mid_right', 'bottom_center', 'bottom_mid_left', 'bottom_left', 'left_mid_bottom', 'middle_left', 'left_mid_top', 'top_left', 'top_mid_left'];
-        const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none'));
+        const labelsArray = clockWiseGrid.map(key => this.getHotCornerLabel(activeMap[key] || 'none', 'oaPages'));
         window.require('electron').ipcRenderer.send('sync-radial-labels', labelsArray);
     }
 
@@ -796,28 +812,39 @@ export class SettingsView extends LitElement {
         e.currentTarget.classList.remove('drag-over');
         if (this.draggedMap !== targetMap || this.draggedZone === targetZone) return;
 
-        const pages = [...(this.prefs[targetMap] || [])];
-        const pageIdx = targetMap === 'oaPages' ? this.editingPageIdx : this.editingTyperPageIdx;
-        
-        let sourceAction = (pages[pageIdx].map || {})[this.draggedZone] || 'none';
-        let targetAction = (pages[pageIdx].map || {})[targetZone] || 'none';
-
-        pages[pageIdx].map = { ...pages[pageIdx].map, [this.draggedZone]: targetAction, [targetZone]: sourceAction };
-        this.savePref(targetMap, pages);
-        
-        if (targetMap === 'oaPages' && window.require) {
-            window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
+        if (targetMap === 'historyCorners') {
+            const hMap = { ...(this.prefs.historyCorners || {}) };
+            let sourceAction = hMap[this.draggedZone] || 'none';
+            let targetAction = hMap[targetZone] || 'none';
+            hMap[this.draggedZone] = targetAction;
+            hMap[targetZone] = sourceAction;
+            this.savePref('historyCorners', hMap);
+        } else {
+            const pages = [...(this.prefs[targetMap] || [])];
+            const pageIdx = targetMap === 'oaPages' ? this.editingPageIdx : this.editingTyperPageIdx;
+            let sourceAction = (pages[pageIdx].map || {})[this.draggedZone] || 'none';
+            let targetAction = (pages[pageIdx].map || {})[targetZone] || 'none';
+            pages[pageIdx].map = { ...pages[pageIdx].map, [this.draggedZone]: targetAction, [targetZone]: sourceAction };
+            this.savePref(targetMap, pages);
+            if (targetMap === 'oaPages' && window.require) {
+                window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
+            }
         }
         this.draggedZone = null;
         this.requestUpdate();
     }
 
     renderMatrixCell(id, row, col, label, mapName = 'oaPages') {
-        const pages = this.prefs[mapName] || [];
-        const pageIdx = mapName === 'oaPages' ? this.editingPageIdx : this.editingTyperPageIdx;
-        const currentPage = pages[pageIdx] || { map: {} };
-        const action = currentPage.map[id] || 'none';
-        const shortLabel = this.getShortLabel(action);
+        let action = 'none';
+        if (mapName === 'historyCorners') {
+            action = (this.prefs.historyCorners || {})[id] || 'none';
+        } else {
+            const pages = this.prefs[mapName] || [];
+            const pageIdx = mapName === 'oaPages' ? this.editingPageIdx : this.editingTyperPageIdx;
+            const currentPage = pages[pageIdx] || { map: {} };
+            action = currentPage.map[id] || 'none';
+        }
+        const shortLabel = this.getShortLabel(action, mapName);
         
         return html`
             <div class="matrix-cell" 
@@ -1034,7 +1061,7 @@ export class SettingsView extends LitElement {
                 let baseCornerActions = [
                     {value: 'none', label: '🚫 None (Disabled)'}, {value: 'capture', label: '📸 Capture Screen'},
                     {value: 'send_ai', label: '🚀 Send to AI'}, {value: 'fix_error', label: '🔧 Fix Error'},
-                    {value: 'refactor', label: '🛠️ Refactor'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume Typer'},
+                    {value: 'refactor', label: '🛠️ Refactor'}, {value: 'auto_type', label: '▶️ Enter Auto Typer Mode'},
                     {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide'},
                     {value: 'toggle_ai_vis', label: '👁️ Show / Hide AI'}, {value: 'scroll_up', label: '⬆️ Scroll Up'},
                     {value: 'scroll_down', label: '⬇️ Scroll Down'}, {value: 'prev_resp', label: '◀ Previous Response'},
@@ -1044,6 +1071,7 @@ export class SettingsView extends LitElement {
                     {value: 'refresh_page', label: '🔄 Refresh Page'}, {value: 'toggle_theme', label: '🌓 Toggle Light/Dark Mode'},
                     {value: 'set_question_count', label: '🔢 Set Total Questions (NumPad)'},
                     {value: 'open_history_nav', label: '📜 Navigate Chat History'},
+                    {value: 'toggle_mouse_tracker', label: '🎯 Live Mouse Tracker Diagnostics'},
                     {value: 'bg_inc', label: '⬛ Opacity+'}, {value: 'bg_dec', label: '⬜ Opacity-'},
                     {value: 'text_inc', label: 'A+ Text Size'}, {value: 'text_dec', label: 'A- Text Size'},
                     {value: 'mic', label: '🎙️ Mic Toggle'}
@@ -1059,15 +1087,15 @@ export class SettingsView extends LitElement {
                 const typerTotalPages = (this.prefs.typerPages || []).length;
                 
                 const typerActionsList = [
-                    {value: 'none', label: '🚫 None (Disabled)'}, {value: 'auto_type', label: '▶️ Start / Pause / Resume'},
-                    {value: 'toggle_typer_vis', label: '👁️ Show / Hide Typer Code'}, {value: 'toggle_perfect_mode', label: '🤖 Toggle Perfect / Human Mode'},
+                    {value: 'none', label: '🚫 None (Disabled)'}, {value: 'auto_type', label: '▶️ Start Typing'},
+                    {value: 'toggle_typer_vis', label: '👁️ Show/Hide Typer Code'}, {value: 'toggle_perfect_mode', label: '🤖 Perfect/Human Mode'},
                     {value: 'trim_top', label: '✂️ Unselect Top Line'}, {value: 'expand_top', label: '➕ Expand Top Line'},
-                    {value: 'trim_bottom', label: '✂️ Unselect Bottom Line'}, {value: 'expand_bottom', label: '➕ Expand Bottom Line'},
+                    {value: 'trim_bottom', label: '✂️ Unselect Bot Line'}, {value: 'expand_bottom', label: '➕ Expand Bot Line'},
                     {value: 'speed_inc', label: '⏩ Speed +5 WPM'}, {value: 'speed_dec', label: '⏪ Speed -5 WPM'},
                     {value: 'speed_set_30', label: '⚡ Set Speed: 30 WPM'}, {value: 'speed_set_60', label: '⚡ Set Speed: 60 WPM'},
-                    {value: 'speed_set_100', label: '⚡ Set Speed: 100 WPM'}, {value: 'speed_custom', label: '✏️ Set Custom Speed...'},
-                    {value: 'reset_typer', label: '🔄 Reset Selection'}, {value: 'abort_typer', label: '🛑 Abort & Go Back'},
-                    {value: 'abort_oa', label: '🚪 Abort OA & Exit'}, {value: 'hide_unhide', label: '👻 Hide / Unhide (INSTANT)'}
+                    {value: 'speed_set_100', label: '⚡ Set Speed: 100 WPM'}, {value: 'speed_custom', label: '✏️ Custom Speed...'},
+                    {value: 'reset_typer', label: '🔄 Reset Selection'}, {value: 'abort_typer', label: '🛑 Exit Auto Typer Mode'},
+                    {value: 'abort_oa', label: '🚪 Exit OA Mode'}, {value: 'hide_unhide', label: '👻 Hide/Show Overlay'}
                 ];
                 if (typerTotalPages > 1) typerActionsList.push({value: 'toggle_typer_page2', label: '🔄 Next Typer Page'});
 
@@ -1208,6 +1236,38 @@ export class SettingsView extends LitElement {
                                     </div>
                                 </div>
                             </div>
+
+                            <div style="margin-top: 20px;">
+                                <h3 style="margin-top: 0; margin-bottom: 5px;">Chat History Corners</h3>
+                                <div class="monitor-matrix" style="grid-template-columns: ${gridCols}; grid-template-rows: ${gridRows};">
+                                    ${this.renderMatrixCell('top_left', 1, 1, 'Top-L Corner', 'historyCorners')}
+                                    ${this.renderMatrixCell('top_mid_left', 1, 2, 'Top-Mid-L', 'historyCorners')}
+                                    ${this.renderMatrixCell('top_center', 1, 3, 'Top Center', 'historyCorners')}
+                                    ${this.renderMatrixCell('top_mid_right', 1, 4, 'Top-Mid-R', 'historyCorners')}
+                                    ${this.renderMatrixCell('top_right', 1, 5, 'Top-R Corner', 'historyCorners')}
+                                    
+                                    ${this.renderMatrixCell('left_mid_top', 2, 1, 'Left-Mid-T', 'historyCorners')}
+                                    ${this.renderMatrixCell('right_mid_top', 2, 5, 'Right-Mid-T', 'historyCorners')}
+                                    
+                                    ${this.renderMatrixCell('middle_left', 3, 1, 'Left Edge', 'historyCorners')}
+                                    ${this.renderMatrixCell('middle_right', 3, 5, 'Right Edge', 'historyCorners')}
+                                    
+                                    ${this.renderMatrixCell('left_mid_bottom', 4, 1, 'Left-Mid-B', 'historyCorners')}
+                                    ${this.renderMatrixCell('right_mid_bottom', 4, 5, 'Right-Mid-B', 'historyCorners')}
+                                    
+                                    ${this.renderMatrixCell('bottom_left', 5, 1, 'Bot-L Corner', 'historyCorners')}
+                                    ${this.renderMatrixCell('bottom_mid_left', 5, 2, 'Bot-Mid-L', 'historyCorners')}
+                                    ${this.renderMatrixCell('bottom_center', 5, 3, 'Bot Center', 'historyCorners')}
+                                    ${this.renderMatrixCell('bottom_mid_right', 5, 4, 'Bot-Mid-R', 'historyCorners')}
+                                    ${this.renderMatrixCell('bottom_right', 5, 5, 'Bot-R Corner', 'historyCorners')}
+                                    
+                                    <div class="matrix-center" style="padding: 6px 12px; border-color: #f14c4c; background: rgba(241, 76, 76, 0.1);">
+                                        <h3 style="margin-top: 0; color: #fff; font-size: 11px; text-align: center; margin-bottom: 6px;">HISTORY SETTINGS</h3>
+                                        <div style="font-size: 10px; color: #ccc; text-align: center;">DOM Scraping Active.<br>No calibration needed.</div>
+                                    </div>
+                                </div>
+                            </div>
+                            
                         </div>
 
                     </div>
@@ -1216,38 +1276,68 @@ export class SettingsView extends LitElement {
                         <div class="zone-editor-modal">
                             <h3 style="margin-top: 0; margin-bottom: 15px; color: #fff;">Assign Action</h3>
                             <div class="zone-action-grid">
-                                ${(this.editingMap === 'typerPages' ? typerActionsList : baseCornerActions).map(act => {
-                                    const pages = this.prefs[this.editingMap] || [];
-                                    const pageIdx = this.editingMap === 'typerPages' ? this.editingTyperPageIdx : this.editingPageIdx;
-                                    const currentMap = (pages[pageIdx] || {}).map || {};
-                                    const isSelected = currentMap[this.editingZone] === act.value || (act.value.startsWith('speed_set_') && currentMap[this.editingZone]?.startsWith('speed_set_'));
-                                    
-                                    return html`
-                                    <button class="action-select-btn ${isSelected ? 'selected' : ''}" 
-                                        @click=${() => { 
-                                            if (act.value === 'speed_custom') {
-                                                this.openModal('input', 'Custom Speed', 'Enter exact typing speed (WPM):', (val) => {
+                                ${(() => {
+                                    const historyActionsList = [
+                                        {value: 'none', label: '🚫 None'},
+                                        {value: 'abort_history_nav', label: '🛑 Exit History Mode'},
+                                        {value: 'prev_history_page', label: '⏮️ Prev Chats'},
+                                        {value: 'next_history_page', label: '⏭️ Next Chats'},
+                                        {value: 'hide_unhide', label: '👻 Hide/Show'}
+                                    ];
+                                    const list = this.editingMap === 'historyCorners' ? historyActionsList : (this.editingMap === 'typerPages' ? typerActionsList : baseCornerActions);
+
+                                    return list.map(act => {
+                                        let currentMap = {};
+                                        let pages = [];
+                                        let pageIdx = 0;
+
+                                        if (this.editingMap === 'historyCorners') {
+                                            currentMap = this.prefs.historyCorners || {};
+                                        } else {
+                                            pages = this.prefs[this.editingMap] || [];
+                                            pageIdx = this.editingMap === 'typerPages' ? this.editingTyperPageIdx : this.editingPageIdx;
+                                            currentMap = (pages[pageIdx] || {}).map || {};
+                                        }
+
+                                        const isSelected = currentMap[this.editingZone] === act.value || (act.value.startsWith('speed_set_') && currentMap[this.editingZone]?.startsWith('speed_set_'));
+
+                                        return html`
+                                        <button class="action-select-btn ${isSelected ? 'selected' : ''}" 
+                                            @click=${() => { 
+                                                if (act.value === 'speed_custom') {
+                                                    this.openModal('input', 'Custom Speed', 'Enter exact typing speed (WPM):', (val) => {
+                                                        const newPages = [...pages];
+                                                        newPages[pageIdx].map = { ...newPages[pageIdx].map, [this.editingZone]: 'speed_set_' + val };
+                                                        this.savePref(this.editingMap, newPages);
+                                                        this.editingZone = null; 
+                                                        this.requestUpdate();
+                                                    });
+                                                    return;
+                                                }
+                                                
+                                                if (this.editingMap === 'historyCorners') {
+                                                    const hMap = { ...(this.prefs.historyCorners || {}) };
+                                                    hMap[this.editingZone] = act.value;
+                                                    this.savePref('historyCorners', hMap);
+                                                } else {
                                                     const newPages = [...pages];
-                                                    newPages[pageIdx].map = { ...newPages[pageIdx].map, [this.editingZone]: `speed_set_${val}` };
+                                                    if (!newPages[pageIdx]) newPages[pageIdx] = { id: 'page_' + Date.now(), map: {} };
+                                                    newPages[pageIdx].map = { ...newPages[pageIdx].map, [this.editingZone]: act.value };
                                                     this.savePref(this.editingMap, newPages);
-                                                    this.editingZone = null; this.requestUpdate();
-                                                });
-                                                return;
-                                            }
-                                            
-                                            const newPages = [...pages];
-                                            if (!newPages[pageIdx]) newPages[pageIdx] = { id: 'page_' + Date.now(), map: {} };
-                                            newPages[pageIdx].map = { ...newPages[pageIdx].map, [this.editingZone]: act.value };
-                                            this.savePref(this.editingMap, newPages);
-                                            
-                                            if(this.editingMap === 'oaPages' && window.require) window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
-                                            
-                                            this.editingZone = null; 
-                                            this.requestUpdate();
-                                        }}>
-                                        ${act.label}
-                                    </button>
-                                `})}
+                                                    
+                                                    if (this.editingMap === 'oaPages' && window.require) {
+                                                        window.require('electron').ipcRenderer.send('refresh-oa-hud', this.editingPageIdx + 1);
+                                                    }
+                                                }
+                                                
+                                                this.editingZone = null; 
+                                                this.requestUpdate();
+                                            }}>
+                                            ${act.label}
+                                        </button>
+                                        `;
+                                    });
+                                })()}
                             </div>
                         </div>
                     ` : ''}
@@ -1315,8 +1405,8 @@ export class SettingsView extends LitElement {
                 };
 
                 const iiActions = [
-                    {value: 'none', label: 'None (Disabled)'},
-                    {value: 'hide_unhide', label: '👻 Hide / Unhide Windows'},
+                    {value: 'none', label: '🚫 None (Disabled)'},
+                    {value: 'hide_unhide', label: '👻 Hide/Show Overlay'},
                     {value: 'sync_left_to_right', label: '➡️ Sync Left Window to Right Window'},
                     {value: 'sync_right_to_left', label: '⬅️ Sync Right Window to Left Window'},
                     {value: 'sync_v_to_c', label: '⬇️ Force Sync Voice to Code'},
@@ -1536,13 +1626,16 @@ export class SettingsView extends LitElement {
                 
             case 'advanced':
                 return html`
-                    <h2>Advanced Settings</h2>
-                    <div class="form-group">
-                        <label style="color: #f14c4c;">Danger Zone</label>
-                        <p style="font-size: 12px; color: var(--text-muted);">
-                            This will completely wipe all your stored profiles, chat history, shortcuts, and custom settings. 
-                        </p>
-                        <button class="danger-btn" @click=${this.handleClearData}>Clear All Local Data</button>
+                    <div class="scrollable-tab">
+                        <h2>Advanced Settings</h2>
+
+                        <div class="form-group">
+                            <label style="color: #f14c4c;">Danger Zone</label>
+                            <p style="font-size: 12px; color: var(--text-muted);">
+                                This will completely wipe all your stored profiles, chat history, shortcuts, and custom settings. 
+                            </p>
+                            <button class="danger-btn" @click=${this.handleClearData}>Clear All Local Data</button>
+                        </div>
                     </div>
                 `;
         }
