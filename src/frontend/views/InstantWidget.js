@@ -89,6 +89,9 @@ export class InstantWidget extends LitElement {
         .btn-abort { background: rgba(241, 76, 76, 0.15); color: #f14c4c; border: 1px solid #f14c4c; }
         .btn-abort:hover { background: #f14c4c; color: white; }
 
+        .btn-resume { background: rgba(66, 133, 244, 0.15); color: #4285f4; border: 1px solid #4285f4; }
+        .btn-resume:hover { background: #4285f4; color: white; }
+
         .btn-adjust { background: rgba(161, 66, 244, 0.15); color: #a142f4; border: 1px solid #a142f4; }
         .btn-adjust:hover { background: #a142f4; color: white; }
 
@@ -242,6 +245,13 @@ export class InstantWidget extends LitElement {
     abort() {
         if (window.require) {
             window.require('electron').ipcRenderer.send('abort-instant-interview');
+        }
+    }
+
+    attachResume() {
+        if (window.require) {
+            window.require('electron').ipcRenderer.send('attach-resume-prompt');
+            this.triggerToast(); // Show "Synced" toast as visual feedback
         }
     }
 
@@ -411,6 +421,10 @@ export class InstantWidget extends LitElement {
 
             <button class="btn btn-adjust interactive" @click=${() => this.isAdjustMode = true}>
                 ${this.getRulerIcon()}
+            </button>
+
+            <button class="btn btn-resume interactive" @click=${this.attachResume} title="Attach Resume & Persona">
+                📄
             </button>
 
             <button class="btn btn-abort interactive" @click=${this.abort}>

@@ -495,7 +495,14 @@ global.executeInstantAction = async (action) => {
             break;
             
         case 'send_pro':
-            try { await fireNativePayload(codeWin, PROMPTS.INTERVIEW_OPTIMIZED || "Provide the optimal solution.", [], 'Fast', true); } catch(e) {}
+            try {
+                const src = await desktopCapturer.getSources({ types: ['screen'], thumbnailSize: { width: 1920, height: 1080 } });
+                if (src && src.length > 0) {
+                    const imgData = src[0].thumbnail.toDataURL();
+                    await fireNativePayload(codeWin, "", [imgData], null, true);
+                    if (mainWin) mainWin.webContents.send('show-radial-toast', '🚀 SENT RAW');
+                }
+            } catch(e) {}
             break;
         
         case 'sync_v_to_c':
@@ -763,8 +770,123 @@ ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) =
     }
 });
 
+// 🟢 NEW: Attach Resume & Persona from Widget
+ipcMain.removeAllListeners('attach-resume-prompt');
+ipcMain.on('attach-resume-prompt', async () => {
+    try {
+        const resumePath = 'D:/CPH-Main/Abhay_Prasad_Resume.txt';
+        let resumeContent = "No resume found.";
+        const fs = require('fs');
+        if (fs.existsSync(resumePath)) {
+            resumeContent = fs.readFileSync(resumePath, 'utf8');
+        }
+
+        const customPrompt = `I have a Software Development Engineer interview coming up. When I send you any DSA, coding, or project-related question, give me a complete response that I can directly read word by word without using my own mind. I want to speak exactly what you write.
+
+Follow this exact format every time for DSA questions:
+
+1. ACTUAL QUESTION
+Start with exact speaking lines:
+“Sure. First, let me explain the question.”
+Then explain the problem in very simple words exactly like I should speak to the interviewer.
+
+2. BRUTE FORCE APPROACH & CODE
+Start with exact speaking lines:
+“A brute force approach for this problem would be…”
+Then explain:
+what the brute force does
+why it works
+time complexity (CRITICAL RULE: Only use the exact mathematical Big-O notation like O(N^2). You must explicitly state what the variables mean [e.g., "where N is the length of the array"] and exactly why this is the complexity [e.g., "because of the two nested loops"]).
+space complexity (CRITICAL RULE: State the Big-O notation, explain the variables, and explain the exact reason for this space usage).
+why it is not the best solution
+Then, write the C++ code for the Brute Force approach, using the exact same speaking-line comment style required in the optimal code section below.
+
+3. OPTIMAL APPROACH
+Start with exact speaking lines:
+“Now I’ll explain the optimized approach.”
+Then explain:
+intuition (CRITICAL RULE: Include a short, concrete example to explain the intuition. If I provided a test case in my prompt, you MUST do a detailed, step-by-step dry run of that specific test case here).
+step-by-step logic (CRITICAL RULE: This must be written entirely in the 1st person, exactly how I would speak it. Example: "First, I initialize a pointer...", "Then, I iterate through...").
+why this is better
+time complexity (State Big-O, define the variables, and explain the reason).
+space complexity (State Big-O, define the variables, and explain the reason).
+
+4. WHY I AM USING THIS APPROACH
+Start with exact speaking lines:
+“I am choosing this approach because…”
+Then explain why this method is preferred in interviews.
+
+5. NOW I’LL WRITE THE OPTIMAL CODE
+Then give the optimized C++ code where comments are also my speaking lines.
+Code style must be exactly like this:
+C++
+class Solution {
+public:
+    vector<int> twoSum(vector<int>& nums, int target) {
+        // I am creating hash map to store number and index  
+        unordered_map<int,int> mp;  
+        // I am traversing the array one by one  
+        for(int i = 0; i < nums.size(); i++) {  
+            // I am calculating required value  
+            int need = target - nums[i];  
+            // I am checking whether required value already exists  
+            if(mp.find(need) != mp.end()) {  
+                // If found, I am returning both indices  
+                return {mp[need], i};  
+            }  
+            // Otherwise I am storing current value with index  
+            mp[nums[i]] = i;  
+        }  
+        // This is default return statement  
+        return {};  
+    }
+};
+
+6. FINAL LINE
+Write exactly:
+“This is my final optimized solution.”
+
+7. IF I SEND MY CODE WITH ERROR
+If later I send my code with wrong output, runtime error, compile error, TLE, or logic mistake, then follow this exact format:
+ERROR FOUND: “I checked your code. Let me fix it.”
+WRONG LINE: Tell exact line or block which is wrong.
+WHY WRONG: Explain simply why it is wrong.
+HOW TO FIX: Explain what to change.
+CORRECTED CODE: Give corrected C++ code with speaking comments.
+FINAL LINE: “This corrected version will work properly.”
+
+8. PROJECT OR RESUME QUESTIONS
+If I send you a question about my resume, projects, or behavioral questions, reply using the same confident, simple, first-person speaking format. Provide a structured, engaging answer that I can read aloud directly.
+
+9. IMPORTANT RULES
+Bold every new topic heading like above.
+Everything should sound like I am speaking live.
+Do not write anything for silent reading.
+Keep English simple and confident.
+Make me sound smart and clear.
+Help me know when one step ends and the next starts.
+If my code is correct, say: “Your logic is correct. Only a minor improvement can be made.”
+Give the final answer only.
+
+10. WHENEVER I SEND ANY QUESTION OR CODE
+Respond in this exact interview speaking format.
+
+Right now, Respond with "Understood. I am ready for your first question."
+The question will be shared by me in the next prompt.`;
+
+        const finalPrompt = "Here is my Resume:\n\n" + resumeContent + "\n\n" + customPrompt;
+
+        if (codeWin && !codeWin.isDestroyed()) await fireNativePayload(codeWin, finalPrompt, [], null, false);
+        if (voiceWin && !voiceWin.isDestroyed()) await fireNativePayload(voiceWin, finalPrompt, [], null, false);
+        
+        const mainWin = getMainWin();
+        if (mainWin) mainWin.webContents.send('show-radial-toast', '📄 RESUME PREPPED');
+    } catch (e) {
+        console.error("Error attaching resume", e);
+    }
+});
+
 // 🟢 NEW: The D-Pad Nudge Engine Listener
-ipcMain.removeAllListeners('nudge-instant-window');
 ipcMain.on('nudge-instant-window', (event, target, dimension, direction) => {
     const prefs = storage.getPreferences();
     const ii = prefs.instantInterview || {};
