@@ -2,17 +2,28 @@ if (require('electron-squirrel-startup')) process.exit(0);
 
 const PROMPTS = {
     // 🟢 OA PROMPTS
-    OA_AUTOMATION: (language) => `Output ONLY functional code. CRITICAL RULES:\n
-    - Identify the programming language from the code editor in the attached screenshot and write your solution in that EXACT language. If you cannot determine the language, default to C++.\n
-    - Do NOT output any greetings, explanations, or comments.\n
-    - Use single letter variable names.\n
-    - Provide a complete solution with a main function so I can run it locally.\n
-    - Strictly preserve the function signature and class names provided in the image.\n
-    - Format the ENTIRE response inside a single set of standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).\n
-    - Extract the visible test cases from the image for the VS Code CPH extension. You MUST place these test cases inside a multiline comment (/* ... */) at the very bottom of the code block so they do not break compilation. Format them exactly like this:\n
-    Test Case 1\n
-    Input:\n
-    Expected Output:`,
+    OA_AUTOMATION: (language) => `Analyze the attached screenshot and output ONLY the required answer based on the type of question presented. Do NOT output any greetings, explanations, or comments. CRITICAL RULES:
+
+    IF IT IS A CODING PROBLEM:
+    - Identify the programming language from the code editor in the attached screenshot and write your solution in that EXACT language. If you cannot determine the language, default to C++.
+    - Use single letter variable names.
+    - Provide a complete solution with a main function so I can run it locally.
+    - Strictly preserve the function signature and class names provided in the image.
+    - Format the ENTIRE response inside a single set of standard Markdown backticks (e.g., \`\`\`cpp ... \`\`\`).
+    - Extract the visible test cases from the image for the VS Code CPH extension. You MUST place these test cases inside a multiline comment (/* ... */) at the very bottom of the code block so they do not break compilation. Format them exactly like this:
+    Test Case 1
+    Input:
+    Expected Output:
+    
+    IF IT IS A MULTIPLE CHOICE QUESTION (MCQ):
+    - Output ONLY the correct option number followed by the exact text of the answer.
+    - Format the output exactly like this: Option [Number]: [Answer Text]
+    - Do NOT wrap the MCQ answer in standard Markdown backticks unless the answer itself consists entirely of code.
+    
+    IF IT IS A FREE TEXT / SHORT ANSWER QUESTION:
+    - Identify any character or word limits specified in the screenshot.
+    - Write a direct, highly relevant answer that strictly adheres to those constraints.
+    - Output ONLY the final text of your answer. Do NOT include introductory phrases, word count confirmations, or Markdown backticks.`,
 
     REFACTOR: `Refactor the above code. Output ONLY functional code. Do NOT output any greetings, explanations, or comments. Optimize the logic for time complexity, and space complexity. Do not use classes unless absolutely necessary for the language. Format the ENTIRE response inside a single set of standard Markdown backticks.`,
 
