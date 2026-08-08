@@ -29,13 +29,13 @@ export class LayoutEditor extends LitElement {
         .pane-toggle {
             display: flex; align-items: center; justify-content: space-between;
             margin-bottom: 10px; padding: 8px; background: rgba(0,0,0,0.3);
-            border-radius: 4px; border: 1px solid #333; cursor: pointer;
+            border-radius: 4px; border: 1px solid #333; cursor: default;
         }
         .pane-toggle.active { border-color: #4285f4; background: rgba(66, 133, 244, 0.1); }
-        .pane-toggle input { cursor: pointer; }
+        .pane-toggle input { cursor: default; }
         .btn-save {
             width: 100%; padding: 10px; background: #00cc66; color: black;
-            border: none; border-radius: 4px; font-weight: bold; cursor: pointer;
+            border: none; border-radius: 4px; font-weight: bold; cursor: default;
             margin-top: 10px; transition: 0.2s;
         }
         .btn-save:hover { background: #00e673; }

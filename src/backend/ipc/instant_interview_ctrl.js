@@ -385,11 +385,75 @@ const startCornerRadar = () => {
     }, 50);
 };
 
+// const fireNativePayload = async (win, text, images = [], modeTag = null, autoSubmit = true) => {
+//     if (!win || win.isDestroyed()) return false;
+//     const isGrok = win.webContents.getURL().includes('grok.com');
+//     const providerName = isGrok ? 'Grok' : (win.webContents.getURL().includes('gemini') ? 'Gemini' : 'ChatGPT');
+//     const modifier = process.platform === 'darwin' ? 'meta' : 'control';
+//     const selector = 'textarea, [contenteditable="true"][role="textbox"], rich-textarea p, #prompt-textarea, .ql-editor';
+
+//     const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('${selector}'); if (el) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
+//     if (!isBoxReady) return false;
+
+//     const focusAndMoveToEnd = async () => {
+//         await win.webContents.executeJavaScript(`(() => { try { const box = document.querySelector('${selector}'); if (box) { box.focus(); if (box.tagName === 'TEXTAREA' || box.tagName === 'INPUT') { box.selectionStart = box.value.length; box.selectionEnd = box.value.length; } else if (typeof window.getSelection !== "undefined" && typeof document.createRange !== "undefined") { const range = document.createRange(); range.selectNodeContents(box); range.collapse(false); const sel = window.getSelection(); sel.removeAllRanges(); sel.addRange(range); } } } catch(e) {} })();`);
+//     };
+
+//     if (images && images.length > 0) {
+//         for (let imgData of images) {
+//             if (providerName === 'Grok') {
+//                 await win.webContents.executeJavaScript(`(async () => { try { const res = await fetch("${imgData}"); const blob = await res.blob(); const file = new File([blob], "screenshot.png", { type: blob.type }); const dt = new DataTransfer(); dt.items.add(file); const fileInput = document.querySelector('input[type="file"]'); if (fileInput) { fileInput.files = dt.files; fileInput.dispatchEvent(new Event('change', { bubbles: true })); } const el = document.querySelector('textarea[placeholder*="Grok"], textarea'); if (el) { el.focus(); const pasteEvent = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }); el.dispatchEvent(pasteEvent); } } catch(e) {} })();`);
+//             } else {
+//                 const img = nativeImage.createFromDataURL(imgData);
+//                 clipboard.writeImage(img);
+//                 await focusAndMoveToEnd();
+//                 win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
+//                 win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
+//             }
+//             await new Promise(r => setTimeout(r, 600)); 
+//             await focusAndMoveToEnd();
+//             await new Promise(r => setTimeout(r, 100));
+//         }
+//     }
+
+//     if (text) {
+//         await focusAndMoveToEnd();
+//         win.webContents.insertText(text); 
+//         await new Promise(r => setTimeout(r, 400));
+//         await focusAndMoveToEnd(); 
+//     }
+
+//     if (modeTag && providerName === 'Gemini') {
+//         await focusAndMoveToEnd();
+//         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
+//         await new Promise(r => setTimeout(r, 100));
+//         win.webContents.sendInputEvent({ type: 'keyDown', modifiers: ['shift'], keyCode: 'Enter' }); win.webContents.sendInputEvent({ type: 'keyUp', modifiers: ['shift'], keyCode: 'Enter' });
+//         await new Promise(r => setTimeout(r, 100));
+//         win.webContents.insertText('@');
+//         await new Promise(r => setTimeout(r, 800));
+//         for (let i = 0; i < modeTag.length; i++) { win.webContents.insertText(modeTag[i]); await new Promise(r => setTimeout(r, 150)); }
+//         await new Promise(r => setTimeout(r, 800));
+//         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+//         await new Promise(r => setTimeout(r, 400));
+//     }
+
+//     if (autoSubmit) {
+//         await focusAndMoveToEnd();
+//         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
+//         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
+//     }
+//     return true;
+// };
+
+// Ensure you have these imported at the top of your file:
+// const { nativeImage, clipboard } = require('electron');
+
 const fireNativePayload = async (win, text, images = [], modeTag = null, autoSubmit = true) => {
     if (!win || win.isDestroyed()) return false;
+    
     const isGrok = win.webContents.getURL().includes('grok.com');
     const providerName = isGrok ? 'Grok' : (win.webContents.getURL().includes('gemini') ? 'Gemini' : 'ChatGPT');
-    const modifier = process.platform === 'darwin' ? 'meta' : 'control';
+    
     const selector = 'textarea, [contenteditable="true"][role="textbox"], rich-textarea p, #prompt-textarea, .ql-editor';
 
     const isBoxReady = await win.webContents.executeJavaScript(`(() => { try { const el = document.querySelector('${selector}'); if (el) { el.focus(); return true; } return false; } catch(e) { return false; } })()`);
@@ -402,21 +466,36 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
     if (images && images.length > 0) {
         for (let imgData of images) {
             if (providerName === 'Grok') {
+                // Grok's DOM manipulation method
                 await win.webContents.executeJavaScript(`(async () => { try { const res = await fetch("${imgData}"); const blob = await res.blob(); const file = new File([blob], "screenshot.png", { type: blob.type }); const dt = new DataTransfer(); dt.items.add(file); const fileInput = document.querySelector('input[type="file"]'); if (fileInput) { fileInput.files = dt.files; fileInput.dispatchEvent(new Event('change', { bubbles: true })); } const el = document.querySelector('textarea[placeholder*="Grok"], textarea'); if (el) { el.focus(); const pasteEvent = new ClipboardEvent('paste', { clipboardData: dt, bubbles: true, cancelable: true }); el.dispatchEvent(pasteEvent); } } catch(e) {} })();`);
             } else {
+                // ChatGPT & Gemini: Electron Native Background Paste
                 const img = nativeImage.createFromDataURL(imgData);
                 clipboard.writeImage(img);
+                
+                // 1. Focus the webview internally
+                win.webContents.focus(); 
+                
+                // 2. Aggressively wait and focus the specific text box
+                await new Promise(r => setTimeout(r, 200)); 
                 await focusAndMoveToEnd();
-                win.webContents.sendInputEvent({ type: 'keyDown', modifiers: [modifier], keyCode: 'V' });
-                win.webContents.sendInputEvent({ type: 'keyUp', modifiers: [modifier], keyCode: 'V' });
+                
+                // 3. Trigger the native paste
+                win.webContents.paste(); 
             }
-            await new Promise(r => setTimeout(r, 600)); 
+            
+            // 4. THE FIX: Give ChatGPT significantly more time to process the 
+            // image attachment UI before we overwrite the clipboard or try to paste again.
+            await new Promise(r => setTimeout(r, 1200)); // Increased from 600 to 1200
+            
+            // 5. Re-focus again so it's perfectly ready for the next loop iteration or text injection
             await focusAndMoveToEnd();
             await new Promise(r => setTimeout(r, 100));
         }
     }
 
     if (text) {
+        win.webContents.focus();
         await focusAndMoveToEnd();
         win.webContents.insertText(text); 
         await new Promise(r => setTimeout(r, 400));
@@ -424,6 +503,7 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
     }
 
     if (modeTag && providerName === 'Gemini') {
+        win.webContents.focus();
         await focusAndMoveToEnd();
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Escape' }); win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Escape' });
         await new Promise(r => setTimeout(r, 100));
@@ -442,6 +522,7 @@ const fireNativePayload = async (win, text, images = [], modeTag = null, autoSub
         win.webContents.sendInputEvent({ type: 'keyDown', keyCode: 'Enter' });
         win.webContents.sendInputEvent({ type: 'keyUp', keyCode: 'Enter' });
     }
+    
     return true;
 };
 

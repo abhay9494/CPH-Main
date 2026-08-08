@@ -1150,7 +1150,7 @@ export class SettingsView extends LitElement {
                                 ${missingPages.length > 0 ? html`
                                     <div class="blinking-alert">
                                         ⚠️ Add 'Next Page' trigger to Page ${missingPages[0] + 1}!
-                                        <button @click=${() => { this.editingPageIdx = missingPages[0]; this.requestUpdate(); }} style="background: #f14c4c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;">Fix It</button>
+                                        <button @click=${() => { this.editingPageIdx = missingPages[0]; this.requestUpdate(); }} style="background: #f14c4c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: default; font-size: 10px;">Fix It</button>
                                     </div>
                                 ` : ''}
                             </div>
@@ -1204,7 +1204,7 @@ export class SettingsView extends LitElement {
                                 ${typerMissingPages.length > 0 ? html`
                                     <div class="blinking-alert">
                                         ⚠️ Add 'Next Typer Page' trigger to Page ${typerMissingPages[0] + 1}!
-                                        <button @click=${() => { this.editingTyperPageIdx = typerMissingPages[0]; this.requestUpdate(); }} style="background: #f14c4c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: pointer; font-size: 10px;">Fix It</button>
+                                        <button @click=${() => { this.editingTyperPageIdx = typerMissingPages[0]; this.requestUpdate(); }} style="background: #f14c4c; color: white; border: none; padding: 2px 8px; border-radius: 4px; cursor: default; font-size: 10px;">Fix It</button>
                                     </div>
                                 ` : ''}
                             </div>
@@ -1501,14 +1501,14 @@ export class SettingsView extends LitElement {
                                 <button @click=${() => {
                                     this.showLayoutEditor = true;
                                     if (window.require) window.require('electron').ipcRenderer.send('layout-editor-opened');
-                                }} style="background: rgba(161, 66, 244, 0.2); color: #a142f4; border: 1px solid #a142f4; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;">
+                                }} style="background: rgba(161, 66, 244, 0.2); color: #a142f4; border: 1px solid #a142f4; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: default; transition: 0.2s;">
                                     📐 Open Visual Layout Editor
                                 </button>
                                 <button @click=${() => {
                                     const resetP = {...iiPrefs, codeW: 48, codeH: 85, codeX: 1, codeY: 7, voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7, meetW: 50, meetH: 28, meetX: 25, meetY: 10, widgetX: 5, widgetY: 80, widgetW: 90, widgetH: 20};
                                     this.savePref('instantInterview', resetP);
                                     if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', resetP);
-                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">🔄 Reset Bounds</button>
+                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: default; transition: 0.2s;">🔄 Reset Bounds</button>
                             </div>
                         </div>
 
