@@ -60,30 +60,43 @@ const updateStackedVisibility = () => {
         )
     );
 
+    const activateWindow = (win) => {
+        win.setOpacity(1);
+        win.setIgnoreMouseEvents(false); // Do NOT pass {forward:true} when false!
+        win.showInactive();
+        win.moveTop();
+        
+        // Fix for Chromium dropping scroll events after z-order changes if the mouse hasn't moved
+        try {
+            const bounds = win.getBounds();
+            win.webContents.sendInputEvent({ type: 'mouseMove', x: Math.floor(bounds.width / 2), y: Math.floor(bounds.height / 2) });
+        } catch(e) {}
+    };
+
     if (isStacked) {
         if (codeWin && !codeWin.isDestroyed()) {
-            if (activePaneId === 'code' && isCodeEnabled) { codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true }); codeWin.moveTop(); }
+            if (activePaneId === 'code' && isCodeEnabled) activateWindow(codeWin);
             else { codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
         if (voiceWin && !voiceWin.isDestroyed()) {
-            if (activePaneId === 'voice' && isVoiceEnabled) { voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true }); voiceWin.moveTop(); }
+            if (activePaneId === 'voice' && isVoiceEnabled) activateWindow(voiceWin);
             else { voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
         if (meetWin && !meetWin.isDestroyed()) {
-            if (activePaneId === 'meet' && isMeetEnabled) { meetWin.setOpacity(1); meetWin.setIgnoreMouseEvents(false, { forward: true }); meetWin.moveTop(); }
+            if (activePaneId === 'meet' && isMeetEnabled) activateWindow(meetWin);
             else { meetWin.setOpacity(0); meetWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
     } else {
         if (codeWin && !codeWin.isDestroyed()) {
-            if (isCodeEnabled) { codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true }); if (activePaneId === 'code') codeWin.moveTop(); }
+            if (isCodeEnabled) { if (activePaneId === 'code') activateWindow(codeWin); else { codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false); } }
             else { codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
         if (voiceWin && !voiceWin.isDestroyed()) {
-            if (isVoiceEnabled) { voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true }); if (activePaneId === 'voice') voiceWin.moveTop(); }
+            if (isVoiceEnabled) { if (activePaneId === 'voice') activateWindow(voiceWin); else { voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false); } }
             else { voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
         if (meetWin && !meetWin.isDestroyed()) {
-            if (isMeetEnabled) { meetWin.setOpacity(1); meetWin.setIgnoreMouseEvents(false, { forward: true }); if (activePaneId === 'meet') meetWin.moveTop(); }
+            if (isMeetEnabled) { if (activePaneId === 'meet') activateWindow(meetWin); else { meetWin.setOpacity(1); meetWin.setIgnoreMouseEvents(false); } }
             else { meetWin.setOpacity(0); meetWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
     }
