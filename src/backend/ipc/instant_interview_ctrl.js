@@ -532,7 +532,7 @@ global.executeInstantAction = async (action) => {
             try {
                 let finalCode = await codeWin.webContents.executeJavaScript(`(() => { try { const sel = window.location.hostname.includes('chatgpt') ? 'div[data-message-author-role="assistant"]' : window.location.hostname.includes('grok') ? '.prose' : 'model-response'; const responses = Array.from(document.querySelectorAll(sel)).filter(el => { if (el.closest('[data-testid="user-message"]') || el.closest('[data-message-author-role="user"]') || el.closest('.user-message')) return false; return (el.innerText || '').trim().length > 0; }); if (responses.length === 0) return ""; return responses[responses.length - 1].innerText.trim(); } catch(e) { return ""; } })();`).catch(()=>"");
                 if (!finalCode || finalCode.trim() === "") { if (mainWin) mainWin.webContents.send('show-radial-toast', '⚠️ NO CODE READY'); return; }
-                const c2vPrompt = (PROMPTS.VOICE_SYNC_OPTIMIZED || "Explain this code simply:") + "\n\nFULL AI RESPONSE:\n\n" + finalCode;
+                const c2vPrompt = (PROMPTS.VOICE_SYNC || "Explain this code simply:") + "\n\nFULL AI RESPONSE:\n\n" + finalCode;
                 await fireNativePayload(voiceWin, c2vPrompt, [], 'Fast', true);
                 if (mainWin) mainWin.webContents.send('show-radial-toast', '➡️ FULL RESPONSE SYNCED');
             } catch(e) {}
@@ -783,6 +783,40 @@ ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) =
     }
 });
 
+// 🟢 NEW: Attach HR Persona from Widget
+ipcMain.removeAllListeners('attach-hr-prompt');
+ipcMain.on('attach-hr-prompt', async () => {
+    try {
+        const resumePath = 'D:/CPH-Main/Abhay_Prasad_Resume.txt';
+        let resumeContent = "No resume found.";
+        const fs = require('fs');
+        if (fs.existsSync(resumePath)) {
+            resumeContent = fs.readFileSync(resumePath, 'utf8');
+        }
+
+        const hrPrompt = PROMPTS.HR_INTERVIEW || "Answer behavioral questions assertively.";
+        const finalPrompt = "Here is my Resume:\n\n" + resumeContent + "\n\n" + hrPrompt;
+
+        const previousPane = activePaneId;
+        
+        if (voiceWin && !voiceWin.isDestroyed()) {
+            activePaneId = 'voice';
+            updateStackedVisibility();
+            voiceWin.focus(); 
+            await new Promise(r => setTimeout(r, 200));
+            await fireNativePayload(voiceWin, finalPrompt, [], null, false);
+        }
+        
+        activePaneId = previousPane;
+        updateStackedVisibility();
+        
+        const mainWin = getMainWin();
+        if (mainWin) mainWin.webContents.send('show-radial-toast', '👔 HR PREPPED');
+    } catch (e) {
+        console.error("Error attaching HR prompt", e);
+    }
+});
+
 // 🟢 NEW: Attach Resume & Persona from Widget
 ipcMain.removeAllListeners('attach-resume-prompt');
 ipcMain.on('attach-resume-prompt', async () => {
@@ -797,6 +831,9 @@ ipcMain.on('attach-resume-prompt', async () => {
         const customPrompt = `I have a Software Development Engineer interview coming up. When I send you any DSA, coding, or project-related question, give me a complete response that I can directly read word by word without using my own mind. I want to speak exactly what you write.
 
 Follow this exact format every time for DSA questions:
+
+0. Problem Statement (Transcribed)
+(Provide the full text of the question here)
 
 1. ACTUAL QUESTION
 Start with exact speaking lines:
@@ -889,8 +926,53 @@ The question will be shared by me in the next prompt.`;
 
         const finalPrompt = "Here is my Resume:\n\n" + resumeContent + "\n\n" + customPrompt;
 
-        if (codeWin && !codeWin.isDestroyed()) await fireNativePayload(codeWin, finalPrompt, [], null, false);
-        if (voiceWin && !voiceWin.isDestroyed()) await fireNativePayload(voiceWin, finalPrompt, [], null, false);
+        const voiceCustomPrompt = `SYSTEM DIRECTIVE: You are my invisible teleprompter during a live Software Engineering interview. I will read your output out loud, word-for-word, directly to the interviewer. 
+
+CRITICAL CONTEXT 1 (THE DUAL BRAIN SETUP & STATE TRACKING):
+I am using a "Code Brain" to write my code, which will often produce both a Brute Force and an Optimized solution.
+- DEFAULT STATE: You MUST assume we are discussing the BRUTE FORCE approach by default. Keep framing all your answers, follow-up questions, and explanations around the brute force approach UNTIL I manually type \`[2]\` in my prompt, or the interviewer explicitly asks to optimize.
+- EXPLICIT LABELING: Every single time you explain time complexity, space complexity, logic, or code, you MUST explicitly mention which approach you are talking about. (e.g., "In my brute force approach, the time complexity is...", or "For my optimized approach, the space complexity becomes...").
+- ALWAYS speak in the 1st person ("I", "me", "my"). 
+
+CRITICAL CONTEXT 2 (SIMPLICITY & TONE):
+I have ZERO natural DSA knowledge. You must make me sound incredibly smart, but highly conversational.
+- NO robotic AI filler, NO markdown formatting, NO prefixes like "Say this:". Just output the raw speaking script.
+- If you use a technical term, immediately follow it up with a simple, real-world analogy.
+- When explaining Time/Space Complexity, never just state "It is O(N)". You must explain exactly *why* in plain English (e.g., "In my brute force approach, it takes O(N) time because I am iterating through the array exactly once.").
+
+CRITICAL CONTEXT 3 (MY BACKGROUND & RESUME):
+I will attach my resume/context separately in my prompts. If the interviewer asks about my background, behavior, or projects, seamlessly use the facts from my provided resume in the 1st person. Give me a confident, concise 3-4 sentence story using those facts.
+
+SCENARIO PROTOCOLS (HOW TO RESPOND):
+1. If I ask you to explain an approach: Start directly with "In my brute force approach..." or "In my optimized approach, the core idea is to..."
+2. If the interviewer asks for a DRY RUN: Act as my dictator. Walk me through the variables changing step-by-step. Use format: "Let's trace this in my [brute force/optimized] approach. At line X, my variable Y is currently [old], but it now becomes [new] because..."
+3. If the interviewer points out an ERROR or BUG: Start with: "Ah, good catch. I see the issue. If we look at my..."
+
+SILENT DIRECTIVE: Acknowledge these instructions. Reply ONLY with this exact sentence so I can read it aloud to stall: "Give me just one moment to read through the constraints and wrap my head around the inputs."`;
+
+        const voiceFinalPrompt = "Here is my Resume:\n\n" + resumeContent + "\n\n" + voiceCustomPrompt;
+
+        const previousPane = activePaneId;
+        
+        if (codeWin && !codeWin.isDestroyed()) {
+            activePaneId = 'code';
+            updateStackedVisibility();
+            codeWin.focus(); // Explicitly focus to guarantee insertText works
+            await new Promise(r => setTimeout(r, 200));
+            await fireNativePayload(codeWin, finalPrompt, [], null, false);
+        }
+        
+        if (voiceWin && !voiceWin.isDestroyed()) {
+            activePaneId = 'voice';
+            updateStackedVisibility();
+            voiceWin.focus(); // Explicitly focus
+            await new Promise(r => setTimeout(r, 200));
+            await fireNativePayload(voiceWin, voiceFinalPrompt, [], null, false);
+        }
+        
+        // Restore original active pane
+        activePaneId = previousPane;
+        updateStackedVisibility();
         
         const mainWin = getMainWin();
         if (mainWin) mainWin.webContents.send('show-radial-toast', '📄 RESUME PREPPED');

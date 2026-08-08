@@ -255,6 +255,20 @@ export class InstantWidget extends LitElement {
         }
     }
 
+    attachHR() {
+        if (window.require) {
+            window.require('electron').ipcRenderer.send('attach-hr-prompt');
+            this.triggerToast(); 
+        }
+    }
+
+    syncCodeToVoice() {
+        if (window.require) {
+            window.require('electron').ipcRenderer.send('instant-action', 'sync_c_to_v');
+            this.triggerToast();
+        }
+    }
+
     async syncMeet() {
         if (!this.meetEnabled) this.togglePane('meet');
 
@@ -423,8 +437,16 @@ export class InstantWidget extends LitElement {
                 ${this.getRulerIcon()}
             </button>
 
-            <button class="btn btn-resume interactive" @click=${this.attachResume} title="Attach Resume & Persona">
+            <button class="btn btn-resume interactive" @click=${this.attachResume}>
                 📄
+            </button>
+
+            <button class="btn btn-sync interactive" @click=${this.syncCodeToVoice}>
+                🔄
+            </button>
+
+            <button class="btn btn-hr interactive" @click=${this.attachHR}>
+                👔
             </button>
 
             <button class="btn btn-abort interactive" @click=${this.abort}>
