@@ -147,7 +147,13 @@ export class InstantWidget extends LitElement {
         showToast: { type: Boolean },
         activeDropdown: { type: String },
         isAdjustMode: { type: Boolean }, // 🟢 NEW
-        dpadTarget: { type: String } // 'code', 'voice', 'both', 'active'
+        dpadTarget: { type: String }, // 'code', 'voice', 'both', 'active'
+        codeEnabled: { type: Boolean },
+        voiceEnabled: { type: Boolean },
+        meetEnabled: { type: Boolean },
+        mProfile: { type: String },
+        savedMProfile: { type: String },
+        isSyncingMeet: { type: Boolean }
     };
 
     constructor() {
@@ -163,6 +169,12 @@ export class InstantWidget extends LitElement {
         this.activeDropdown = null;
         this.isAdjustMode = false;
         this.dpadTarget = 'active'; // Default to auto-detecting the visible window
+        this.codeEnabled = true;
+        this.voiceEnabled = true;
+        this.meetEnabled = false;
+        this.mProfile = '';
+        this.savedMProfile = '';
+        this.isSyncingMeet = false;
         
         this.aiOptions = [
             { value: '0', label: 'ChatGPT' },
@@ -184,11 +196,16 @@ export class InstantWidget extends LitElement {
             this.cProfile = iiPrefs.codeProfileId || '';
             this.vProfile = iiPrefs.voiceProfileId || '';
             this.bgTransparency = this.prefs.backgroundTransparency ?? 0.8;
+            this.codeEnabled = iiPrefs.codeEnabled !== false;
+            this.voiceEnabled = iiPrefs.voiceEnabled !== false;
+            this.meetEnabled = iiPrefs.meetEnabled === true;
+            this.mProfile = iiPrefs.meetProfileId || '';
 
             this.savedCIdx = this.cIdx;
             this.savedVIdx = this.vIdx;
             this.savedCProfile = this.cProfile;
             this.savedVProfile = this.vProfile;
+            this.savedMProfile = this.mProfile;
 
             this.requestUpdate();
         }
@@ -226,6 +243,35 @@ export class InstantWidget extends LitElement {
         if (window.require) {
             window.require('electron').ipcRenderer.send('abort-instant-interview');
         }
+    }
+
+    async syncMeet() {
+        if (!this.meetEnabled) this.togglePane('meet');
+
+        this.isSyncingMeet = true;
+        this.requestUpdate();
+        await new Promise(r => setTimeout(r, 600)); 
+        if (window.require) {
+            window.require('electron').ipcRenderer.send('apply-instant-settings', 'meet', 0, this.mProfile);
+            this.triggerToast();
+        }
+        this.savedMProfile = this.mProfile;
+        this.isSyncingMeet = false;
+        this.requestUpdate();
+    }
+
+    togglePane(pane) {
+        if (pane === 'code') this.codeEnabled = !this.codeEnabled;
+        if (pane === 'voice') this.voiceEnabled = !this.voiceEnabled;
+        if (pane === 'meet') this.meetEnabled = !this.meetEnabled;
+        
+        if (window.cheatingDaddy && window.cheatingDaddy.storage) {
+            const iiPrefs = this.prefs.instantInterview || {};
+            iiPrefs[`${pane}Enabled`] = pane === 'code' ? this.codeEnabled : pane === 'voice' ? this.voiceEnabled : this.meetEnabled;
+            window.cheatingDaddy.storage.updatePreference('instantInterview', iiPrefs);
+        }
+        this.requestUpdate();
+        if (window.require) window.require('electron').ipcRenderer.send('toggle-instant-pane', pane, pane === 'code' ? this.codeEnabled : pane === 'voice' ? this.voiceEnabled : this.meetEnabled);
     }
 
     // 🟢 NEW: Programmatic Nudge Dispatcher
@@ -290,6 +336,7 @@ export class InstantWidget extends LitElement {
                 <div class="divider"></div>
                 <button class="d-btn text-btn ${this.dpadTarget === 'code' ? 'active-target' : ''}" @click=${() => this.dpadTarget = 'code'}>💻 L</button>
                 <button class="d-btn text-btn ${this.dpadTarget === 'voice' ? 'active-target' : ''}" @click=${() => this.dpadTarget = 'voice'}>🗣️ R</button>
+                <button class="d-btn text-btn ${this.dpadTarget === 'meet' ? 'active-target' : ''}" @click=${() => this.dpadTarget = 'meet'}>🎥 M</button>
                 <button class="d-btn text-btn ${this.dpadTarget === 'both' ? 'active-target' : ''}" @click=${() => this.dpadTarget = 'both'}>🔗</button>
             </div>
 
@@ -317,10 +364,16 @@ export class InstantWidget extends LitElement {
         const profileOpts = this.profiles.map(p => ({ value: p.id, label: p.name }));
         const isLeftDirty = String(this.cIdx) !== String(this.savedCIdx) || String(this.cProfile) !== String(this.savedCProfile);
         const isRightDirty = String(this.vIdx) !== String(this.savedVIdx) || String(this.vProfile) !== String(this.savedVProfile);
+        const isMeetDirty = String(this.mProfile) !== String(this.savedMProfile);
+
+        const crossSvg = html`<svg style="position:absolute; top:-2px; left:-2px; width:18px; height:18px; color:#f14c4c; pointer-events:none;" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>`;
 
         return html`
             <div class="pane-group">
-                <span class="pane-label code-label">💻</span>
+                <span class="pane-label code-label interactive" @click=${() => this.togglePane('code')} style="cursor:pointer; position:relative; opacity: ${this.codeEnabled ? 1 : 0.4}">
+                    💻
+                    ${!this.codeEnabled ? crossSvg : ''}
+                </span>
                 ${this.renderCustomDropdown('c-ai', this.aiOptions, this.cIdx, (val) => this.cIdx = val)}
                 ${this.renderCustomDropdown('c-profile', profileOpts, this.cProfile, (val) => this.cProfile = val)}
                 <button class="btn btn-apply interactive ${isLeftDirty ? 'dirty' : ''} ${this.isSyncingLeft ? 'syncing' : ''}" @click=${this.syncLeft}>
@@ -329,11 +382,25 @@ export class InstantWidget extends LitElement {
             </div>
 
             <div class="pane-group">
-                <span class="pane-label voice-label">🗣️</span>
+                <span class="pane-label voice-label interactive" @click=${() => this.togglePane('voice')} style="cursor:pointer; position:relative; opacity: ${this.voiceEnabled ? 1 : 0.4}">
+                    🗣️
+                    ${!this.voiceEnabled ? crossSvg : ''}
+                </span>
                 ${this.renderCustomDropdown('v-ai', this.aiOptions, this.vIdx, (val) => this.vIdx = val)}
                 ${this.renderCustomDropdown('v-profile', profileOpts, this.vProfile, (val) => this.vProfile = val)}
                 <button class="btn btn-apply interactive ${isRightDirty ? 'dirty' : ''} ${this.isSyncingRight ? 'syncing' : ''}" @click=${this.syncRight}>
                     ${this.isSyncingRight ? this.getSpinIcon() : this.getCheckIcon()}
+                </button>
+            </div>
+
+            <div class="pane-group">
+                <span class="pane-label interactive" @click=${() => this.togglePane('meet')} style="cursor:pointer; position:relative; opacity: ${this.meetEnabled ? 1 : 0.4}">
+                    🎥
+                    ${!this.meetEnabled ? crossSvg : ''}
+                </span>
+                ${this.renderCustomDropdown('m-profile', profileOpts, this.mProfile, (val) => this.mProfile = val)}
+                <button class="btn btn-apply interactive ${isMeetDirty ? 'dirty' : ''} ${this.isSyncingMeet ? 'syncing' : ''}" @click=${this.syncMeet}>
+                    ${this.isSyncingMeet ? this.getSpinIcon() : this.getCheckIcon()}
                 </button>
             </div>
 

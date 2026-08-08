@@ -14,8 +14,9 @@ let scrapingInterval = null;
 
 let codeWin = null;
 let voiceWin = null;
+let meetWin = null;
 let widgetWin = null;
-let isSwapped = false;
+let swapOffset = 0;
 let isHidden = false; 
 let activeLoadout = {};
 
@@ -23,7 +24,7 @@ let isHardStealthLocked = false;
 let cornerRadarInterval = null;
 let dwellTimer = null;
 
-let isCodeActivePane = true;
+let activePaneId = 'code';
 
 const getMainWin = () => {
     return BrowserWindow.getAllWindows().find(w => 
@@ -39,20 +40,52 @@ const updateStackedVisibility = () => {
     const prefs = storage.getPreferences();
     const ii = prefs.instantInterview || {};
     
-    const isStacked = Math.abs((ii.codeX || 0) - (ii.voiceX || 0)) < 5 && 
-                      Math.abs((ii.codeY || 0) - (ii.voiceY || 0)) < 5;
+    const isCodeEnabled = ii.codeEnabled !== false;
+    const isVoiceEnabled = ii.voiceEnabled !== false;
+    const isMeetEnabled = ii.meetEnabled === true;
+
+    const activeEnabled = [];
+    if (isCodeEnabled) activeEnabled.push('code');
+    if (isVoiceEnabled) activeEnabled.push('voice');
+    if (isMeetEnabled) activeEnabled.push('meet');
+
+    if (!activeEnabled.includes(activePaneId) && activeEnabled.length > 0) {
+        activePaneId = activeEnabled[0];
+    }
+
+    const isStacked = activeEnabled.length > 1 && activeEnabled.every(id1 => 
+        activeEnabled.every(id2 => 
+            Math.abs((ii[`${id1}X`] || 0) - (ii[`${id2}X`] || 0)) < 5 &&
+            Math.abs((ii[`${id1}Y`] || 0) - (ii[`${id2}Y`] || 0)) < 5
+        )
+    );
 
     if (isStacked) {
-        if (isCodeActivePane) {
-            codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true }); codeWin.moveTop();
-            voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true });
-        } else {
-            voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true }); voiceWin.moveTop();
-            codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true });
+        if (codeWin && !codeWin.isDestroyed()) {
+            if (activePaneId === 'code' && isCodeEnabled) { codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true }); codeWin.moveTop(); }
+            else { codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true }); }
+        }
+        if (voiceWin && !voiceWin.isDestroyed()) {
+            if (activePaneId === 'voice' && isVoiceEnabled) { voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true }); voiceWin.moveTop(); }
+            else { voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true }); }
+        }
+        if (meetWin && !meetWin.isDestroyed()) {
+            if (activePaneId === 'meet' && isMeetEnabled) { meetWin.setOpacity(1); meetWin.setIgnoreMouseEvents(false, { forward: true }); meetWin.moveTop(); }
+            else { meetWin.setOpacity(0); meetWin.setIgnoreMouseEvents(true, { forward: true }); }
         }
     } else {
-        codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true });
-        voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true });
+        if (codeWin && !codeWin.isDestroyed()) {
+            if (isCodeEnabled) { codeWin.setOpacity(1); codeWin.setIgnoreMouseEvents(false, { forward: true }); if (activePaneId === 'code') codeWin.moveTop(); }
+            else { codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true }); }
+        }
+        if (voiceWin && !voiceWin.isDestroyed()) {
+            if (isVoiceEnabled) { voiceWin.setOpacity(1); voiceWin.setIgnoreMouseEvents(false, { forward: true }); if (activePaneId === 'voice') voiceWin.moveTop(); }
+            else { voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true }); }
+        }
+        if (meetWin && !meetWin.isDestroyed()) {
+            if (isMeetEnabled) { meetWin.setOpacity(1); meetWin.setIgnoreMouseEvents(false, { forward: true }); if (activePaneId === 'meet') meetWin.moveTop(); }
+            else { meetWin.setOpacity(0); meetWin.setIgnoreMouseEvents(true, { forward: true }); }
+        }
     }
     
     if (widgetWin && !widgetWin.isDestroyed()) widgetWin.moveTop();
@@ -201,23 +234,25 @@ const applyWindowBounds = () => {
         voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7
     };
     const primaryDisplay = screen.getPrimaryDisplay();
-    const { width: sw, height: sh } = primaryDisplay.workAreaSize;
+    const { x: sx, y: sy, width: sw, height: sh } = primaryDisplay.workArea;
 
-    const cConf = isSwapped ? {w: ii.voiceW, h: ii.voiceH, x: ii.voiceX, y: ii.voiceY} : {w: ii.codeW, h: ii.codeH, x: ii.codeX, y: ii.codeY};
-    const vConf = isSwapped ? {w: ii.codeW, h: ii.codeH, x: ii.codeX, y: ii.codeY} : {w: ii.voiceW, h: ii.voiceH, x: ii.voiceX, y: ii.voiceY};
-
-    codeWin.setBounds({
-        x: Math.floor(sw * (cConf.x / 100)),
-        y: Math.floor(sh * (cConf.y / 100)),
-        width: Math.floor(sw * (cConf.w / 100)),
-        height: Math.floor(sh * (cConf.h / 100))
-    });
-    voiceWin.setBounds({
-        x: Math.floor(sw * (vConf.x / 100)),
-        y: Math.floor(sh * (vConf.y / 100)),
-        width: Math.floor(sw * (vConf.w / 100)),
-        height: Math.floor(sh * (vConf.h / 100))
-    });
+    if (codeWin && !codeWin.isDestroyed()) {
+        codeWin.setBounds({ x: sx + Math.floor(sw * ((ii.codeX ?? 1) / 100)), y: sy + Math.floor(sh * ((ii.codeY ?? 7) / 100)), width: Math.floor(sw * ((ii.codeW ?? 48) / 100)), height: Math.floor(sh * ((ii.codeH ?? 85) / 100)) });
+    }
+    if (voiceWin && !voiceWin.isDestroyed()) {
+        voiceWin.setBounds({ x: sx + Math.floor(sw * ((ii.voiceX ?? 51) / 100)), y: sy + Math.floor(sh * ((ii.voiceY ?? 7) / 100)), width: Math.floor(sw * ((ii.voiceW ?? 48) / 100)), height: Math.floor(sh * ((ii.voiceH ?? 85) / 100)) });
+    }
+    if (meetWin && !meetWin.isDestroyed()) {
+        meetWin.setBounds({ x: sx + Math.floor(sw * ((ii.meetX ?? 25) / 100)), y: sy + Math.floor(sh * ((ii.meetY ?? 10) / 100)), width: Math.floor(sw * ((ii.meetW ?? 50) / 100)), height: Math.floor(sh * ((ii.meetH ?? 28) / 100)) });
+    }
+    if (widgetWin && !widgetWin.isDestroyed()) {
+        widgetWin.setBounds({
+            x: sx + Math.floor(sw * ((ii.widgetX ?? 5) / 100)),
+            y: sy + Math.floor(sh * ((ii.widgetY ?? 80) / 100)),
+            width: Math.floor(sw * ((ii.widgetW ?? 90) / 100)),
+            height: Math.floor(sh * ((ii.widgetH ?? 20) / 100))
+        });
+    }
 
     updateStackedVisibility();
 };
@@ -325,7 +360,7 @@ const startCornerRadar = () => {
                 dwellTimer = setTimeout(() => {
                     isHidden = false; isHardStealthLocked = false; isDwelling = false; waitForExit = true; 
                     updateStackedVisibility(); 
-                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(false, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
+                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(true, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
                     const mainWin = getMainWin();
                     if (mainWin) mainWin.webContents.send('show-radial-toast', '🔓 STEALTH UNLOCKED');
                 }, delayMs);
@@ -416,10 +451,11 @@ global.executeInstantAction = async (action) => {
                 if (isHidden) {
                     codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true });
                     voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true });
+                    if (meetWin && !meetWin.isDestroyed()) { meetWin.setOpacity(0); meetWin.setIgnoreMouseEvents(true, { forward: true }); }
                     if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(0); widgetWin.setIgnoreMouseEvents(true, { forward: true }); }
                 } else {
                     updateStackedVisibility();
-                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(false, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
+                    if (widgetWin && !widgetWin.isDestroyed()) { widgetWin.setOpacity(1); widgetWin.setIgnoreMouseEvents(true, { forward: true }); widgetWin.showInactive(); widgetWin.moveTop(); }
                 }
             } catch(e) {}
             break;
@@ -429,19 +465,21 @@ global.executeInstantAction = async (action) => {
                 const prefs = storage.getPreferences();
                 const ii = prefs.instantInterview || {};
                 
-                const isStacked = Math.abs((ii.codeX || 0) - (ii.voiceX || 0)) < 5 && 
-                                  Math.abs((ii.codeY || 0) - (ii.voiceY || 0)) < 5;
+                const activeEnabled = [];
+                if (ii.codeEnabled !== false) activeEnabled.push('code');
+                if (ii.voiceEnabled !== false) activeEnabled.push('voice');
+                if (ii.meetEnabled === true) activeEnabled.push('meet');
+
+                if (activeEnabled.length <= 1) return; // Nothing to swap
+
+                if (!activeEnabled.includes(activePaneId)) activePaneId = activeEnabled[0];
+
+                const idx = activeEnabled.indexOf(activePaneId);
+                activePaneId = activeEnabled[(idx + 1) % activeEnabled.length];
+                updateStackedVisibility();
                 
-                if (isStacked) {
-                    isCodeActivePane = !isCodeActivePane;
-                    updateStackedVisibility();
-                    if (mainWin) mainWin.webContents.send('show-radial-toast', isCodeActivePane ? '💻 CODE ACTIVE' : '🗣️ VOICE ACTIVE');
-                } else {
-                    isSwapped = !isSwapped;
-                    applyWindowBounds();
-                    if (!isHidden) { codeWin.showInactive(); voiceWin.showInactive(); }
-                    if (mainWin) mainWin.webContents.send('show-radial-toast', '🔀 SWAPPED PANES');
-                }
+                const labels = { 'code': '💻 CODE ACTIVE', 'voice': '🗣️ VOICE ACTIVE', 'meet': '🎥 MEET ACTIVE' };
+                if (mainWin) mainWin.webContents.send('show-radial-toast', labels[activePaneId]);
             } catch(e) {}
             break;
 
@@ -526,6 +564,7 @@ global.executeInstantAction = async (action) => {
 
                 if (codeWin && !codeWin.isDestroyed()) codeWin.destroy();
                 if (voiceWin && !voiceWin.isDestroyed()) voiceWin.destroy();
+                if (meetWin && !meetWin.isDestroyed()) meetWin.destroy();
                 if (widgetWin && !widgetWin.isDestroyed()) widgetWin.destroy();
                 
                 if (mainWindowToRestore) {
@@ -566,8 +605,17 @@ const launchInstantInterview = (isPreview = false) => {
 
     if (codeWin && !codeWin.isDestroyed()) codeWin.destroy();
     if (voiceWin && !voiceWin.isDestroyed()) voiceWin.destroy();
+    if (meetWin && !meetWin.isDestroyed()) meetWin.destroy();
 
     const sharedOpts = { show: true, alwaysOnTop: true, skipTaskbar: true, frame: false, autoHideMenuBar: true, resizable: false };
+
+    if (iiPrefs.meetEnabled === true) {
+        const mProfileId = iiPrefs.meetProfileId || '1';
+        meetWin = new BrowserWindow({ ...sharedOpts, title: `⚡ Meet Brain`, webPreferences: { partition: `persist:ai_profile_${mProfileId}` }});
+        meetWin.setContentProtection(true);
+        if (process.platform === 'win32') meetWin.setAlwaysOnTop(true, 'screen-saver', 1);
+        meetWin.loadURL('https://meet.google.com/');
+    }
 
     codeWin = new BrowserWindow({ ...sharedOpts, title: `⚡ Code Brain: ${codeProvider.name}`, webPreferences: { partition: `persist:ai_profile_${cProfileId}` }});
     codeWin.setContentProtection(true);
@@ -593,6 +641,7 @@ const launchInstantInterview = (isPreview = false) => {
     widgetWin = new BrowserWindow({
         width: 900, height: 400, x: Math.floor((sw - 900) / 2), y: sh - 400,
         frame: false, transparent: true, alwaysOnTop: true, skipTaskbar: true, resizable: false,
+        show: false,
         webPreferences: { nodeIntegration: true, contextIsolation: false }
     });
     widgetWin.setContentProtection(true);
@@ -613,6 +662,7 @@ const launchInstantInterview = (isPreview = false) => {
             const app = document.querySelector('root-app');
             if (app) { app.currentView = 'instant_widget'; app.requestUpdate(); }
         `).catch(()=>{});
+        widgetWin.showInactive();
     });
 
     codeWin.on('focus', () => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.moveTop(); });
@@ -626,6 +676,23 @@ const launchInstantInterview = (isPreview = false) => {
 ipcMain.removeAllListeners('abort-instant-interview');
 ipcMain.on('abort-instant-interview', () => {
     if (global.executeInstantAction) global.executeInstantAction('abort');
+});
+
+ipcMain.removeAllListeners('toggle-instant-pane');
+ipcMain.on('toggle-instant-pane', (event, pane, isEnabled) => {
+    if (pane === 'meet') {
+        const prefs = storage.getPreferences();
+        const iiPrefs = prefs.instantInterview || {};
+        if (isEnabled && (!meetWin || meetWin.isDestroyed())) {
+            const mProfileId = iiPrefs.meetProfileId || '1';
+            const sharedOpts = { show: true, alwaysOnTop: true, skipTaskbar: true, frame: false, autoHideMenuBar: true, resizable: false };
+            meetWin = new BrowserWindow({ ...sharedOpts, title: `⚡ Meet Brain`, webPreferences: { partition: `persist:ai_profile_${mProfileId}` }});
+            meetWin.setContentProtection(true);
+            if (process.platform === 'win32') meetWin.setAlwaysOnTop(true, 'screen-saver', 1);
+            meetWin.loadURL('https://meet.google.com/');
+        }
+    }
+    applyWindowBounds();
 });
 
 ipcMain.removeAllListeners('apply-instant-settings');
@@ -673,10 +740,26 @@ ipcMain.on('apply-instant-settings', (event, targetPane, engineIdx, profileId) =
         voiceWin.on('focus', () => { if (widgetWin && !widgetWin.isDestroyed()) widgetWin.moveTop(); });
     }
 
+    else if (targetPane === 'meet') {
+        if (iiPrefs.meetProfileId === profileId) return;
+
+        iiPrefs.meetProfileId = profileId;
+        storage.updatePreference('instantInterview', iiPrefs);
+
+        if (meetWin && !meetWin.isDestroyed()) meetWin.destroy();
+        if (iiPrefs.meetEnabled) {
+            meetWin = new BrowserWindow({ ...sharedOpts, title: `⚡ Meet Brain`, webPreferences: { partition: `persist:ai_profile_${profileId}` }});
+            meetWin.setContentProtection(true);
+            if (process.platform === 'win32') meetWin.setAlwaysOnTop(true, 'screen-saver', 1);
+            meetWin.loadURL('https://meet.google.com/');
+        }
+    }
+
     applyWindowBounds();
     if (isHidden) {
         if (codeWin && !codeWin.isDestroyed()) { codeWin.setOpacity(0); codeWin.setIgnoreMouseEvents(true, { forward: true }); }
         if (voiceWin && !voiceWin.isDestroyed()) { voiceWin.setOpacity(0); voiceWin.setIgnoreMouseEvents(true, { forward: true }); }
+        if (meetWin && !meetWin.isDestroyed()) { meetWin.setOpacity(0); meetWin.setIgnoreMouseEvents(true, { forward: true }); }
     }
 });
 
@@ -692,6 +775,7 @@ ipcMain.on('nudge-instant-window', (event, target, dimension, direction) => {
     // Determine which windows to move based on the target selector
     const updateCode = target === 'code' || (target === 'both' && isStacked) || (target === 'active' && isCodeActivePane) || (target === 'active' && !isStacked);
     const updateVoice = target === 'voice' || (target === 'both' && isStacked) || (target === 'active' && !isCodeActivePane) || (target === 'active' && !isStacked);
+    const updateMeet = target === 'meet';
 
     const posStep = 2;  // Move by 2%
     const sizeStep = 4; // Grow/Shrink by 4%
@@ -723,6 +807,20 @@ ipcMain.on('nudge-instant-window', (event, target, dimension, direction) => {
         if (dimension === 'h') {
             ii.voiceH = Math.min(100, Math.max(10, (ii.voiceH || 85) + (direction * sizeStep)));
             ii.voiceY = Math.max(0, (ii.voiceY || 7) - (direction * (sizeStep / 2)));
+        }
+    }
+
+    if (updateMeet) {
+        if (dimension === 'x') ii.meetX = Math.min(90, Math.max(0, (ii.meetX !== undefined ? ii.meetX : 25) + (direction * posStep)));
+        if (dimension === 'y') ii.meetY = Math.min(90, Math.max(0, (ii.meetY !== undefined ? ii.meetY : 10) + (direction * posStep)));
+        
+        if (dimension === 'w') {
+            ii.meetW = Math.min(100, Math.max(10, (ii.meetW !== undefined ? ii.meetW : 50) + (direction * sizeStep)));
+            ii.meetX = Math.max(0, (ii.meetX !== undefined ? ii.meetX : 25) - (direction * (sizeStep / 2)));
+        }
+        if (dimension === 'h') {
+            ii.meetH = Math.min(100, Math.max(10, (ii.meetH !== undefined ? ii.meetH : 28) + (direction * sizeStep)));
+            ii.meetY = Math.max(0, (ii.meetY !== undefined ? ii.meetY : 10) - (direction * (sizeStep / 2)));
         }
     }
 

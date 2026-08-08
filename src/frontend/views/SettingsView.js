@@ -1,4 +1,7 @@
 import { html, css, LitElement } from '../../assets/lit-core-2.7.4.min.js';
+import { HelpView } from './HelpView.js';
+import { HistoryView } from './HistoryView.js';
+import { LayoutEditor } from '../components/LayoutEditor.js';
 
 export class SettingsView extends LitElement {
     static styles = css`
@@ -327,7 +330,8 @@ export class SettingsView extends LitElement {
         audioDevices: { type: Object },
         editingTyperPageIdx: { type: Number },
         showCustomModal: { type: Boolean },
-        modalConfig: { type: Object }
+        modalConfig: { type: Object },
+        showLayoutEditor: { type: Boolean }
     };
 
     constructor() {
@@ -386,6 +390,7 @@ export class SettingsView extends LitElement {
         this.modalConfig = {};
         this.draggedZone = null;
         this.draggedMap = null;
+        this.showLayoutEditor = false;
     }
 
     async connectedCallback() {
@@ -1399,6 +1404,7 @@ export class SettingsView extends LitElement {
                 const iiPrefs = this.prefs.instantInterview || {
                     codeW: 48, codeH: 85, codeX: 1, codeY: 7,
                     voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7,
+                    meetW: 50, meetH: 28, meetX: 25, meetY: 10,
                     tap_3: 'hide_unhide', swipe_left_3: 'sync_right_to_left', swipe_right_3: 'sync_left_to_right',
                     swipe_up_3: 'restart_voice', swipe_down_3: 'swap_windows',
                     tap_4: 'capture', swipe_down_4: 'send_pro', swipe_left_4: 'on_the_go', swipe_right_4: 'dry_run', swipe_up_4: 'abort'
@@ -1478,88 +1484,31 @@ export class SettingsView extends LitElement {
                                         ${this.renderCustomDropdown('ii_voiceProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.voiceProfileId || '', (val) => { this.savePref('instantInterview', { ...iiPrefs, voiceProfileId: val }); })}
                                     </div>
                                 </div>
+                                <div style="flex: 1; border: 1px dashed rgba(0, 204, 102, 0.5); padding: 10px; border-radius: 4px;">
+                                    <div style="font-weight: bold; font-size: 12px; margin-bottom: 8px; color: #00cc66;">🎥 Meet Window Account</div>
+                                    <div style="display: flex; flex-direction: column; gap: 8px;">
+                                        ${this.renderCustomDropdown('ii_meetProfile', (this.prefs.aiProfiles || []).map(p => ({value: p.id, label: p.name})), iiPrefs.meetProfileId || '', (val) => { this.savePref('instantInterview', { ...iiPrefs, meetProfileId: val }); })}
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
                         <div style="background: var(--bg-tertiary); padding: 20px; border-radius: 8px; border: 1px solid var(--border-color); margin-bottom: 20px;">
                             <h3 style="margin-top: 0; font-size: 13px; color: #fff;">Independent Window Geometry</h3>
-                            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Adjust the physical size and location of the AI windows. Click <strong>Test Live Windows</strong> to view your changes in real-time on your screen.</p>
+                            <p style="font-size: 11px; color: var(--text-muted); margin-bottom: 15px;">Visually configure the exact size and position of all windows using a drag-and-drop editor.</p>
                                     
-                            <div style="width: 100%; display: flex; gap: 15px;">
-                                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; border: 1px solid #4285f4; padding: 10px; border-radius: 6px; background: rgba(66, 133, 244, 0.05);">
-                                    <h4 style="margin:0; color:#4285f4; font-size: 12px;">💻 Left Pane Configuration</h4>
-                                    <div class="slider-row"><label><span>Width</span> <span>${iiPrefs.codeW}%</span></label>
-                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.codeW} @input=${(e) => {
-                                            const newP = {...iiPrefs, codeW: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                    <div class="slider-row"><label><span>Height</span> <span>${iiPrefs.codeH}%</span></label>
-                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.codeH} @input=${(e) => {
-                                            const newP = {...iiPrefs, codeH: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                    <div class="slider-row"><label><span>X Position (Left)</span> <span>${iiPrefs.codeX}%</span></label>
-                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.codeX} @input=${(e) => {
-                                            const newP = {...iiPrefs, codeX: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                    <div class="slider-row"><label><span>Y Position (Top)</span> <span>${iiPrefs.codeY}%</span></label>
-                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.codeY} @input=${(e) => {
-                                            const newP = {...iiPrefs, codeY: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                </div>
-                                    
-                                <div style="flex: 1; display: flex; flex-direction: column; gap: 8px; border: 1px solid #a142f4; padding: 10px; border-radius: 6px; background: rgba(161, 66, 244, 0.05);">
-                                    <h4 style="margin:0; color:#a142f4; font-size: 12px;">🗣️ Right Pane Configuration</h4>
-                                    <div class="slider-row"><label><span>Width</span> <span>${iiPrefs.voiceW}%</span></label>
-                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.voiceW} @input=${(e) => {
-                                            const newP = {...iiPrefs, voiceW: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                    <div class="slider-row"><label><span>Height</span> <span>${iiPrefs.voiceH}%</span></label>
-                                        <input type="range" min="10" max="100" step="1" .value=${iiPrefs.voiceH} @input=${(e) => {
-                                            const newP = {...iiPrefs, voiceH: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                    <div class="slider-row"><label><span>X Position (Left)</span> <span>${iiPrefs.voiceX}%</span></label>
-                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.voiceX} @input=${(e) => {
-                                            const newP = {...iiPrefs, voiceX: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                    <div class="slider-row"><label><span>Y Position (Top)</span> <span>${iiPrefs.voiceY}%</span></label>
-                                        <input type="range" min="0" max="100" step="1" .value=${iiPrefs.voiceY} @input=${(e) => {
-                                            const newP = {...iiPrefs, voiceY: parseInt(e.target.value)};
-                                            this.savePref('instantInterview', newP);
-                                            if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', newP);
-                                        }}>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div style="display: flex; gap: 10px; margin-top: 15px; width: 100%; justify-content: center;">
+                            <div style="display: flex; gap: 10px; margin-top: 15px; width: 100%; justify-content: flex-start;">
                                 <button @click=${() => {
-                                    if(window.require) window.require('electron').ipcRenderer.send('preview-instant-windows');
-                                }} style="background: rgba(0, 204, 102, 0.2); color: #00cc66; border: 1px solid #00cc66; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: default; transition: 0.2s;">👀 Test Live Windows</button>
+                                    this.showLayoutEditor = true;
+                                    if (window.require) window.require('electron').ipcRenderer.send('layout-editor-opened');
+                                }} style="background: rgba(161, 66, 244, 0.2); color: #a142f4; border: 1px solid #a142f4; padding: 10px 20px; border-radius: 6px; font-weight: bold; cursor: pointer; transition: 0.2s;">
+                                    📐 Open Visual Layout Editor
+                                </button>
                                 <button @click=${() => {
-                                    const resetP = {...iiPrefs, codeW: 48, codeH: 85, codeX: 1, codeY: 7, voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7};
+                                    const resetP = {...iiPrefs, codeW: 48, codeH: 85, codeX: 1, codeY: 7, voiceW: 48, voiceH: 85, voiceX: 51, voiceY: 7, meetW: 50, meetH: 28, meetX: 25, meetY: 10, widgetX: 5, widgetY: 80, widgetW: 90, widgetH: 20};
                                     this.savePref('instantInterview', resetP);
                                     if (window.require) window.require('electron').ipcRenderer.send('live-update-instant-bounds', resetP);
-                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: default; transition: 0.2s;">🔄 Reset Bounds</button>
+                                }} style="background: rgba(241, 76, 76, 0.2); color: #f14c4c; border: 1px solid #f14c4c; padding: 6px 15px; border-radius: 4px; font-weight: bold; cursor: pointer; transition: 0.2s;">🔄 Reset Bounds</button>
                             </div>
                         </div>
 
@@ -1642,6 +1591,21 @@ export class SettingsView extends LitElement {
     }
 
     render() {
+        if (this.showLayoutEditor) {
+            const iiPrefs = this.prefs.instantInterview || {};
+            return html`
+                <layout-editor .prefs=${iiPrefs} @save=${(e) => {
+                    this.showLayoutEditor = false;
+                    this.savePref('instantInterview', e.detail);
+                    if (window.require) {
+                        window.require('electron').ipcRenderer.send('live-update-instant-bounds', e.detail);
+                        window.require('electron').ipcRenderer.send('layout-editor-closed');
+                    }
+                    this.requestUpdate();
+                }}></layout-editor>
+            `;
+        }
+
         return html`
             <div class="settings-container">
                 <div class="sidebar">

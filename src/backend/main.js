@@ -1414,6 +1414,24 @@ function setupGeneralIpcHandlers() {
         if (applyWindowBounds) applyWindowBounds();
     });
 
+    let preLayoutEditorBounds = null;
+    ipcMain.on('layout-editor-opened', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win) {
+            preLayoutEditorBounds = win.getBounds();
+            const { width: sw, height: sh } = screen.getPrimaryDisplay().workAreaSize;
+            win.setBounds({ x: 0, y: 0, width: sw, height: sh });
+        }
+    });
+
+    ipcMain.on('layout-editor-closed', (event) => {
+        const win = BrowserWindow.fromWebContents(event.sender);
+        if (win && preLayoutEditorBounds) {
+            win.setBounds(preLayoutEditorBounds);
+            preLayoutEditorBounds = null;
+        }
+    });
+
     // 🟢 STEALTH ZOOM HANDLER
     ipcMain.handle('toggle-zoom-window', () => {
         if (global.zoomWindow && !global.zoomWindow.isDestroyed()) {
